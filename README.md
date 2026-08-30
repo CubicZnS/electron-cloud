@@ -5,7 +5,7 @@ GPU 粒子电子云交互可视化：分子 · 电子云 · 诱导效应 / 共�
 
 > by CubicZnS · 单文件 HTML 产物，无构建依赖（three.js 由 CDN 加载）
 >
-> **当前版本：v2.0.1（修复：拒绝轨道/ESP 带符号字段，防导入后云弥散）** · 版本历史见 [CHANGELOG.md](CHANGELOG.md)
+> **当前版本：v2.1.0（字段类型自动检测：电子密度 / 轨道 / ESP 诚实标注置信度）** · 版本历史见 [CHANGELOG.md](CHANGELOG.md)
 
 ## 功能
 

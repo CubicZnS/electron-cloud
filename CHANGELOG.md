@@ -1,9 +1,28 @@
-# Changelog
-
 本项目采用语义化版本（SemVer）：主版本号 = 功能里程碑，次版本号 = 兼容性新功能，补丁号 = 修复。
 
-## [v2.0.1] — 2026-08-31 · 修复：导入带符号字段（HOMO/LUMO 轨道、ESP）导致云弥散
+## [v2.1.0] — 2026-08-31 · 字段类型自动检测（诚实启发式）
 
+### 新增功能
+- **字段类型估计**（parts/03b_cube.js 的 estimateCubeFieldType）：Cube 格式无标准属性标签（Multiwfn 头部不写属性名），通过「注释行关键词（若有）+ 数据统计（负值占比/峰值量级/有界性）」给出类型估计与置信度：
+  - 注释行明确（Gaussian 写 Density / Orbital N / ESP / ELF / Laplacian）→ 高置信标注
+  - 数据统计：负值体素 >20% → 带符号标量场（分子轨道或 ESP，高置信，不假装区分二者）；非负 + 高峰值 → 可能为电子密度（中置信）；非负 + 0–1 有界 → 非负标量场（低置信，可能 ELF）；少量负值 → 密度差/噪声（低置信）
+- **面板元数据显示「字段类型」行**：如「带符号标量场（分子轨道或 ESP，非电子密度）（置信：高）」
+- 带符号字段拒绝（SIGNED_FIELD）的错误消息按检测结果给出具体提示（如「注释行标注为分子轨道」）
+
+### 设计说明（诚实边界）
+- 不假装识别 HOMO vs LUMO、轨道 vs ESP：真实带符号文件振幅不可靠（实测 ASPIRIN_HOMO47.cub |值|max ≈ 5.3e5），只用「带符号字段」高置信大类
+- DFT 字样（Density Functional Theory）不会误判为 density 提示
+
+### 验证
+- node tools/validate-cube.mjs：47/47（新增 6 项字段类型估计测试，含真实文件统计特征回归）
+- node tools/validate-sigma.mjs：15/15；node tools/build.mjs：SYNTAX_OK
+
+### 文件
+- 修改：parts/03b_cube.js、parts/06b_cube_ui.js、tools/validate-cube.mjs、index.html（组装产物）、CHANGELOG.md、README.md
+
+---
+
+## [v2.0.1] — 2026-08-31 · 修复：导入带符号字段（HOMO/LUMO 轨道、ESP）导致云弥散
 ### 修复
 - **带符号字段拒绝**（parts/03b_cube.js）：电子密度处处非负；若负值体素占比 > 20%，判定为 HOMO/LUMO 轨道、静电势 ESP 等带符号标量场并拒绝（SIGNED_FIELD），提示在 Multiwfn 中导出 electron density 后再导入。
   - 背景：真实案例 ASPIRIN_HOMO47.cub（Multiwfn 导出的阿司匹林 HOMO 轨道，42.1% 体素为负）——旧实现把负值截断为 0 后，正值布满全盒 → 云弥散；现已改为友好错误且不改变当前场景。

@@ -94,8 +94,27 @@ function renderCubeMeta(vol, name){
   vol.atoms.forEach(function (a){ cnt[a.el] = (cnt[a.el] || 0) + 1; });
   const elStr = Object.keys(cnt).sort().map(function (e){ return e + "×" + cnt[e]; }).join(" · ");
   const rng = function (a, b){ return a.toFixed(2) + " … " + b.toFixed(2); };
+  // 字段类型估计（诚实标注置信度；Cube 无标准标签，注释行缺失时只能启发式）
+  const ft = vol.fieldType;
+  let ftText = "未知";
+  if (ft){
+    const conf = ft.confidence === "high" ? "置信：高" : ft.confidence === "medium" ? "置信：中" : "置信：低";
+    const zh = {
+      density: "电子密度",
+      orbital: "分子轨道（非电子密度）",
+      esp: "静电势 ESP（非电子密度）",
+      elf: "ELF（非电子密度）",
+      laplacian: "Laplacian（非电子密度）",
+      signed_field: "带符号标量场（分子轨道或 ESP，非电子密度）",
+      electron_density_likely: "可能为电子密度",
+      nonnegative_field: "非负标量场（可能为 ELF 等，未必是密度）",
+      mixed_small_negative: "含少量负值（可能为密度差或数值噪声）",
+    }[ft.type] || "未知";
+    ftText = zh + "（" + conf + "）";
+  }
   el.innerHTML =
     "<div class='row'><span class='k'>文件</span><span class='v'>" + name + "</span></div>"
+    + "<div class='row'><span class='k'>字段类型</span><span class='v' class='src'>" + ftText + "</span></div>"
     + "<div class='row'><span class='k'>原子数</span><span class='v'>" + vol.natoms + "（" + elStr + "）</span></div>"
     + "<div class='row'><span class='k'>网格</span><span class='v'>" + vol.dims[0] + " × " + vol.dims[1] + " × " + vol.dims[2] + "</span></div>"
     + "<div class='row'><span class='k'>Voxel 数</span><span class='v'>" + vol.nVox.toLocaleString() + "</span></div>"
