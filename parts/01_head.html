@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Electron Cloud · 有机电子效应可视化</title>
+<link rel="stylesheet" href="/api/worktable/template/dshell.css" onerror="(function(){var s=document.createElement('style');s.textContent='.dshell-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid rgba(124,199,255,0.35);background:rgba(124,199,255,0.10);color:#eaf6ff;border-radius:8px;padding:6px 14px;font-size:12px;font-family:inherit;cursor:pointer;letter-spacing:1px;transition:all .15s}.dshell-btn:hover{background:rgba(124,199,255,0.20);border-color:rgba(124,199,255,0.55)}.dshell-btnGhost{background:transparent;border-color:rgba(163,182,214,0.22);color:#8b96a8}.dshell-btnGhost:hover{color:#d9e8ff;border-color:rgba(124,199,255,0.4)}';document.head.appendChild(s);})()" />
+<style>
+:root{
+  --ink:#dce5f2; --dim:#8b96a8; --faint:#5b6678;
+  --accent:#7cc7ff; --amber:#ffb35c; --violet:#b893ff;
+  --stroke:rgba(163,182,214,0.16);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
+  font-family:"SF Pro Display","SF Pro Text",-apple-system,"PingFang SC","Segoe UI",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;user-select:none;}
+#scene{position:fixed;inset:0;z-index:0}
+#scene canvas{display:block;outline:none}
+#vignette{position:fixed;inset:0;z-index:1;pointer-events:none;
+  background:radial-gradient(120% 100% at 50% 45%, transparent 55%, rgba(0,0,0,0.42) 100%);}
+.panel{background:rgba(13,17,26,0.60);border:1px solid var(--stroke);border-radius:12px;
+  backdrop-filter:blur(16px) saturate(1.25);-webkit-backdrop-filter:blur(16px) saturate(1.25);
+  box-shadow:0 10px 40px rgba(0,0,0,0.4);}
+#topbar{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:20;
+  display:flex;align-items:center;gap:8px;pointer-events:none;max-width:min(96vw,1240px)}
+#topbar .panel{pointer-events:auto;padding:5px 12px;display:flex;align-items:center;gap:8px}
+#brand{letter-spacing:2.5px;font-size:11px;font-weight:600;color:#eaf4ff;white-space:nowrap}
+#brand .sub{color:var(--dim);font-weight:400;letter-spacing:1px;margin-left:8px;font-size:10px}
+.seg{display:flex;gap:2px;padding:3px}
+.seg-btn{border:0;background:transparent;color:var(--dim);font-size:11px;font-weight:500;
+  padding:5px 11px;border-radius:8px;cursor:pointer;letter-spacing:1px;transition:all .18s;font-family:inherit}
+.seg-btn:hover{color:#cfe4ff}
+.seg-btn.active{background:rgba(124,199,255,0.14);color:#eaf6ff;box-shadow:inset 0 0 0 1px rgba(124,199,255,0.35)}
+#explainBtn{display:flex;align-items:center;gap:6px;color:var(--dim);border:0;background:transparent;
+  font-size:11px;letter-spacing:1px;cursor:pointer;font-family:inherit;padding:4px 8px;border-radius:8px;transition:all .18s}
+#explainBtn:hover{color:#d9e8ff}
+#explainBtn.on{color:#f3e8ff;background:rgba(184,147,255,0.14);box-shadow:inset 0 0 0 1px rgba(184,147,255,0.35)}
+#explainBtn .dot{width:6px;height:6px;border-radius:50%;background:var(--violet);opacity:.35;transition:opacity .18s}
+#explainBtn.on .dot{opacity:1;box-shadow:0 0 8px var(--violet)}
+#bottomBar{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:20;
+  display:flex;align-items:center;gap:10px}
+#moleculeBar{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:76vw;padding:8px 10px}
+.mol-chip{border:1px solid transparent;background:transparent;color:var(--dim);font-size:11px;
+  padding:5px 11px;border-radius:999px;cursor:pointer;letter-spacing:.5px;transition:all .18s;
+  font-family:inherit;display:flex;gap:6px;align-items:center}
+.mol-chip:hover{color:#d9e8ff;border-color:rgba(124,199,255,0.25)}
+.mol-chip.active{color:#eaf6ff;background:rgba(124,199,255,0.12);border-color:rgba(124,199,255,0.4);
+  box-shadow:0 0 14px rgba(124,199,255,0.15)}
+.mol-chip .zh{color:var(--faint);font-size:10px}
+.mol-chip.active .zh{color:var(--dim)}
+#legend{position:fixed;left:18px;bottom:20px;z-index:20;max-width:320px;padding:10px 12px;pointer-events:auto}
+#legend .mol{font-size:11px;letter-spacing:1.5px;font-weight:600;color:#e8f2ff;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+#legend .formula{color:var(--faint);font-size:10px;letter-spacing:1px;font-weight:400}
+#legend .fxrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.fx-badge{font-size:10px;letter-spacing:1px;padding:3px 9px;border-radius:999px;cursor:pointer;
+  background:rgba(255,255,255,0.05);color:var(--dim);border:1px solid var(--stroke);transition:all .18s}
+.fx-badge:hover{color:#fff;border-color:rgba(255,255,255,0.35)}
+.fx-badge .i{color:var(--amber)}
+.fx-badge .m{color:var(--violet)}
+.fx-badge b{color:#e8f2ff;font-weight:600}
+#disclaimer{position:fixed;right:16px;bottom:16px;z-index:20;font-size:9px;letter-spacing:1.5px;color:#3d4656;pointer-events:none}
+#popover{position:fixed;z-index:45;padding:10px 12px;min-width:178px;max-width:250px;visibility:hidden;opacity:0;transform:translateY(6px);transition:opacity .25s ease, transform .25s ease, visibility .25s}
+#popover.show{visibility:visible;opacity:1;transform:translateY(0)}
+#popover .pv-title{font-size:10px;color:var(--dim);letter-spacing:1.5px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+#popover .pv-title b{color:#eaf6ff;font-weight:600}
+#popover .pv-close{color:var(--faint);cursor:pointer;font-size:12px;padding:0 3px}
+#popover .pv-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.pv-chip{border:1px solid var(--stroke);background:rgba(255,255,255,0.04);color:var(--dim);font-size:10px;
+  padding:5px 2px;border-radius:7px;cursor:pointer;text-align:center;transition:all .15s;font-family:inherit;letter-spacing:.5px}
+.pv-chip:hover{color:#fff;border-color:rgba(124,199,255,0.5);background:rgba(124,199,255,0.12)}
+.pv-chip.remove{color:#ff9a8f}
+.pv-chip.remove:hover{border-color:rgba(255,120,110,0.5);background:rgba(255,110,100,0.12)}
+#infoCard{position:fixed;right:18px;top:50%;transform:translateY(-50%);z-index:45;width:252px;padding:14px 16px;visibility:hidden;opacity:0;transition:opacity .25s ease, visibility .25s}
+#infoCard.show{visibility:visible;opacity:1}
+#infoCard h3{font-size:14px;letter-spacing:1px;font-weight:600;color:#fff;display:flex;align-items:center;justify-content:space-between}
+#infoCard h3 .zh{color:var(--dim);font-size:11px;font-weight:400}
+#infoCard .kv{margin:10px 0;display:flex;flex-direction:column;gap:6px}
+#infoCard .kv-row{display:flex;justify-content:space-between;font-size:11px;color:var(--dim)}
+#infoCard .kv-row .val{color:#e8f2ff}
+#infoCard .kv-row .val.i{color:var(--amber)}
+#infoCard .kv-row .val.m{color:var(--violet)}
+#infoCard .desc{font-size:11px;line-height:1.6;color:#a9b6c9}
+#infoCard .close{color:var(--faint);cursor:pointer;font-size:12px;padding:0 3px}
+.cmap-sel{background:transparent;border:1px solid var(--stroke);color:#cfe4ff;font-size:10px;letter-spacing:1px;border-radius:8px;padding:4px 6px;cursor:pointer;font-family:inherit;outline:none}
+.cmap-sel option{background:#0d111a;color:#cfe4ff}
+#legend .cmaprow{display:flex;align-items:center;gap:6px;margin-top:9px}
+#legend .cmapbar{flex:1;height:6px;border-radius:3px;border:1px solid var(--stroke);background:#000}
+#legend .cmaplabel{font-size:9px;color:var(--faint);letter-spacing:1px}
+#densityTag{position:fixed;z-index:25;display:flex;flex-direction:column;align-items:center;gap:1px;
+  padding:5px 14px;border-radius:10px;pointer-events:none;
+  visibility:hidden;opacity:0;transform:translateY(5px);
+  background:rgba(13,17,26,0.68);border:1px solid rgba(163,182,214,0.4);
+  backdrop-filter:blur(14px) saturate(1.25);-webkit-backdrop-filter:blur(14px) saturate(1.25);
+  box-shadow:0 8px 28px rgba(0,0,0,0.45);
+  transition:opacity .35s ease, transform .35s ease, border-color .2s ease, box-shadow .2s ease, visibility .35s;}
+#densityTag.show{visibility:visible;opacity:1;transform:translateY(0)}
+#densityTag .dt-val{font-size:15px;font-weight:700;color:#eaf6ff;font-variant-numeric:tabular-nums;letter-spacing:1px}
+#densityTag .dt-cap{font-size:8px;color:var(--faint);letter-spacing:1px;white-space:nowrap}
+#legend .densityhint{font-size:9px;color:var(--faint);letter-spacing:1px;margin-top:6px}
+#creator{position:fixed;left:18px;top:50%;transform:translateY(-50%);z-index:35;width:378px;padding:12px 14px;display:none;flex-direction:column;gap:8px}
+#creator.show{display:flex}
+#creator .cr-head{display:flex;justify-content:space-between;align-items:center;font-size:12px;letter-spacing:1.5px;color:#eaf6ff}
+#creator .cr-close{color:var(--faint);cursor:pointer;font-size:12px;padding:0 3px}
+#crCanvas{width:100%;height:300px;background:rgba(8,12,20,0.6);border:1px solid var(--stroke);border-radius:8px;cursor:crosshair}
+#creator .cr-tools{display:flex;gap:5px}
+#creator .cr-bordseg{display:flex;align-items:center;gap:4px;font-size:9px;color:var(--dim);letter-spacing:1px}
+.cr-bord-label{color:var(--faint)}
+.cr-bord{border:1px solid var(--stroke);background:rgba(255,255,255,0.04);color:var(--dim);font-size:10px;padding:2px 8px;border-radius:6px;cursor:pointer;font-family:inherit;transition:all .15s}
+.cr-bord:hover{color:#d9e8ff}
+.cr-bord.active{color:#eaf6ff;background:rgba(124,199,255,0.14);border-color:rgba(124,199,255,0.45)}
+.cr-tool{flex:1;border:1px solid var(--stroke);background:rgba(255,255,255,0.04);color:var(--dim);font-size:11px;padding:5px 0;border-radius:7px;cursor:pointer;font-family:inherit;letter-spacing:1px;transition:all .15s}
+.cr-tool:hover{color:#d9e8ff}
+.cr-tool.active{color:#eaf6ff;background:rgba(124,199,255,0.14);border-color:rgba(124,199,255,0.45)}
+#creator .cr-actions{display:flex;gap:6px}
+#creator .cr-actions .dshell-btn{flex:1;padding:6px 0;font-size:11px}
+#creator .cr-hint{font-size:9px;color:var(--faint);letter-spacing:1px;line-height:1.7}
+
+.cr-gp{display:inline-flex;flex-direction:column;align-items:center;gap:1px;min-width:46px;padding:4px 6px;border:1px solid var(--stroke);background:rgba(255,255,255,0.04);color:var(--dim);font-size:9px;border-radius:7px;cursor:pointer;font-family:inherit;line-height:1.25;transition:all .15s}
+.cr-gp .sym{font-size:11px;font-weight:600;color:#d9e8ff}
+.cr-gp .zh{font-size:9px}
+.cr-gp .fx{font-size:8px;color:var(--faint)}
+.cr-gp:hover{color:#fff;border-color:rgba(124,199,255,0.5)}
+.cr-gp.on{border-color:rgba(159,224,176,0.75);background:rgba(159,224,176,0.10)}
+.cr-gp.on .sym{color:#9fe0b0}
+.cr-gp.full{opacity:0.42;cursor:not-allowed}
+.cr-gp.remove{color:#ff9a8f;justify-content:center}
+.cr-gp[data-g=""]{color:#ff9a8f}
+.cr-gp-info{width:100%;font-size:9px;color:var(--faint);letter-spacing:1px;padding:0 2px 3px}
+#popover .cr-gp-info{grid-column:1/-1}
+#creatorBtn{width:40px;height:40px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;
+  color:var(--accent);cursor:pointer;flex:none;transition:all .18s}
+#creatorBtn:hover{color:#eaf6ff;border-color:rgba(124,199,255,0.5);box-shadow:0 0 18px rgba(124,199,255,0.18)}
+#creatorBtn.active{color:#eaf6ff;background:rgba(124,199,255,0.16);border-color:rgba(124,199,255,0.55);
+  box-shadow:0 0 22px rgba(124,199,255,0.30)}
+#debugPanel{position:fixed;right:16px;bottom:64px;z-index:40;width:236px;padding:12px 14px;display:none}
+#debugPanel.show{display:block}
+#debugPanel h4{font-size:10px;letter-spacing:2px;color:var(--dim);margin-bottom:8px;display:flex;justify-content:space-between}
+#debugPanel .dbg-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px;font-size:10px;color:var(--dim)}
+#debugPanel input[type=range]{flex:1;accent-color:var(--accent);height:2px;cursor:pointer}
+#debugPanel .dbg-val{width:38px;text-align:right;color:#cfe4ff}
+#toast{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:50;padding:8px 16px;font-size:11px;color:#eaf6ff;
+  background:rgba(13,17,26,0.85);border:1px solid rgba(124,199,255,0.35);border-radius:10px;
+  opacity:0;transition:opacity .35s;pointer-events:none;letter-spacing:.5px}
+#toast.show{opacity:1}
+#intro{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  background:radial-gradient(80% 70% at 50% 45%, rgba(12,20,34,0.55), #04060a 78%);transition:opacity 1.4s ease}
+#intro.out{opacity:0;pointer-events:none}
+#intro .big{font-size:26px;letter-spacing:8px;font-weight:700;color:#eaf6ff;text-shadow:0 0 30px rgba(124,199,255,0.35)}
+#intro .sub{font-size:12px;letter-spacing:3px;color:var(--dim)}
+#intro .hint{margin-top:26px;font-size:10px;letter-spacing:1.5px;color:var(--faint)}
+#errOverlay{position:fixed;inset:0;z-index:200;display:none;align-items:center;justify-content:center;
+  background:#04060a;color:#dce5f2;font-size:13px;line-height:1.9;text-align:center;padding:40px}
+#errOverlay.show{display:flex}
+#errOverlay .err-title{font-size:15px;letter-spacing:3px;color:#eaf6ff;margin-bottom:10px}
+@media (max-width:920px){
+  #topbar{flex-wrap:wrap;justify-content:center}
+  #legend{display:none}
+  #brand .sub{display:none}
+}
+</style>
+</head>
+<body>
+<div id="scene"></div>
+<div id="vignette"></div>
+<div id="intro">
+  <div class="big">ELECTRON&nbsp;CLOUD</div>
+  <div class="sub">有机化合物电子效应可视化</div>
+  <div class="hint">分子 · 电子云 · 诱导效应 / 共轭效应 · 点击原子替换官能团</div>
+</div>
+<div id="topbar">
+  <div class="panel" id="brand">ELECTRON CLOUD<span class="sub">电子云 · 有机电子效应</span></div>
+  <div class="panel seg" id="modeSeg">
+    <button class="seg-btn active" data-mode="total">Total</button>
+    <button class="seg-btn" data-mode="inductive">Inductive</button>
+    <button class="seg-btn" data-mode="resonance">Resonance</button>
+  </div>
+  <div class="panel seg" id="qualitySeg">
+    <button class="seg-btn" data-q="LOW">LOW</button>
+    <button class="seg-btn" data-q="MEDIUM">MED</button>
+    <button class="seg-btn active" data-q="HIGH">HIGH</button>
+    <button class="seg-btn" data-q="ULTRA">ULTRA</button>
+  </div>
+  <div class="panel" style="padding:5px 10px">
+    <button id="explainBtn"><span class="dot"></span>Explain</button>
+  </div>
+  <div class="panel" style="padding:5px 8px">
+    <select id="cmapSel" class="cmap-sel" title="电子密度色图">
+      <option value="plasma" selected>Plasma</option>
+      <option value="inferno">Inferno</option>
+      <option value="viridis">Viridis</option>
+      <option value="coolwarm">Cool-Warm</option>
+      <option value="ice">Cyan Glow</option>
+    </select>
+  </div>
+</div>
+<div id="bottomBar">
+  <div class="panel" id="moleculeBar"></div>
+  <button class="panel" id="creatorBtn" title="创造模式 · 自由碳架" aria-label="创造模式">
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+  </button>
+</div>
+<div class="panel" id="legend"></div>
+<div id="disclaimer">by CubicZnS · 半定量模型 仅供参考</div>
+<div id="densityTag"></div>
+<div class="panel" id="creator">
+  <div class="cr-head"><b>创造模式 · 自由碳架</b><span class="cr-close" id="crClose">✕</span></div>
+  <canvas id="crCanvas" width="344" height="300"></canvas>
+  <div class="cr-tools">
+    <button class="cr-tool active" data-tool="atom">加碳</button>
+    <button class="cr-tool" data-tool="bond">连键</button>
+    <button class="cr-tool" data-tool="erase">擦除</button>
+  </div>
+  <div class="cr-bordseg">
+    <span class="cr-bord-label">键级</span>
+    <button class="cr-bord active" data-order="1">单</button>
+    <button class="cr-bord" data-order="2">双</button>
+    <button class="cr-bord" data-order="3">三</button>
+    <span class="cr-bord-label" style="margin-left:6px;color:var(--faint)">交替单双六元环自动芳香化（Hückel）</span>
+  </div>
+  <div class="cr-actions">
+    <button class="dshell-btn" id="crApply">应用</button>
+    <button class="dshell-btn dshell-btnGhost" id="crLoadBz">载入苯</button>
+    <button class="dshell-btn dshell-btnGhost" id="crClear">清空</button>
+  </div>
+  <div class="cr-hint">画布只画碳架：加碳 · 连键（先选键级 单/双/三）· 擦除 · 环烷自动 sp³ · 交替单双六元环自动芳香化 · 应用后点 3D 分子中的碳取代 H 挂官能团</div>
+<div class="cr-hint" id="crIdentify" style="color:#9fe0b0"></div>
+</div>
+<div class="panel" id="popover"></div>
+<div class="panel" id="infoCard"></div>
+<div class="panel" id="debugPanel"></div>
+<div id="toast"></div>
+<div id="errOverlay"><div><div class="err-title">ELECTRON CLOUD</div><div id="errMsg">加载失败</div></div></div>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">

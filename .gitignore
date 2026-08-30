@@ -1,0 +1,4 @@
+.DS_Store
+.syntax-check.js
+*.log
+node_modules/

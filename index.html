@@ -1,0 +1,3204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Electron Cloud · 有机电子效应可视化</title>
+<link rel="stylesheet" href="/api/worktable/template/dshell.css" onerror="(function(){var s=document.createElement('style');s.textContent='.dshell-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid rgba(124,199,255,0.35);background:rgba(124,199,255,0.10);color:#eaf6ff;border-radius:8px;padding:6px 14px;font-size:12px;font-family:inherit;cursor:pointer;letter-spacing:1px;transition:all .15s}.dshell-btn:hover{background:rgba(124,199,255,0.20);border-color:rgba(124,199,255,0.55)}.dshell-btnGhost{background:transparent;border-color:rgba(163,182,214,0.22);color:#8b96a8}.dshell-btnGhost:hover{color:#d9e8ff;border-color:rgba(124,199,255,0.4)}';document.head.appendChild(s);})()" />
+<style>
+:root{
+  --ink:#dce5f2; --dim:#8b96a8; --faint:#5b6678;
+  --accent:#7cc7ff; --amber:#ffb35c; --violet:#b893ff;
+  --stroke:rgba(163,182,214,0.16);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
+  font-family:"SF Pro Display","SF Pro Text",-apple-system,"PingFang SC","Segoe UI",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;user-select:none;}
+#scene{position:fixed;inset:0;z-index:0}
+#scene canvas{display:block;outline:none}
+#vignette{position:fixed;inset:0;z-index:1;pointer-events:none;
+  background:radial-gradient(120% 100% at 50% 45%, transparent 55%, rgba(0,0,0,0.42) 100%);}
+.panel{background:rgba(13,17,26,0.60);border:1px solid var(--stroke);border-radius:12px;
+  backdrop-filter:blur(16px) saturate(1.25);-webkit-backdrop-filter:blur(16px) saturate(1.25);
+  box-shadow:0 10px 40px rgba(0,0,0,0.4);}
+#topbar{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:20;
+  display:flex;align-items:center;gap:8px;pointer-events:none;max-width:min(96vw,1240px)}
+#topbar .panel{pointer-events:auto;padding:5px 12px;display:flex;align-items:center;gap:8px}
+#brand{letter-spacing:2.5px;font-size:11px;font-weight:600;color:#eaf4ff;white-space:nowrap}
+#brand .sub{color:var(--dim);font-weight:400;letter-spacing:1px;margin-left:8px;font-size:10px}
+.seg{display:flex;gap:2px;padding:3px}
+.seg-btn{border:0;background:transparent;color:var(--dim);font-size:11px;font-weight:500;
+  padding:5px 11px;border-radius:8px;cursor:pointer;letter-spacing:1px;transition:all .18s;font-family:inherit}
+.seg-btn:hover{color:#cfe4ff}
+.seg-btn.active{background:rgba(124,199,255,0.14);color:#eaf6ff;box-shadow:inset 0 0 0 1px rgba(124,199,255,0.35)}
+#explainBtn{display:flex;align-items:center;gap:6px;color:var(--dim);border:0;background:transparent;
+  font-size:11px;letter-spacing:1px;cursor:pointer;font-family:inherit;padding:4px 8px;border-radius:8px;transition:all .18s}
+#explainBtn:hover{color:#d9e8ff}
+#explainBtn.on{color:#f3e8ff;background:rgba(184,147,255,0.14);box-shadow:inset 0 0 0 1px rgba(184,147,255,0.35)}
+#explainBtn .dot{width:6px;height:6px;border-radius:50%;background:var(--violet);opacity:.35;transition:opacity .18s}
+#explainBtn.on .dot{opacity:1;box-shadow:0 0 8px var(--violet)}
+#bottomBar{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:20;
+  display:flex;align-items:center;gap:10px}
+#moleculeBar{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:76vw;padding:8px 10px}
+.mol-chip{border:1px solid transparent;background:transparent;color:var(--dim);font-size:11px;
+  padding:5px 11px;border-radius:999px;cursor:pointer;letter-spacing:.5px;transition:all .18s;
+  font-family:inherit;display:flex;gap:6px;align-items:center}
+.mol-chip:hover{color:#d9e8ff;border-color:rgba(124,199,255,0.25)}
+.mol-chip.active{color:#eaf6ff;background:rgba(124,199,255,0.12);border-color:rgba(124,199,255,0.4);
+  box-shadow:0 0 14px rgba(124,199,255,0.15)}
+.mol-chip .zh{color:var(--faint);font-size:10px}
+.mol-chip.active .zh{color:var(--dim)}
+#legend{position:fixed;left:18px;bottom:20px;z-index:20;max-width:320px;padding:10px 12px;pointer-events:auto}
+#legend .mol{font-size:11px;letter-spacing:1.5px;font-weight:600;color:#e8f2ff;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+#legend .formula{color:var(--faint);font-size:10px;letter-spacing:1px;font-weight:400}
+#legend .fxrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.fx-badge{font-size:10px;letter-spacing:1px;padding:3px 9px;border-radius:999px;cursor:pointer;
+  background:rgba(255,255,255,0.05);color:var(--dim);border:1px solid var(--stroke);transition:all .18s}
+.fx-badge:hover{color:#fff;border-color:rgba(255,255,255,0.35)}
+.fx-badge .i{color:var(--amber)}
+.fx-badge .m{color:var(--violet)}
+.fx-badge b{color:#e8f2ff;font-weight:600}
+#disclaimer{position:fixed;right:16px;bottom:16px;z-index:20;font-size:9px;letter-spacing:1.5px;color:#3d4656;pointer-events:none}
+#popover{position:fixed;z-index:45;padding:10px 12px;min-width:178px;max-width:250px;visibility:hidden;opacity:0;transform:translateY(6px);transition:opacity .25s ease, transform .25s ease, visibility .25s}
+#popover.show{visibility:visible;opacity:1;transform:translateY(0)}
+#popover .pv-title{font-size:10px;color:var(--dim);letter-spacing:1.5px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+#popover .pv-title b{color:#eaf6ff;font-weight:600}
+#popover .pv-close{color:var(--faint);cursor:pointer;font-size:12px;padding:0 3px}
+#popover .pv-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.pv-chip{border:1px solid var(--stroke);background:rgba(255,255,255,0.04);color:var(--dim);font-size:10px;
+  padding:5px 2px;border-radius:7px;cursor:pointer;text-align:center;transition:all .15s;font-family:inherit;letter-spacing:.5px}
+.pv-chip:hover{color:#fff;border-color:rgba(124,199,255,0.5);background:rgba(124,199,255,0.12)}
+.pv-chip.remove{color:#ff9a8f}
+.pv-chip.remove:hover{border-color:rgba(255,120,110,0.5);background:rgba(255,110,100,0.12)}
+#infoCard{position:fixed;right:18px;top:50%;transform:translateY(-50%);z-index:45;width:252px;padding:14px 16px;visibility:hidden;opacity:0;transition:opacity .25s ease, visibility .25s}
+#infoCard.show{visibility:visible;opacity:1}
+#infoCard h3{font-size:14px;letter-spacing:1px;font-weight:600;color:#fff;display:flex;align-items:center;justify-content:space-between}
+#infoCard h3 .zh{color:var(--dim);font-size:11px;font-weight:400}
+#infoCard .kv{margin:10px 0;display:flex;flex-direction:column;gap:6px}
+#infoCard .kv-row{display:flex;justify-content:space-between;font-size:11px;color:var(--dim)}
+#infoCard .kv-row .val{color:#e8f2ff}
+#infoCard .kv-row .val.i{color:var(--amber)}
+#infoCard .kv-row .val.m{color:var(--violet)}
+#infoCard .desc{font-size:11px;line-height:1.6;color:#a9b6c9}
+#infoCard .close{color:var(--faint);cursor:pointer;font-size:12px;padding:0 3px}
+.cmap-sel{background:transparent;border:1px solid var(--stroke);color:#cfe4ff;font-size:10px;letter-spacing:1px;border-radius:8px;padding:4px 6px;cursor:pointer;font-family:inherit;outline:none}
+.cmap-sel option{background:#0d111a;color:#cfe4ff}
+#legend .cmaprow{display:flex;align-items:center;gap:6px;margin-top:9px}
+#legend .cmapbar{flex:1;height:6px;border-radius:3px;border:1px solid var(--stroke);background:#000}
+#legend .cmaplabel{font-size:9px;color:var(--faint);letter-spacing:1px}
+#densityTag{position:fixed;z-index:25;display:flex;flex-direction:column;align-items:center;gap:1px;
+  padding:5px 14px;border-radius:10px;pointer-events:none;
+  visibility:hidden;opacity:0;transform:translateY(5px);
+  background:rgba(13,17,26,0.68);border:1px solid rgba(163,182,214,0.4);
+  backdrop-filter:blur(14px) saturate(1.25);-webkit-backdrop-filter:blur(14px) saturate(1.25);
+  box-shadow:0 8px 28px rgba(0,0,0,0.45);
+  transition:opacity .35s ease, transform .35s ease, border-color .2s ease, box-shadow .2s ease, visibility .35s;}
+#densityTag.show{visibility:visible;opacity:1;transform:translateY(0)}
+#densityTag .dt-val{font-size:15px;font-weight:700;color:#eaf6ff;font-variant-numeric:tabular-nums;letter-spacing:1px}
+#densityTag .dt-cap{font-size:8px;color:var(--faint);letter-spacing:1px;white-space:nowrap}
+#legend .densityhint{font-size:9px;color:var(--faint);letter-spacing:1px;margin-top:6px}
+#creator{position:fixed;left:18px;top:50%;transform:translateY(-50%);z-index:35;width:378px;padding:12px 14px;display:none;flex-direction:column;gap:8px}
+#creator.show{display:flex}
+#creator .cr-head{display:flex;justify-content:space-between;align-items:center;font-size:12px;letter-spacing:1.5px;color:#eaf6ff}
+#creator .cr-close{color:var(--faint);cursor:pointer;font-size:12px;padding:0 3px}
+#crCanvas{width:100%;height:300px;background:rgba(8,12,20,0.6);border:1px solid var(--stroke);border-radius:8px;cursor:crosshair}
+#creator .cr-tools{display:flex;gap:5px}
+#creator .cr-bordseg{display:flex;align-items:center;gap:4px;font-size:9px;color:var(--dim);letter-spacing:1px}
+.cr-bord-label{color:var(--faint)}
+.cr-bord{border:1px solid var(--stroke);background:rgba(255,255,255,0.04);color:var(--dim);font-size:10px;padding:2px 8px;border-radius:6px;cursor:pointer;font-family:inherit;transition:all .15s}
+.cr-bord:hover{color:#d9e8ff}
+.cr-bord.active{color:#eaf6ff;background:rgba(124,199,255,0.14);border-color:rgba(124,199,255,0.45)}
+.cr-tool{flex:1;border:1px solid var(--stroke);background:rgba(255,255,255,0.04);color:var(--dim);font-size:11px;padding:5px 0;border-radius:7px;cursor:pointer;font-family:inherit;letter-spacing:1px;transition:all .15s}
+.cr-tool:hover{color:#d9e8ff}
+.cr-tool.active{color:#eaf6ff;background:rgba(124,199,255,0.14);border-color:rgba(124,199,255,0.45)}
+#creator .cr-actions{display:flex;gap:6px}
+#creator .cr-actions .dshell-btn{flex:1;padding:6px 0;font-size:11px}
+#creator .cr-hint{font-size:9px;color:var(--faint);letter-spacing:1px;line-height:1.7}
+
+.cr-gp{display:inline-flex;flex-direction:column;align-items:center;gap:1px;min-width:46px;padding:4px 6px;border:1px solid var(--stroke);background:rgba(255,255,255,0.04);color:var(--dim);font-size:9px;border-radius:7px;cursor:pointer;font-family:inherit;line-height:1.25;transition:all .15s}
+.cr-gp .sym{font-size:11px;font-weight:600;color:#d9e8ff}
+.cr-gp .zh{font-size:9px}
+.cr-gp .fx{font-size:8px;color:var(--faint)}
+.cr-gp:hover{color:#fff;border-color:rgba(124,199,255,0.5)}
+.cr-gp.on{border-color:rgba(159,224,176,0.75);background:rgba(159,224,176,0.10)}
+.cr-gp.on .sym{color:#9fe0b0}
+.cr-gp.full{opacity:0.42;cursor:not-allowed}
+.cr-gp.remove{color:#ff9a8f;justify-content:center}
+.cr-gp[data-g=""]{color:#ff9a8f}
+.cr-gp-info{width:100%;font-size:9px;color:var(--faint);letter-spacing:1px;padding:0 2px 3px}
+#popover .cr-gp-info{grid-column:1/-1}
+#creatorBtn{width:40px;height:40px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;
+  color:var(--accent);cursor:pointer;flex:none;transition:all .18s}
+#creatorBtn:hover{color:#eaf6ff;border-color:rgba(124,199,255,0.5);box-shadow:0 0 18px rgba(124,199,255,0.18)}
+#creatorBtn.active{color:#eaf6ff;background:rgba(124,199,255,0.16);border-color:rgba(124,199,255,0.55);
+  box-shadow:0 0 22px rgba(124,199,255,0.30)}
+#debugPanel{position:fixed;right:16px;bottom:64px;z-index:40;width:236px;padding:12px 14px;display:none}
+#debugPanel.show{display:block}
+#debugPanel h4{font-size:10px;letter-spacing:2px;color:var(--dim);margin-bottom:8px;display:flex;justify-content:space-between}
+#debugPanel .dbg-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px;font-size:10px;color:var(--dim)}
+#debugPanel input[type=range]{flex:1;accent-color:var(--accent);height:2px;cursor:pointer}
+#debugPanel .dbg-val{width:38px;text-align:right;color:#cfe4ff}
+#toast{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:50;padding:8px 16px;font-size:11px;color:#eaf6ff;
+  background:rgba(13,17,26,0.85);border:1px solid rgba(124,199,255,0.35);border-radius:10px;
+  opacity:0;transition:opacity .35s;pointer-events:none;letter-spacing:.5px}
+#toast.show{opacity:1}
+#intro{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  background:radial-gradient(80% 70% at 50% 45%, rgba(12,20,34,0.55), #04060a 78%);transition:opacity 1.4s ease}
+#intro.out{opacity:0;pointer-events:none}
+#intro .big{font-size:26px;letter-spacing:8px;font-weight:700;color:#eaf6ff;text-shadow:0 0 30px rgba(124,199,255,0.35)}
+#intro .sub{font-size:12px;letter-spacing:3px;color:var(--dim)}
+#intro .hint{margin-top:26px;font-size:10px;letter-spacing:1.5px;color:var(--faint)}
+#errOverlay{position:fixed;inset:0;z-index:200;display:none;align-items:center;justify-content:center;
+  background:#04060a;color:#dce5f2;font-size:13px;line-height:1.9;text-align:center;padding:40px}
+#errOverlay.show{display:flex}
+#errOverlay .err-title{font-size:15px;letter-spacing:3px;color:#eaf6ff;margin-bottom:10px}
+@media (max-width:920px){
+  #topbar{flex-wrap:wrap;justify-content:center}
+  #legend{display:none}
+  #brand .sub{display:none}
+}
+</style>
+</head>
+<body>
+<div id="scene"></div>
+<div id="vignette"></div>
+<div id="intro">
+  <div class="big">ELECTRON&nbsp;CLOUD</div>
+  <div class="sub">有机化合物电子效应可视化</div>
+  <div class="hint">分子 · 电子云 · 诱导效应 / 共轭效应 · 点击原子替换官能团</div>
+</div>
+<div id="topbar">
+  <div class="panel" id="brand">ELECTRON CLOUD<span class="sub">电子云 · 有机电子效应</span></div>
+  <div class="panel seg" id="modeSeg">
+    <button class="seg-btn active" data-mode="total">Total</button>
+    <button class="seg-btn" data-mode="inductive">Inductive</button>
+    <button class="seg-btn" data-mode="resonance">Resonance</button>
+  </div>
+  <div class="panel seg" id="qualitySeg">
+    <button class="seg-btn" data-q="LOW">LOW</button>
+    <button class="seg-btn" data-q="MEDIUM">MED</button>
+    <button class="seg-btn active" data-q="HIGH">HIGH</button>
+    <button class="seg-btn" data-q="ULTRA">ULTRA</button>
+  </div>
+  <div class="panel" style="padding:5px 10px">
+    <button id="explainBtn"><span class="dot"></span>Explain</button>
+  </div>
+  <div class="panel" style="padding:5px 8px">
+    <select id="cmapSel" class="cmap-sel" title="电子密度色图">
+      <option value="plasma" selected>Plasma</option>
+      <option value="inferno">Inferno</option>
+      <option value="viridis">Viridis</option>
+      <option value="coolwarm">Cool-Warm</option>
+      <option value="ice">Cyan Glow</option>
+    </select>
+  </div>
+</div>
+<div id="bottomBar">
+  <div class="panel" id="moleculeBar"></div>
+  <button class="panel" id="creatorBtn" title="创造模式 · 自由碳架" aria-label="创造模式">
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+  </button>
+</div>
+<div class="panel" id="legend"></div>
+<div id="disclaimer">by CubicZnS · 半定量模型 仅供参考</div>
+<div id="densityTag"></div>
+<div class="panel" id="creator">
+  <div class="cr-head"><b>创造模式 · 自由碳架</b><span class="cr-close" id="crClose">✕</span></div>
+  <canvas id="crCanvas" width="344" height="300"></canvas>
+  <div class="cr-tools">
+    <button class="cr-tool active" data-tool="atom">加碳</button>
+    <button class="cr-tool" data-tool="bond">连键</button>
+    <button class="cr-tool" data-tool="erase">擦除</button>
+  </div>
+  <div class="cr-bordseg">
+    <span class="cr-bord-label">键级</span>
+    <button class="cr-bord active" data-order="1">单</button>
+    <button class="cr-bord" data-order="2">双</button>
+    <button class="cr-bord" data-order="3">三</button>
+    <span class="cr-bord-label" style="margin-left:6px;color:var(--faint)">交替单双六元环自动芳香化（Hückel）</span>
+  </div>
+  <div class="cr-actions">
+    <button class="dshell-btn" id="crApply">应用</button>
+    <button class="dshell-btn dshell-btnGhost" id="crLoadBz">载入苯</button>
+    <button class="dshell-btn dshell-btnGhost" id="crClear">清空</button>
+  </div>
+  <div class="cr-hint">画布只画碳架：加碳 · 连键（先选键级 单/双/三）· 擦除 · 环烷自动 sp³ · 交替单双六元环自动芳香化 · 应用后点 3D 分子中的碳取代 H 挂官能团</div>
+<div class="cr-hint" id="crIdentify" style="color:#9fe0b0"></div>
+</div>
+<div class="panel" id="popover"></div>
+<div class="panel" id="infoCard"></div>
+<div class="panel" id="debugPanel"></div>
+<div id="toast"></div>
+<div id="errOverlay"><div><div class="err-title">ELECTRON CLOUD</div><div id="errMsg">加载失败</div></div></div>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+
+const MOLECULE_DATA = {"ringR":1.3949,"source":"pubchem","fetchedAt":"2026-08-28T16:27:11.870Z","molecules":{"benzene":{"name":"Benzene","zh":"苯","formula":"C6H6","fragments":[]},"toluene":{"name":"Toluene","zh":"甲苯","formula":"C7H8","fragments":[{"pos":5,"group":"CH3"}]},"anisole":{"name":"Anisole","zh":"苯甲醚","formula":"C7H8O","fragments":[{"pos":2,"group":"OMe"}]},"phenol":{"name":"Phenol","zh":"苯酚","formula":"C6H6O","fragments":[{"pos":0,"group":"OH"}]},"aniline":{"name":"Aniline","zh":"苯胺","formula":"C6H7N","fragments":[{"pos":0,"group":"NH2"}]},"fluorobenzene":{"name":"Fluorobenzene","zh":"氟苯","formula":"C6H5F","fragments":[{"pos":5,"group":"F"}]},"chlorobenzene":{"name":"Chlorobenzene","zh":"氯苯","formula":"C6H5Cl","fragments":[{"pos":5,"group":"Cl"}]},"benzonitrile":{"name":"Benzonitrile","zh":"苯甲腈","formula":"C7H5N","fragments":[{"pos":3,"group":"CN"}]},"nitrobenzene":{"name":"Nitrobenzene","zh":"硝基苯","formula":"C6H5NO2","fragments":[{"pos":2,"group":"NO2"}]},"benzaldehyde":{"name":"Benzaldehyde","zh":"苯甲醛","formula":"C7H6O","fragments":[{"pos":3,"group":"CHO"}]},"benzoicacid":{"name":"Benzoic acid","zh":"苯甲酸","formula":"C7H6O2","fragments":[{"pos":3,"group":"COOH"}]},"benzotrifluoride":{"name":"Benzotrifluoride","zh":"三氟甲苯","formula":"C7H5F3","fragments":[{"pos":2,"group":"CF3"}]}},"fragments":{"CH3":{"atoms":[{"el":"C","p":[1.4916,0,0]},{"el":"H","p":[1.8867,0.8802,0.5186]},{"el":"H","p":[1.8869,-0.8807,0.5177]},{"el":"H","p":[1.8672,0.0006,-1.028]}],"bonds":[[0,1,1],[0,2,1],[0,3,1]],"attachOrder":1},"OMe":{"atoms":[{"el":"O","p":[1.3608,0,0]},{"el":"C","p":[2.0104,1.2705,0.0012]},{"el":"H","p":[1.785,1.8368,0.9112]},{"el":"H","p":[1.7851,1.8385,-0.9078]},{"el":"H","p":[3.089,1.082,0.001]}],"bonds":[[0,1,1],[1,2,1],[1,3,1],[1,4,1]],"attachOrder":1},"OH":{"atoms":[{"el":"O","p":[1.3611,0,0]},{"el":"H","p":[1.6762,-0.9202,0.0002]}],"bonds":[[0,1,1]],"attachOrder":1},"NH2":{"atoms":[{"el":"N","p":[1.4105,0,0]},{"el":"H","p":[1.9167,0.8756,-0.0012]},{"el":"H","p":[1.9167,-0.8755,-0.0015]}],"bonds":[[0,1,1],[0,2,1]],"attachOrder":1},"F":{"atoms":[{"el":"F","p":[1.3393,0,0]}],"bonds":[],"attachOrder":1},"Cl":{"atoms":[{"el":"Cl","p":[1.7213,0,0]}],"bonds":[],"attachOrder":1},"CN":{"atoms":[{"el":"C","p":[1.429,0,0]},{"el":"N","p":[2.5909,0.0001,0.0001]}],"bonds":[[1,0,3]],"attachOrder":1},"NO2":{"atoms":[{"el":"N","p":[1.42,0,0]},{"el":"O","p":[2.0279,1.0976,0.0003]},{"el":"O","p":[2.0279,-1.0976,0]}],"bonds":[[1,0,1],[2,0,2]],"attachOrder":1},"CHO":{"atoms":[{"el":"C","p":[1.4542,0,0]},{"el":"O","p":[2.1282,-1.0339,-0.0002]},{"el":"H","p":[1.9492,0.986,0.0006]}],"bonds":[[1,0,2],[0,2,1]],"attachOrder":1},"CF3":{"atoms":[{"el":"C","p":[1.4915,0,0]},{"el":"F","p":[2.0388,1.2515,-0.0019]},{"el":"F","p":[2.0382,-0.6259,1.0841]},{"el":"F","p":[2.0166,-0.6308,-1.0904]}],"bonds":[[1,0,1],[2,0,1],[3,0,1]],"attachOrder":1},"COOH":{"atoms":[{"el":"C","p":[1.4542,0,0]},{"el":"O","p":[1.9748,-1.2578,0.0002]},{"el":"O","p":[2.1704,1.0067,0.0007]},{"el":"H","p":[2.9558,-1.2467,0.0008]}],"bonds":[[1,0,1],[1,3,1],[2,0,2]],"attachOrder":1}},"fragSource":"pubchem"};
+/* ================= 常量与数据 ================= */
+const RING_R = MOLECULE_DATA.ringR;
+const ELEMENTS = {
+  H:  { color:0xdfe6ee, ball:0.26, sigma:0.60, base:0.80, emissive:0.04 },
+  C:  { color:0x9aa5b1, ball:0.38, sigma:0.80, base:1.55, emissive:0.07 },
+  N:  { color:0x4d7cff, ball:0.36, sigma:0.78, base:2.10, emissive:0.30 },
+  O:  { color:0xff5a52, ball:0.34, sigma:0.76, base:2.30, emissive:0.28 },
+  F:  { color:0x8fe388, ball:0.32, sigma:0.72, base:2.50, emissive:0.18 },
+  Cl: { color:0x63d69a, ball:0.44, sigma:0.92, base:2.40, emissive:0.16 },
+};
+const GROUPS = {
+  CH3:  { name:"Methyl",            zh:"甲基",     sigmaM:-0.07, sigmaP:-0.17, sigmaPlus:-0.31, sigmaMinus:-0.17, sigmaI:-0.01, desc:"弱 +I（σI≈0）+ 超共轭 +M（σR≈-0.14）：向邻/对位弱给电子。" },
+  OH:   { name:"Hydroxyl",          zh:"羟基",     sigmaM:+0.12, sigmaP:-0.37, sigmaPlus:-0.92, sigmaMinus:-0.37, sigmaI:+0.25, desc:"−I（σI=+0.25）+ 强 +M（σR≈-0.43）：氧孤对电子经 π 共轭向邻/对位强给电子。" },
+  OMe:  { name:"Methoxy",           zh:"甲氧基",   sigmaM:+0.12, sigmaP:-0.27, sigmaPlus:-0.78, sigmaMinus:-0.27, sigmaI:+0.30, desc:"−I（σI=+0.30）+ 强 +M（σR≈-0.33）。" },
+  NH2:  { name:"Amino",             zh:"氨基",     sigmaM:-0.16, sigmaP:-0.66, sigmaPlus:-1.30, sigmaMinus:-0.66, sigmaI:+0.12, desc:"−I（σI=+0.12）+ 最强 +M（σR≈-0.58，推-拉时增强至 -1.2）。" },
+  F:    { name:"Fluoro",            zh:"氟",       sigmaM:+0.34, sigmaP:+0.06, sigmaPlus:-0.07, sigmaMinus:+0.06, sigmaI:+0.54, desc:"强 −I（σI=+0.54）主导；π 给电子被掩盖（σp≈0，对位近中性），总效应吸电子。" },
+  Cl:   { name:"Chloro",            zh:"氯",       sigmaM:+0.37, sigmaP:+0.23, sigmaPlus:+0.11, sigmaMinus:+0.23, sigmaI:+0.47, desc:"−I（σI=+0.47）主导；弱 +M。总效应吸电子。" },
+  CF3:  { name:"Trifluoromethyl",   zh:"三氟甲基", sigmaM:+0.43, sigmaP:+0.54, sigmaPlus:+0.61, sigmaMinus:+0.54, sigmaI:+0.42, desc:"强 −I（σI=+0.42），无有效 π 共轭（σp>σm 源于偶极/场效应）。" },
+  CN:   { name:"Cyano",             zh:"氰基",     sigmaM:+0.56, sigmaP:+0.66, sigmaPlus:+0.66, sigmaMinus:+1.00, sigmaI:+0.57, desc:"−I（σI=+0.57）+ −M（σR 常态 +0.38，推-拉时增强至 +0.72）。" },
+  NO2:  { name:"Nitro",             zh:"硝基",     sigmaM:+0.71, sigmaP:+0.78, sigmaPlus:+0.79, sigmaMinus:+1.27, sigmaI:+0.67, desc:"强 −I（σI=+0.67）+ 强 −M（σR 常态 +0.42，推-拉时增强至 +0.92）。" },
+  CHO:  { name:"Formyl",            zh:"醛基",     sigmaM:+0.35, sigmaP:+0.42, sigmaPlus:+0.73, sigmaMinus:+1.03, sigmaI:+0.30, desc:"−I（σI=+0.30）+ −M（σR 常态 +0.24，推-拉时增强至 +0.85）。" },
+  COOH: { name:"Carboxyl",          zh:"羧基",     sigmaM:+0.37, sigmaP:+0.45, sigmaPlus:+0.45, sigmaMinus:+0.75, sigmaI:+0.30, desc:"−I（σI=+0.30）+ −M（σR 常态 +0.27，推-拉时增强至 +0.57）。" },
+};
+const GROUP_KEYS = ["CH3","OH","OMe","NH2","F","Cl","CF3","CN","NO2","CHO","COOH"];
+const MODE_COLORS = {
+  total:     { a:[0.49,0.76,1.00], b:[0.82,0.92,1.00] },
+  inductive: { a:[1.00,0.70,0.36], b:[1.00,0.86,0.64] },
+  resonance: { a:[0.72,0.58,1.00], b:[0.90,0.83,1.00] },
+};
+const MODE_LABEL = { total:"Total", inductive:"Inductive", resonance:"Resonance" };
+const FX_MODE = { total:{i:1,r:1}, inductive:{i:1,r:0}, resonance:{i:0,r:1} };
+const QUALITY = {
+  LOW:    { count: 40000,  bloom: 0.35, radius: 0.50, threshold: 0.50, psize: 0.042 },
+  MEDIUM: { count: 80000,  bloom: 0.42, radius: 0.55, threshold: 0.47, psize: 0.038 },
+  HIGH:   { count: 160000, bloom: 0.50, radius: 0.55, threshold: 0.45, psize: 0.034 },
+  ULTRA:  { count: 300000, bloom: 0.60, radius: 0.62, threshold: 0.42, psize: 0.031 },
+};
+const QUALITY_ORDER = ["LOW","MEDIUM","HIGH","ULTRA"];
+const MOLECULE_LIST = Object.keys(MOLECULE_DATA.molecules).map(function (k) {
+  const m = MOLECULE_DATA.molecules[k];
+  return { key:k, name:m.name, zh:m.zh, formula:m.formula, fragments:m.fragments };
+});
+const SETTINGS = {
+  mode:"total", quality:"HIGH",
+  transDur:2.6, noiseAmp:0.16, breathAmp:0.055, flowAmp:0.9, cloudAlpha:0.6,
+  indScale:1.0, resScale:1.0,
+  colormap:"plasma", densGamma:1.0,
+  sigmaK:1.4,
+};
+let seededRand = mulberry32(20260828);
+
+function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+function mulberry32(seed){
+  let a = seed >>> 0;
+  return function(){
+    a += 0x6D2B79F5;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function gauss(rand){ const u = Math.max(rand(), 1e-9); const v = rand(); return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v); }
+function randUnit(rand){
+  let x = gauss(rand), y = gauss(rand), z = gauss(rand);
+  const l = Math.hypot(x,y,z) + 1e-9;
+  return [x/l, y/l, z/l];
+}
+function v3sub(a,b){ return [a[0]-b[0], a[1]-b[1], a[2]-b[2]]; }
+function v3len(a){ return Math.hypot(a[0],a[1],a[2]); }
+function ringSteps(a,b){ const d = Math.abs(a-b) % 6; return Math.min(d, 6-d); }
+function rotZ2(p, th){ const c = Math.cos(th), s = Math.sin(th); return [p[0]*c - p[1]*s, p[0]*s + p[1]*c, p[2]]; }
+function ringPos(k){ const a = Math.PI/180 * (30 + 60*k); return [RING_R*Math.cos(a), RING_R*Math.sin(a), 0]; }
+function easeOutCubic(t){ return 1 - Math.pow(1-t, 3); }
+function easeInCubic(t){ return t*t*t; }
+function easeInOutCubic(t){ return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2; }
+function easeOutBack(t){
+  const c1 = 1.70158, c3 = c1 + 1;
+  return 1 + c3*Math.pow(t-1, 3) + c1*Math.pow(t-1, 2);
+}
+function overallVerdict(g){
+  const net = g.sigmaP;
+  if (net < -0.1) return "净给电子（electron-donating）";
+  if (net > 0.1) return "净吸电子（electron-withdrawing）";
+  return "混合 / 弱效应（mixed）";
+}
+function signLabel(v){ return v > 0 ? "+" : v < 0 ? "−" : ""; }
+
+/* ================= 分子构建 ================= */
+function buildMolecule(fragList){
+  const frags = (fragList || []).slice().sort(function (a,b){ return a.pos - b.pos; });
+  const atoms = [], bonds = [];
+  const used = new Set(frags.map(function (f){ return f.pos; }));
+  for (let k=0;k<6;k++){
+    const p = ringPos(k);
+    atoms.push({ el:"C", pos:[p[0],p[1],p[2]], key:"R"+k+"C", ringPos:k, fragId:-1, localIdx:-1 });
+    bonds.push({ i:k, j:(k+1)%6, order:1.5 });
+  }
+  for (let k=0;k<6;k++){
+    if (used.has(k)) continue;
+    const p = ringPos(k);
+    const r = (RING_R + 1.086) / RING_R;
+    atoms.push({ el:"H", pos:[p[0]*r, p[1]*r, 0], key:"R"+k+"H", ringPos:k, fragId:-1, localIdx:-1 });
+    bonds.push({ i:k, j:atoms.length-1, order:1 });
+  }
+  for (let fi=0; fi<frags.length; fi++){
+    const f = frags[fi];
+    const gd = MOLECULE_DATA.fragments[f.group];
+    const th = Math.PI/180 * (30 + 60*f.pos);
+    const rp = ringPos(f.pos);
+    const base = atoms.length;
+    for (let li=0; li<gd.atoms.length; li++){
+      const a = gd.atoms[li];
+      const q = rotZ2(a.p, th);
+      atoms.push({ el:a.el, pos:[q[0]+rp[0], q[1]+rp[1], q[2]], key:f.group+"@"+f.pos+"#"+li, ringPos:f.pos, fragId:fi, localIdx:li, fragGroup:f.group });
+    }
+    for (const b of gd.bonds) bonds.push({ i:base+b[0], j:base+b[1], order:b[2] });
+    bonds.push({ i:f.pos, j:base, order:1 });
+  }
+  for (const f of frags) f.atomIdx = f.pos;
+  return { atoms:atoms, bonds:bonds, fragments:frags };
+}
+function bondKey(aKey, bKey, order){
+  return (aKey < bKey ? aKey + "|" + bKey : bKey + "|" + aKey) + "#" + order;
+}
+
+/* ================= 碳架本征电子密度基线（创造模式） ================= */
+/* 半定量依据（文献数据，非编造）：
+   · 杂化因子 R —— 轨道电负性随 s 成分增大（Bent's rule；sp>sp²>sp³）：
+     Hinze & Jaffé (1962) 轨道电负性（Mulliken, eV）：C(sp3)=7.98, C(sp2)=8.79, C(sp)=10.39
+     → 相对值 1.000 : 1.101 : 1.302（高电负性碳吸附更多 σ 电子密度）
+   · C–H 极化 —— Pauling 电负性 C(2.55) > H(2.20)：每个 C–H 键把电子密度向碳偏移，
+     故 CH3 富 > CH2 > CH > C（季碳最贫）；幅度 CH_POLAR 为校准常数（每键 +7%），
+     量级锚定文献典型烷烃碳部分电荷差异（ESP/Mulliken：propane CH3 明显负于 CH2，约几 %）
+   · 芳香/烯 sp² 碳由 R 因子统一抬升；苯环六位相等（初始态均匀，符合化学事实） */
+const SKELETON_BASIS = { SP3: 1.000, SP2: 1.101, SP: 1.302, CH_POLAR: 0.07 };
+function skeletonBaseline(mol){
+  const n = mol.atoms.length;
+  const base = new Float64Array(n);
+  for (let i = 0; i < n; i++){
+    base[i] = 1;
+    if (mol.atoms[i].el !== "C") continue;
+    let maxO = 0, nH = 0;
+    for (const b of mol.bonds){
+      let o = -1;
+      if (b.i === i) o = b.j; else if (b.j === i) o = b.i;
+      if (o >= 0){
+        if (b.order > maxO) maxO = b.order;
+        if (mol.atoms[o].el === "H") nH++;
+      }
+    }
+    // 杂化电负性按真实 π 键判定（sp³/sp²/sp；四根单键 = sp³）
+    const R = maxO >= 3 ? SKELETON_BASIS.SP : maxO >= 1.5 ? SKELETON_BASIS.SP2 : SKELETON_BASIS.SP3;
+    base[i] = R * (1 + SKELETON_BASIS.CH_POLAR * nH);
+  }
+  return base;
+}
+
+/* ================= 化学引擎（半定量虚拟电子势场） ================= */
+function computeField(mol, mode){
+  const atoms = mol.atoms, bonds = mol.bonds, frags = mol.fragments;
+  const n = atoms.length;
+  // σ 数据驱动（LFER 理论）：Taft/Hammett 常数 + 位置加和 + 推-拉增强
+  //   · 间位 = σ_m（实测，近似纯诱导）
+  //   · 邻/对位 = 诱导(σ_m 位置衰减) + 共振(σR_model，由 σ_p 校准)
+  //   · 因子 = exp(-K·Σσ)：σ 为 log 尺度 → 密度乘性、天然饱和、不会为负
+  const ind = new Float64Array(n), res = new Float64Array(n);
+  let hasDonor = false, hasAcceptor = false;
+  for (const f of frags){
+    const g = GROUPS[f.group];
+    if (g.sigmaPlus < g.sigmaP) hasDonor = true;   // 有 σ⁺ 增强能力 → 共振供体
+    if (g.sigmaMinus > g.sigmaP) hasAcceptor = true; // 有 σ⁻ 增强能力 → 共振受体
+  }
+  const IND_D = [3.0, 1.8, 1.0, 0.5, 0.25, 0.125]; // σ_m 的位置衰减（d=0..5，链上继续衰减）
+  // 碳-碳邻接：诱导沿全部 C–C 键传播（距离衰减）
+  const ccAdj = new Array(n).fill(null).map(function(){ return []; });
+  for (const b of bonds){
+    if (atoms[b.i].el === "C" && atoms[b.j].el === "C"){
+      ccAdj[b.i].push(b.j);
+      ccAdj[b.j].push(b.i);
+    }
+  }
+  // 共轭网络（π）：共振只沿 π 体系传播——含 π 键的碳（sp²/sp）及连接两个 π 碳的单键；
+  // 饱和 sp³ 碳不在共轭网络内（取代基在烷烃上无共振，只有诱导，符合化学事实）
+  const hasPi = new Array(n).fill(false);
+  for (let i = 0; i < n; i++){
+    if (atoms[i].el !== "C") continue;
+    let mo = 0;
+    for (const b of bonds){
+      if ((b.i === i || b.j === i) && b.order > mo) mo = b.order;
+    }
+    if (mo >= 1.5) hasPi[i] = true; // 双键/三键/芳香键
+  }
+  const piAdj = new Array(n).fill(null).map(function(){ return []; });
+  for (const b of bonds){
+    if (atoms[b.i].el === "C" && atoms[b.j].el === "C" && hasPi[b.i] && hasPi[b.j]){
+      piAdj[b.i].push(b.j);
+      piAdj[b.j].push(b.i);
+    }
+  }
+  function bfsOn(adj, src){
+    const dist = new Int32Array(n);
+    dist.fill(-1);
+    const queue = [src];
+    dist[src] = 0;
+    for (let qi = 0; qi < queue.length; qi++){
+      const cur = queue[qi];
+      for (const nb of adj[cur]){
+        if (dist[nb] === -1){ dist[nb] = dist[cur] + 1; queue.push(nb); }
+      }
+    }
+    return dist;
+  }
+  frags.forEach(function (f, fi){
+    const g = GROUPS[f.group];
+    const src = f.atomIdx;
+    if (src === undefined) return;
+    // 推-拉增强（Yukawa–Tsuno）：受体在供体存在时用 σ⁻，供体在受体存在时用 σ⁺
+    let sigmaP = g.sigmaP;
+    if (g.sigmaMinus > g.sigmaP && hasDonor) sigmaP = g.sigmaMinus;
+    else if (g.sigmaPlus < g.sigmaP && hasAcceptor) sigmaP = g.sigmaPlus;
+    const sigmaR = sigmaP - 0.5 * g.sigmaM; // 校准共振常数（para 精确复现 σ_p）
+    // 诱导：沿全部 C–C 键的距离衰减（σ_m）
+    const dInd = bfsOn(ccAdj, src);
+    for (let i = 0; i < n; i++){
+      if (atoms[i].el === "C" && dInd[i] >= 0){
+        ind[i] += g.sigmaM * IND_D[Math.min(dInd[i], 5)];
+      }
+    }
+    // 共振：仅沿共轭网络传播；ipso 碳无 π（sp³）→ 该取代基无共振项
+    if (hasPi[src]){
+      const dRes = bfsOn(piAdj, src);
+      for (let i = 0; i < n; i++){
+        if (atoms[i].el === "C" && dRes[i] >= 0){
+          if (dRes[i] === 0) res[i] += sigmaR * 0.7;        // ipso
+          else if (dRes[i] % 2 === 1) res[i] += sigmaR;     // 奇距离 = 邻/对式共振活化位
+        }
+      }
+    }
+    for (let i = 0; i < n; i++){
+      const a = atoms[i];
+      if (a.fragId === fi){
+        ind[i] += -g.sigmaI * 0.6;
+        res[i] += -sigmaR * 0.5;
+      }
+    }
+  });
+  const fm = FX_MODE[mode];
+  const fI = fm.i * SETTINGS.indScale, fR = fm.r * SETTINGS.resScale;
+  const K = SETTINGS.sigmaK;
+  const factor = new Float64Array(n);
+  const w = new Float64Array(n);
+  for (let i = 0; i < n; i++){
+    const s = fI * ind[i] + fR * res[i];
+    factor[i] = clamp(Math.exp(-K * s), 0.05, 4.0);
+    w[i] = clamp(ELEMENTS[atoms[i].el].base * factor[i], 0.05, 4.0);
+  }
+  // 创造模式：乘入碳架本征基线（杂化 + C–H 极化）——初始碳架密度即不均匀，
+  // 取代基 σ 效应在基线上叠加；预置分子保持「苯环=1.00」规范不变
+  if (mol.isCustom){
+    const base = skeletonBaseline(mol);
+    for (let i = 0; i < n; i++){
+      factor[i] = clamp(factor[i] * base[i], 0.05, 4.0);
+      w[i] = clamp(ELEMENTS[atoms[i].el].base * factor[i], 0.05, 4.0);
+    }
+  }
+  const src = [];
+  let maxW = 1e-6;
+  for (let i=0;i<n;i++){
+    const a = atoms[i];
+    src.push({ kind:0, p:a.pos, s:ELEMENTS[a.el].sigma, w:w[i] });
+    if (w[i] > maxW) maxW = w[i];
+  }
+  for (const b of bonds){
+    const isPi = b.order >= 1.5;
+    let mf;
+    if (mode === "inductive") mf = isPi ? 0.18 : 1.35;
+    else if (mode === "resonance") mf = isPi ? 1.60 : 0.40;
+    else mf = isPi ? 1.15 : 0.85;
+    const bw = b.order * mf;
+    src.push({ kind:1, a:atoms[b.i].pos, b:atoms[b.j].pos, s:0.30, w:bw });
+    if (bw > maxW) maxW = bw;
+  }
+  return { src:src, maxW:maxW, w:w, factor:factor };
+}
+
+/* ================= 电子密度着色（科学色图） ================= */
+/* 色图规范：matplotlib 感知均匀色图（plasma/inferno/viridis，BSD License）
+   + ChimeraX/PyMOL 风格静电势蓝↔红（coolwarm）+ 自研深蓝→青→白（ice） */
+const COLORMAPS = {
+  plasma:   { name:"Plasma (matplotlib)", stops:[[0.0,[13,8,135]],[0.16,[70,3,159]],[0.32,[110,0,168]],[0.46,[156,21,152]],[0.6,[192,45,118]],[0.74,[220,88,87]],[0.88,[240,155,62]],[1.0,[249,251,26]]] },
+  inferno:  { name:"Inferno (matplotlib)", stops:[[0.0,[0,0,4]],[0.2,[66,10,104]],[0.4,[147,38,103]],[0.6,[221,81,58]],[0.8,[252,165,10]],[1.0,[252,255,164]]] },
+  viridis:  { name:"Viridis (matplotlib)", stops:[[0.0,[68,1,84]],[0.2,[65,68,135]],[0.4,[42,120,142]],[0.6,[34,168,132]],[0.8,[122,209,81]],[1.0,[253,231,37]]] },
+  coolwarm: { name:"Cool-Warm (静电势规范)", stops:[[0.0,[59,76,192]],[0.5,[230,232,238]],[1.0,[180,4,38]]] },
+  ice:      { name:"Cyan Glow (深蓝→青→白)", stops:[[0.0,[6,26,66]],[0.35,[16,92,168]],[0.62,[50,155,214]],[0.82,[140,225,255]],[1.0,[255,255,255]]] },
+};
+function sampleStops(stops, t){
+  if (t <= stops[0][0]) return stops[0][1];
+  for (let i = 1; i < stops.length; i++){
+    if (t <= stops[i][0]){
+      const s0 = stops[i-1], s1 = stops[i];
+      const f = (t - s0[0]) / (s1[0] - s0[0]);
+      return [s0[1][0] + (s1[1][0]-s0[1][0])*f, s0[1][1] + (s1[1][1]-s0[1][1])*f, s0[1][2] + (s1[1][2]-s0[1][2])*f];
+    }
+  }
+  return stops[stops.length-1][1];
+}
+function colormapCSS(stops){
+  const parts = [];
+  for (let i = 0; i <= 12; i++){
+    const c = sampleStops(stops, i / 12);
+    parts.push("rgb(" + Math.round(c[0]) + "," + Math.round(c[1]) + "," + Math.round(c[2]) + ")");
+  }
+  return "linear-gradient(90deg, " + parts.join(", ") + ")";
+}
+/* 体素密度场：把半定量电子势场采样到网格；粒子取对数归一化密度（体渲染常用对数压缩） */
+function buildDensityGrid(field){
+  // 固定对数标度（体渲染惯例）：以苯环核心≈1 为基准，保证不同分子/取代状态间颜色可比
+  const N = 36, half = 4.8;
+  const cell = (2 * half) / (N - 1);
+  const vMax = Math.log1p(1.6);
+  const data = new Float32Array(N * N * N);
+  let idx = 0;
+  for (let iz = 0; iz < N; iz++){
+    const z = -half + iz * cell;
+    for (let iy = 0; iy < N; iy++){
+      const y = -half + iy * cell;
+      for (let ix = 0; ix < N; ix++){
+        data[idx++] = clamp(Math.log1p(fieldValue(field, -half + ix * cell, y, z)) / vMax, 0, 1);
+      }
+    }
+  }
+  return { data: data, N: N, cell: cell, half: half };
+}
+function fieldValue(field, x, y, z){
+  let v = 0;
+  for (let si = 0; si < field.src.length; si++){
+    const s = field.src[si];
+    if (s.kind === 0){
+      const dx = x - s.p[0], dy = y - s.p[1], dz = z - s.p[2];
+      v += s.w * Math.exp(-(dx*dx + dy*dy + dz*dz) / (s.s * s.s));
+    } else {
+      const ax = s.a[0], ay = s.a[1], az = s.a[2];
+      const bx = s.b[0], by = s.b[1], bz = s.b[2];
+      const dxx = bx - ax, dyy = by - ay, dzz = bz - az;
+      const len2 = dxx*dxx + dyy*dyy + dzz*dzz + 1e-9;
+      let t = ((x-ax)*dxx + (y-ay)*dyy + (z-az)*dzz) / len2;
+      t = clamp(t, 0, 1);
+      const px = ax + dxx*t, py = ay + dyy*t, pz = az + dzz*t;
+      const dx = x - px, dy = y - py, dz = z - pz;
+      v += s.w * Math.exp(-(dx*dx + dy*dy + dz*dz) / (s.s * s.s));
+    }
+  }
+  return v;
+}
+function gridDensity(grid, x, y, z){
+  const N = grid.N, cell = grid.cell, half = grid.half;
+  const fx = clamp((x + half) / cell, 0, N - 1.0001);
+  const fy = clamp((y + half) / cell, 0, N - 1.0001);
+  const fz = clamp((z + half) / cell, 0, N - 1.0001);
+  const ix = Math.floor(fx), iy = Math.floor(fy), iz = Math.floor(fz);
+  const tx = fx - ix, ty = fy - iy, tz = fz - iz;
+  const s2 = N * N;
+  const i000 = (iz * N + iy) * N + ix;
+  const d = grid.data;
+  const c000 = d[i000], c100 = d[i000+1], c010 = d[i000+N], c110 = d[i000+N+1];
+  const c001 = d[i000+s2], c101 = d[i000+s2+1], c011 = d[i000+s2+N], c111 = d[i000+s2+N+1];
+  const c00 = c000*(1-tx) + c100*tx;
+  const c10 = c010*(1-tx) + c110*tx;
+  const c01 = c001*(1-tx) + c101*tx;
+  const c11 = c011*(1-tx) + c111*tx;
+  const c0 = c00*(1-ty) + c10*ty;
+  const c1 = c01*(1-ty) + c11*ty;
+  return clamp(c0*(1-tz) + c1*tz, 0, 1);
+}
+/* ================= 粒子目标分布采样 ================= */
+function sampleCloud(field, count, oldPos, grid){
+  const src = field.src, maxW = field.maxW;
+  const cdf = new Float64Array(src.length);
+  let total = 0;
+  for (let si=0; si<src.length; si++){
+    const s = src[si];
+    let wv;
+    if (s.kind === 0) wv = s.w * s.s * s.s * s.s;
+    else { const L = v3len(v3sub(s.b, s.a)); wv = s.w * L * s.s * s.s; }
+    total += wv;
+    cdf[si] = total;
+  }
+  const pos = new Float32Array(count*3);
+  const size = new Float32Array(count);
+  const bright = new Float32Array(count);
+  const density = new Float32Array(count);
+  const seed = new Float32Array(count*3);
+  const delay = new Float32Array(count);
+  for (let i=0;i<count;i++){
+    let r = seededRand() * total;
+    let lo = 0, hi = src.length - 1;
+    while (lo < hi){ const mid = (lo + hi) >> 1; if (cdf[mid] < r) lo = mid + 1; else hi = mid; }
+    const s = src[lo];
+    let px, py, pz;
+    if (s.kind === 0){
+      px = s.p[0] + gauss(seededRand)*s.s;
+      py = s.p[1] + gauss(seededRand)*s.s;
+      pz = s.p[2] + gauss(seededRand)*s.s;
+    } else {
+      const tt = seededRand();
+      const d = v3sub(s.b, s.a);
+      const u = randUnit(seededRand);
+      const rad = gauss(seededRand) * s.s;
+      px = s.a[0] + d[0]*tt + u[0]*rad;
+      py = s.a[1] + d[1]*tt + u[1]*rad;
+      pz = s.a[2] + d[2]*tt + u[2]*rad;
+    }
+    const kf = oldPos ? 0.18 + 0.30*seededRand() : 0;
+    if (kf > 0 && oldPos){
+      const oi = i*3;
+      px = px*(1-kf) + oldPos[oi]*kf;
+      py = py*(1-kf) + oldPos[oi+1]*kf;
+      pz = pz*(1-kf) + oldPos[oi+2]*kf;
+    }
+    const rel = clamp(s.w / maxW, 0.05, 1.6);
+    pos[i*3] = px; pos[i*3+1] = py; pos[i*3+2] = pz;
+    size[i] = 0.55 + seededRand()*0.75 + 0.35*Math.min(rel, 1.0);
+    bright[i] = clamp(0.08 + 0.24*rel + seededRand()*0.18, 0.05, 0.5);
+    density[i] = grid ? gridDensity(grid, px, py, pz) : clamp(s.w / maxW, 0, 1);
+    seed[i*3] = seededRand(); seed[i*3+1] = seededRand(); seed[i*3+2] = seededRand();
+    delay[i] = 0;
+  }
+  return { pos:pos, size:size, bright:bright, density:density, seed:seed, delay:delay };
+}
+
+
+/* ================= 创造模式：自由碳架 → 分子对象 ================= */
+/* graph: { pts:[[x,y],...]（3D 坐标，z=0，六方格距=1.4Å）, bonds:[[i,j],...], groups:[{i,group}] } */
+/* 芳香环检测（Hückel 4n+2）：枚举简单环，环长 6/10/14…（4n+2）且键序沿环严格
+   交替 1,2,1,2…（Kekulé 画法）→ 整环键升为芳香 1.5。环烷（全单键）保持 sp³，
+   4n 反芳香环（如环丁二烯）保持 Kekulé 不转化。 */
+function findAromaticBonds(bonds, n){
+  const adj = new Array(n).fill(null).map(function(){ return []; });
+  for (let bi = 0; bi < bonds.length; bi++){
+    adj[bonds[bi][0]].push({ nb: bonds[bi][1], bi: bi });
+    adj[bonds[bi][1]].push({ nb: bonds[bi][0], bi: bi });
+  }
+  const aro = new Set();
+  const seen = new Set();
+  const onBond = new Uint8Array(bonds.length);
+  const onNode = new Uint8Array(n);
+  const path = [];
+  function dfs(s, v, parentBi){
+    for (const e of adj[v]){
+      if (e.bi === parentBi) continue;
+      if (e.nb === s && path.length >= 3){
+        const cyc = path.slice().concat(e.bi);
+        const key = cyc.slice().sort(function (a, b){ return a - b; }).join(",");
+        if (!seen.has(key)){
+          seen.add(key);
+          const orders = cyc.map(function (bi2){ return bonds[bi2][2] || 1; });
+          const alt = orders.every(function (o){ return o === 1 || o === 2; })
+            && orders.every(function (o, k){ return o !== orders[(k + 1) % orders.length]; });
+          if (alt && (cyc.length - 2) % 4 === 0) cyc.forEach(function (bi2){ aro.add(bi2); });
+        }
+      } else if (e.nb > s && !onBond[e.bi] && !onNode[e.nb]){
+        onBond[e.bi] = 1; onNode[e.nb] = 1; path.push(e.bi);
+        dfs(s, e.nb, e.bi);
+        path.pop(); onNode[e.nb] = 0; onBond[e.bi] = 0;
+      }
+    }
+  }
+  for (let s = 0; s < n; s++) dfs(s, s, -1);
+  return aro;
+}
+function buildCustomMolecule(graph){
+  const nC = graph.pts.length;
+  if (!nC) return { atoms:[], bonds:[], fragments:[], isCustom:true };
+  // 键级来自绘制（单 1 / 双 2 / 三 3，模板芳香 1.5）；环不再默认芳香（修复环烷全变 sp² 的 bug）
+  const order = graph.bonds.map(function (b){ return b[2] || 1; });
+  for (const bi of findAromaticBonds(graph.bonds, nC)) order[bi] = 1.5;
+  // 1) 正确分子构型：力松弛嵌入（键长/键角/杂化）
+  const posC = embedSkeleton(graph.pts, graph.bonds, order);
+  // 2) 质心居中（重心在屏幕中心）
+  let cx = 0, cy = 0, cz = 0;
+  for (let i = 0; i < nC; i++){ cx += posC[i][0]; cy += posC[i][1]; cz += posC[i][2]; }
+  cx /= nC; cy /= nC; cz /= nC;
+  for (let i = 0; i < nC; i++){ posC[i][0] -= cx; posC[i][1] -= cy; posC[i][2] -= cz; }
+  // 3) 碳原子/碳键
+  const atoms = [], bonds = [];
+  for (let i = 0; i < nC; i++){
+    atoms.push({ el:"C", pos:[posC[i][0], posC[i][1], posC[i][2]], key:"c" + i, atomIdx: i, fragId: -1, localIdx: -1 });
+  }
+  for (let bi = 0; bi < graph.bonds.length; bi++){
+    bonds.push({ i: graph.bonds[bi][0], j: graph.bonds[bi][1], order: order[bi] });
+  }
+  const groups = graph.groups || [];
+  const fragments = [];
+  // 每个碳上的官能团列表（保持添加顺序；一个碳可挂多个，受剩余价键限制）
+  const groupsAt = new Array(nC).fill(null).map(function (){ return []; });
+  for (let gi = 0; gi < groups.length; gi++){
+    const g = groups[gi];
+    if (g.i >= 0 && g.i < nC) groupsAt[g.i].push({ gi: gi, group: g.group, dir: g.dir });
+  }
+  // 4) 杂化 + 理想方向：H / 官能团按正确 3D 几何放置
+  const hyb = skeletonHybridization(graph.bonds, order, nC);
+  for (let i = 0; i < nC; i++){
+    const nbrDirs = [];
+    for (const b of graph.bonds){
+      let o = -1;
+      if (b[0] === i) o = b[1];
+      else if (b[1] === i) o = b[0];
+      if (o >= 0) nbrDirs.push(v3norm([posC[o][0]-posC[i][0], posC[o][1]-posC[i][1], posC[o][2]-posC[i][2]]));
+    }
+    const ideal = idealBondDirs(nbrDirs, hyb[i]);
+    const used = new Array(ideal.length).fill(false);
+    for (let k = 0; k < nbrDirs.length; k++){
+      let best = -1, bestA = 1e9;
+      for (let s = 0; s < ideal.length; s++){
+        if (used[s]) continue;
+        const a = Math.acos(Math.max(-1, Math.min(1, v3dot(nbrDirs[k], ideal[s]))));
+        if (a < bestA){ bestA = a; best = s; }
+      }
+      if (best >= 0) used[best] = true;
+    }
+    const freeSlots = [];
+    for (let s = 0; s < ideal.length; s++) if (!used[s]) freeSlots.push(s);
+    const myGroups = groupsAt[i];
+    // 官能团默认占「朝外」空位（远离分子质心）；若指定了 dir（点击了某个 H），
+    // 则取代该 H——占用与该方向夹角最小的空位（即被点击 H 的位置）
+    const outward = v3len(posC[i]) > 1e-9 ? v3norm(posC[i]) : null;
+    const freeIdx = freeSlots.slice().sort(function (a, b){
+      if (outward){
+        const da = v3dot(ideal[a], outward), db = v3dot(ideal[b], outward);
+        if (da !== db) return db - da;
+      }
+      return a - b;
+    });
+    const taken = new Set();
+    let f = 0;
+    for (const ge of myGroups){
+      let slot = -1;
+      if (ge.dir){
+        let best = -1, bestA = 1e9;
+        for (const s of freeSlots){
+          if (taken.has(s)) continue;
+          const a = Math.acos(Math.max(-1, Math.min(1, v3dot(ideal[s], ge.dir))));
+          if (a < bestA){ bestA = a; best = s; }
+        }
+        slot = best;
+      } else {
+        while (f < freeIdx.length && taken.has(freeIdx[f])) f++;
+        if (f < freeIdx.length) slot = freeIdx[f++];
+      }
+      if (slot < 0) break; // 价键已满（UI 已拦截，防御性跳过）
+      taken.add(slot);
+      addGroupAt(atoms, bonds, fragments, i, ideal[slot], ge.group, ge.gi);
+    }
+    const nH = Math.max(0, Math.min(Math.round(4 - ccOrderSum(order, graph.bonds, i) - myGroups.length), freeSlots.length - myGroups.length));
+    for (let h = 0; h < nH; h++){
+      while (f < freeIdx.length && taken.has(freeIdx[f])) f++;
+      if (f >= freeIdx.length) break;
+      const dir = ideal[freeIdx[f]];
+      f++;
+      const idx = atoms.length;
+      atoms.push({ el:"H", pos:[posC[i][0]+dir[0]*1.09, posC[i][1]+dir[1]*1.09, posC[i][2]+dir[2]*1.09], key:"h" + i + "_" + h, atomIdx: idx, fragId: -1, localIdx: -1 });
+      bonds.push({ i: i, j: idx, order: 1 });
+    }
+  }
+  return { atoms: atoms, bonds: bonds, fragments: fragments, isCustom: true };
+}
+function ccOrderSum(order, bonds, i){
+  let s = 0;
+  for (let bi = 0; bi < bonds.length; bi++){
+    if (bonds[bi][0] === i) s += order[bi];
+    else if (bonds[bi][1] === i) s += order[bi];
+  }
+  return s;
+}
+function skeletonHybridization(bonds, order, n){
+  const hyb = new Array(n).fill("sp3");
+  for (let i = 0; i < n; i++){
+    let hasTriple = false, hasDouble = false, hasAro = false;
+    for (let bi = 0; bi < bonds.length; bi++){
+      let o = -1;
+      if (bonds[bi][0] === i) o = bonds[bi][1];
+      else if (bonds[bi][1] === i) o = bonds[bi][0];
+      if (o >= 0){
+        if (order[bi] >= 3) hasTriple = true;
+        else if (order[bi] >= 2) hasDouble = true;
+        else if (order[bi] >= 1.5) hasAro = true;
+      }
+    }
+    // sp² 仅当存在 π 键（双键或芳香键）；四根单键（季碳）为 sp³（原 bsum≥2.5 误判已修）
+    if (hasTriple) hyb[i] = "sp";
+    else if (hasDouble || hasAro) hyb[i] = "sp2";
+  }
+  return hyb;
+}
+/* 理想成键方向（sp3 四面体 / sp2 平面 120° / sp 直线），对齐邻居 */
+function idealBondDirs(nbrDirs, hyb){
+  if (hyb === "sp"){
+    const d = nbrDirs.length ? v3norm(nbrDirs[0]) : [1, 0, 0];
+    return [d, [-d[0], -d[1], -d[2]]];
+  }
+  if (hyb === "sp3"){
+    const t = [[1,1,1],[1,-1,-1],[-1,1,-1],[-1,-1,1]];
+    const base = t.map(function (v){ return v3norm(v); });
+    if (nbrDirs.length >= 2){
+      // 显式构造正四面体：d0 沿第一个邻居 u，d1 落在 (u, 第二个邻居) 平面内、与 u 成 109.47°。
+      // 避免“最小旋转任意扭转”导致 C 邻居不落在四面体方向上（旧实现使环烷的
+      // C–C–H / H–C–H 角畸变，实测最差 H–C–H 塌缩到 63°）
+      const u = v3norm(nbrDirs[0]);
+      const vp = v3sub(nbrDirs[1], v3scale(u, v3dot(nbrDirs[1], u)));
+      if (v3len(vp) > 1e-6){
+        const e1 = v3norm(vp);
+        const e2 = v3cross(u, e1);
+        const ca = Math.cos(1.9106), sa = Math.sin(1.9106); // 109.47°
+        const out = [u];
+        for (let k = 0; k < 3; k++){
+          const th = k * 2.0944; // 120° 方位
+          const d = v3add(v3add(v3scale(u, ca), v3scale(e1, sa * Math.cos(th))), v3scale(e2, sa * Math.sin(th)));
+          out.push(v3norm(d));
+        }
+        return out;
+      }
+    }
+    if (nbrDirs.length){
+      const q = v3quatFromTo(base[0], v3norm(nbrDirs[0]));
+      return base.map(function (v){ return v3rotQuat(q, v); });
+    }
+    return base;
+  }
+  const u = nbrDirs.length ? v3norm(nbrDirs[0]) : [1, 0, 0];
+  let n = nbrDirs.length > 1 ? v3norm(v3cross(u, nbrDirs[1])) : [0, 0, 1];
+  if (v3len(n) < 1e-6) n = [0, 0, 1];
+  let by = v3norm(v3cross(n, u));
+  if (v3len(by) < 1e-6) by = v3len(v3cross(u, [1, 0, 0])) > 1e-6 ? v3norm(v3cross(u, [1, 0, 0])) : v3norm(v3cross(u, [0, 1, 0]));
+  const out = [];
+  for (let k = 0; k < 3; k++){
+    const a = k * 2.0944;
+    out.push([u[0]*Math.cos(a)+by[0]*Math.sin(a), u[1]*Math.cos(a)+by[1]*Math.sin(a), u[2]*Math.cos(a)+by[2]*Math.sin(a)]);
+  }
+  return out;
+}
+/* 官能团沿给定方向附着（碎片第一原子对齐方向，保留扭转） */
+function addGroupAt(atoms, bonds, fragments, cIdx, dir, gname, gi){
+  const frag = MOLECULE_DATA.fragments[gname];
+  const base = atoms.length;
+  const q = v3quatFromTo([1, 0, 0], dir);
+  for (let li = 0; li < frag.atoms.length; li++){
+    const p = frag.atoms[li].p;
+    const r = v3rotQuat(q, p);
+    atoms.push({ el: frag.atoms[li].el, pos:[atoms[cIdx].pos[0]+r[0], atoms[cIdx].pos[1]+r[1], atoms[cIdx].pos[2]+r[2]], key: gname+"@"+cIdx+"#"+li, atomIdx: atoms.length, fragId: gi, localIdx: li, fragGroup: gname });
+  }
+  for (const b of frag.bonds) bonds.push({ i: base + b[0], j: base + b[1], order: b[2] });
+  bonds.push({ i: cIdx, j: base, order: 1 });
+  fragments.push({ atomIdx: cIdx, group: gname });
+}
+/* 力松弛嵌入：键长弹簧 + 键角弹簧（键角目标按杂化） */
+function embedSkeleton(pts, bonds, order){
+  const n = pts.length;
+  const pos = pts.map(function (p){ return [p[0], p[1], 0]; });
+  // 微小 z 扰动打破平面对称：否则环烷卡在平面 120° 局部极小（各顶点力平衡），
+  // 无法折叠成 sp³ 109.5° 的非平面/椅式构型；sp² 碳（双键/芳香）不加扰动，保持平面。
+  // 扰动为**确定性哈希**（不消耗全局随机流）：同一骨架每次重建几何完全一致，
+  // 避免挂/换官能团时整分子重新嵌入产生随机跳动（视觉上像视角被改变、卡顿）
+  const hyb0 = skeletonHybridization(bonds, order, n);
+  for (let i = 0; i < n; i++){
+    if (hyb0[i] !== "sp2"){
+      const ph = Math.abs(Math.sin(i * 127.1 + pos[i][0] * 3.7 + pos[i][1] * 5.1) * 43758.5453);
+      pos[i][2] += (ph - Math.floor(ph) - 0.5) * 0.05;
+    }
+  }
+  const bondLen = function (o){ return o >= 3 ? 1.20 : o >= 2 ? 1.34 : o >= 1.5 ? 1.39 : 1.54; };
+  const hyb = skeletonHybridization(bonds, order, n);
+  const th0 = new Array(n).fill(1.9106);
+  for (let i = 0; i < n; i++){
+    th0[i] = hyb[i] === "sp" ? 3.1416 : hyb[i] === "sp2" ? 2.0944 : 1.9106;
+  }
+  const K_B = 40, K_A = 10, step = 0.015, maxDisp = 0.08; // step 0.015：避免环闭合落入交替键长局域极小
+  for (let iter = 0; iter < 3000; iter++){
+    const F = pos.map(function(){ return [0, 0, 0]; });
+    for (let bi = 0; bi < bonds.length; bi++){
+      const a = bonds[bi][0], b = bonds[bi][1];
+      const L = bondLen(order[bi]);
+      const dx = pos[b][0]-pos[a][0], dy = pos[b][1]-pos[a][1], dz = pos[b][2]-pos[a][2];
+      const d = Math.max(Math.hypot(dx, dy, dz), 0.2) + 1e-6;
+      const f = K_B * (d - L) / d;
+      F[a][0] += f*dx; F[a][1] += f*dy; F[a][2] += f*dz;
+      F[b][0] -= f*dx; F[b][1] -= f*dy; F[b][2] -= f*dz;
+    }
+    for (let i = 0; i < n; i++){
+      const nb = [];
+      for (let bi = 0; bi < bonds.length; bi++){
+        if (bonds[bi][0] === i) nb.push(bonds[bi][1]);
+        else if (bonds[bi][1] === i) nb.push(bonds[bi][0]);
+      }
+      for (let p = 0; p < nb.length; p++){
+        for (let q = p + 1; q < nb.length; q++){
+          const a = nb[p], b = nb[q];
+          const va = v3sub(pos[a], pos[i]), vb = v3sub(pos[b], pos[i]);
+          const la = v3len(va) + 1e-6, lb = v3len(vb) + 1e-6;
+          const th = Math.acos(Math.max(-1, Math.min(1, v3dot(va, vb) / (la * lb))));
+          const dth = th - th0[i];
+          const ia = v3scale(va, 1/la), ib = v3scale(vb, 1/lb);
+          const bis = v3norm(v3add(ia, ib));
+          const da = v3sub(bis, v3scale(ia, v3dot(bis, ia)));
+          const db = v3sub(bis, v3scale(ib, v3dot(bis, ib)));
+          const la2 = v3len(da), lb2 = v3len(db);
+          if (la2 > 1e-6){
+            const fa = K_A * dth / Math.max(la2, 0.5); // 力上限，防 θ→180° 爆炸
+            F[a][0] += fa*da[0]; F[a][1] += fa*da[1]; F[a][2] += fa*da[2];
+          }
+          if (lb2 > 1e-6){
+            const fb = K_A * dth / Math.max(lb2, 0.5);
+            F[b][0] += fb*db[0]; F[b][1] += fb*db[1]; F[b][2] += fb*db[2];
+          }
+        }
+      }
+    }
+    let fx = 0, fy = 0, fz = 0;
+    for (let i = 0; i < n; i++){ fx += F[i][0]; fy += F[i][1]; fz += F[i][2]; }
+    fx /= n; fy /= n; fz /= n;
+    for (let i = 0; i < n; i++){
+      // 每步位移钳制（防欧拉积分振荡/发散）
+      let dx = (F[i][0] - fx) * step;
+      let dy = (F[i][1] - fy) * step;
+      let dz = (F[i][2] - fz) * step;
+      const dl = Math.hypot(dx, dy, dz);
+      if (dl > maxDisp){ const s = maxDisp / dl; dx *= s; dy *= s; dz *= s; }
+      pos[i][0] += dx; pos[i][1] += dy; pos[i][2] += dz;
+    }
+  }
+  return pos;
+}
+function isConnectedWithout(bonds, a, b, skip, n){
+  const adj = new Array(n).fill(null).map(function(){ return []; });
+  for (let bi = 0; bi < bonds.length; bi++){
+    if (bi === skip) continue;
+    adj[bonds[bi][0]].push(bonds[bi][1]);
+    adj[bonds[bi][1]].push(bonds[bi][0]);
+  }
+  const seen = new Uint8Array(n);
+  const q = [a];
+  seen[a] = 1;
+  for (let qi = 0; qi < q.length; qi++){
+    const cur = q[qi];
+    for (const nb of adj[cur]){
+      if (!seen[nb]){ seen[nb] = 1; q.push(nb); }
+    }
+  }
+  return !!seen[b];
+}
+/* ---------- 3D 向量工具 ---------- */
+function v3norm(a){ const l = v3len(a); return l < 1e-9 ? [0, 0, 0] : [a[0]/l, a[1]/l, a[2]/l]; }
+function v3cross(a, b){ return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]; }
+function v3dot(a, b){ return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]; }
+function v3add(a, b){ return [a[0]+b[0], a[1]+b[1], a[2]+b[2]]; }
+function v3scale(a, s){ return [a[0]*s, a[1]*s, a[2]*s]; }
+function v3quatFromTo(vFrom, vTo){
+  const a = v3norm(vFrom), b = v3norm(vTo);
+  const d = v3dot(a, b);
+  if (d > 0.99999) return [1, 0, 0, 0];
+  if (d < -0.99999){
+    let axis = v3norm(v3cross(a, [0, 0, 1]));
+    if (v3len(axis) < 1e-6) axis = v3norm(v3cross(a, [0, 1, 0]));
+    return [0, axis[0], axis[1], axis[2]];
+  }
+  const q = [1 + d, a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+  const l = Math.hypot(q[0], q[1], q[2], q[3]);
+  return [q[0]/l, q[1]/l, q[2]/l, q[3]/l];
+}
+function v3rotQuat(q, v){
+  const w = q[0], x = q[1], y = q[2], z = q[3];
+  const t = [y*v[2]-z*v[1], z*v[0]-x*v[2], x*v[1]-y*v[0]];
+  const u = [2*(w*t[0] + y*t[2]-z*t[1]), 2*(w*t[1] + z*t[0]-x*t[2]), 2*(w*t[2] + x*t[1]-y*t[0])];
+  return [v[0]+u[0], v[1]+u[1], v[2]+u[2]];
+}
+
+/* ================= 唯一拓扑识别：规范化 SMILES（芳香形式） ================= */
+function molFormula(mol){
+  const cnt = {};
+  for (const a of mol.atoms) cnt[a.el] = (cnt[a.el] || 0) + 1;
+  let s = "";
+  for (const el of ["C","H","N","O","F","Cl","Br","I","S"]){
+    if (cnt[el]) s += el + (cnt[el] > 1 ? cnt[el] : "");
+  }
+  return s;
+}
+function isAromaticAtom(mol, i){
+  let aro = 0;
+  for (const b of mol.bonds){
+    let o = -1;
+    if (b.i === i) o = b.j;
+    else if (b.j === i) o = b.i;
+    if (o >= 0 && b.order >= 1.5) aro++;
+  }
+  return aro >= 2;
+}
+function canonicalSmiles(mol){
+  // 过滤 H（SMILES 中隐式）；重映射非 H 原子
+  const keep = [];
+  const remap = [];
+  for (let i = 0; i < mol.atoms.length; i++){
+    if (mol.atoms[i].el !== "H"){ remap.push(keep.length); keep.push(i); }
+    else remap.push(-1);
+  }
+  const n = keep.length;
+  if (!n) return "";
+  const fBonds = [];
+  for (const b of mol.bonds){
+    const a = remap[b.i], c = remap[b.j];
+    if (a >= 0 && c >= 0) fBonds.push({ i: a, j: c, order: b.order });
+  }
+  const el = keep.map(function (i){ return mol.atoms[i].el; });
+  mol = { atoms: keep.map(function (i){ return mol.atoms[i]; }), bonds: fBonds };
+  const aro = el.map(function (_, i){ return isAromaticAtom(mol, i); });
+  const deg = new Array(n).fill(0);
+  for (const b of fBonds){ deg[b.i]++; deg[b.j]++; }
+  // Morgan 不变量
+  let inv = el.map(function (e, i){
+    let bs = 0;
+    for (const b of mol.bonds) if (b.i === i || b.j === i) bs += b.order;
+    return e + "|" + bs + "|" + deg[i];
+  });
+  for (let it = 0; it <= n + 1; it++){
+    const next = inv.map(function (v, i){
+      const parts = [v];
+      const nb = [];
+      for (const b of mol.bonds){
+        let o = -1;
+        if (b.i === i) o = b.j;
+        else if (b.j === i) o = b.i;
+        if (o >= 0) nb.push(inv[o] + (b.order >= 3 ? "#" : b.order >= 2 ? "=" : b.order >= 1.5 ? "~" : ""));
+      }
+      nb.sort();
+      parts.push(nb.join(","));
+      return parts.join(">");
+    });
+    inv = next;
+  }
+  const starts = Array.from({ length: n }, function (_, i){ return i; });
+  let best = null;
+  for (const s of starts){
+    const smi = smilesFromStart(mol, s, inv, aro, el);
+    if (smi && (!best || smi < best)) best = smi;
+  }
+  return best || "";
+}
+function smilesFromStart(mol, start, inv, aro, el){
+  const n = mol.atoms.length;
+  const adj = new Array(n).fill(null).map(function(){ return []; });
+  for (const b of mol.bonds){
+    adj[b.i].push({ j: b.j, order: b.order });
+    adj[b.j].push({ j: b.i, order: b.order });
+  }
+  // BFS 生成树 + 环闭合边
+  const parent = new Int32Array(n).fill(-2);
+  const ringBonds = [];
+  const q = [start];
+  parent[start] = -1;
+  for (let qi = 0; qi < q.length; qi++){
+    const cur = q[qi];
+    for (const nb of adj[cur]){
+      if (parent[nb.j] === -2){ parent[nb.j] = cur; q.push(nb.j); }
+      else if (nb.j !== parent[cur]){
+        const dup = ringBonds.some(function (rb){ return (rb[0]===cur&&rb[1]===nb.j)||(rb[0]===nb.j&&rb[1]===cur); });
+        if (!dup) ringBonds.push([cur, nb.j, nb.order]);
+      }
+    }
+  }
+  // 环闭合边 → 编号（每个端点写同号）
+  const ringDigits = new Array(n).fill(null).map(function(){ return []; });
+  let digit = 1;
+  for (const rb of ringBonds){
+    const d = digit++;
+    ringDigits[rb[0]].push(d);
+    ringDigits[rb[1]].push(d);
+  }
+  let out = "";
+  const visited = new Uint8Array(n);
+  function atomSym(i){
+    const e = el[i];
+    if (aro[i]){
+      if (e === "C") return "c";
+      if (e === "N") return "n";
+      if (e === "O") return "o";
+      if (e === "S") return "s";
+    }
+    return e;
+  }
+  function bondSym(a, b, o){
+    if (o >= 3) return "#";
+    if (o >= 2) return "=";
+    if (aro[a] && aro[b]) return o >= 1.5 ? "" : "-";
+    return "";
+  }
+  function dfs(i, parentIdx){
+    visited[i] = 1;
+    out += atomSym(i);
+    const digs = ringDigits[i].slice().sort(function (a, b){ return a - b; });
+    for (const d of digs) out += String(d);
+    // 只沿 BFS 生成树边遍历：环闭合边由两端编号闭合，避免伪二元环（如 ccc1c1）
+    const nbrs = [];
+    for (const nb of adj[i]) if (parent[nb.j] === i) nbrs.push(nb);
+    nbrs.sort(function (a, b){
+      if (inv[a.j] !== inv[b.j]) return inv[a.j] < inv[b.j] ? 1 : -1;
+      if (a.order !== b.order) return a.order < b.order ? 1 : -1;
+      return el[a.j] < el[b.j] ? 1 : -1;
+    });
+    let first = true;
+    for (const nb of nbrs){
+      if (visited[nb.j]) continue;
+      if (!first) out += "(";
+      out += bondSym(i, nb.j, nb.order);
+      dfs(nb.j, i);
+      if (!first) out += ")";
+      first = false;
+    }
+  }
+  dfs(start, -1);
+  return out;
+}
+/* 化合物名称字典：预置分子与常见烃类全部用同一 canonicalSmiles 算法运行时注册，
+   保证「绘制 → 识别」与字典条目一一对应 */
+const MOLECULE_NAMES = {};
+function regMol(mol, name, zh, formula){
+  const smi = canonicalSmiles(mol);
+  MOLECULE_NAMES[smi] = [name, zh, formula];
+  return smi;
+}
+function chainMol(n){
+  const atoms = [], bonds = [];
+  for (let i = 0; i < n; i++) atoms.push({ el: "C", pos: [i * 1.5, 0, 0] });
+  for (let i = 0; i < n - 1; i++) bonds.push({ i: i, j: i + 1, order: 1 });
+  return { atoms: atoms, bonds: bonds, fragments: [] };
+}
+function ringMol(n){
+  const atoms = [], bonds = [];
+  for (let i = 0; i < n; i++) atoms.push({ el: "C", pos: [Math.cos(i * 2 * Math.PI / n), Math.sin(i * 2 * Math.PI / n), 0] });
+  for (let i = 0; i < n; i++) bonds.push({ i: i, j: (i + 1) % n, order: 1 });
+  return { atoms: atoms, bonds: bonds, fragments: [] };
+}
+/* 烯（piOrder=2）/ 炔（piOrder=3）：piAt 处为重键 */
+function unsatMol(n, piAt, piOrder){
+  const atoms = [], bonds = [];
+  for (let i = 0; i < n; i++) atoms.push({ el: "C", pos: [i * 1.5, 0, 0] });
+  for (let i = 0; i < n - 1; i++) bonds.push({ i: i, j: i + 1, order: i === piAt ? (piOrder || 2) : 1 });
+  return { atoms: atoms, bonds: bonds, fragments: [] };
+}
+(function (){
+  for (const m of MOLECULE_LIST) regMol(buildMolecule(m.fragments), m.name, m.zh, m.formula);
+  // 烷烃 / 环烷
+  regMol(chainMol(2), "Ethane", "乙烷", "C2H6");
+  regMol(chainMol(3), "Propane", "丙烷", "C3H8");
+  regMol(chainMol(4), "Butane", "丁烷", "C4H10");
+  regMol(chainMol(5), "Pentane", "戊烷", "C5H12");
+  regMol(chainMol(6), "Hexane", "己烷", "C6H14");
+  regMol(chainMol(7), "Heptane", "庚烷", "C7H16");
+  regMol(ringMol(5), "Cyclopentane", "环戊烷", "C5H10");
+  regMol(ringMol(6), "Cyclohexane", "环己烷", "C6H12");
+  // 烯 / 炔
+  regMol(unsatMol(2, 0, 2), "Ethene", "乙烯", "C2H4");
+  regMol(unsatMol(2, 0, 3), "Ethyne", "乙炔", "C2H2");
+  regMol(unsatMol(3, 0, 2), "Propene", "丙烯", "C3H6");
+  regMol(unsatMol(4, 0, 2), "1-Butene", "1-丁烯", "C4H8");
+  regMol(unsatMol(4, 1, 2), "2-Butene", "2-丁烯", "C4H8");
+  regMol(unsatMol(4, 0, 3), "1-Butyne", "1-丁炔", "C4H6");
+  regMol(unsatMol(4, 1, 3), "2-Butyne", "2-丁炔", "C4H6");
+  // 萘（双环芳烃）
+  {
+    const nap = { atoms: [], bonds: [], fragments: [] };
+    for (let i = 0; i < 10; i++) nap.atoms.push({ el: "C", pos: [0, 0, 0] });
+    const nb = [[0,1],[1,2],[2,3],[3,4],[4,9],[5,6],[6,7],[7,8],[8,9],[9,0],[4,5]];
+    for (const e of nb) nap.bonds.push({ i: e[0], j: e[1], order: 1.5 });
+    regMol(nap, "Naphthalene", "萘", "C10H8");
+  }
+  // 联苯 / 乙苯 / 二甲苯（以苯为核）
+  function phenylX(fragAtoms, fragBonds, extraFormula){
+    const core = buildMolecule([{ pos: 0, group: "CH3" }]); // 苯环模板
+    const atoms = core.atoms.map(function (a){ return { el: a.el, pos: a.pos }; });
+    const bonds = core.bonds.map(function (b){ return { i: b.i, j: b.j, order: b.order }; });
+    // 把 CH3 的 C 换成 X 的原子
+    const cIdx = 6; // 甲基碳位置
+    const base = atoms.length;
+    for (let li = 0; li < fragAtoms.length; li++){
+      atoms.push({ el: fragAtoms[li], pos: [core.atoms[cIdx].pos[0] + li, core.atoms[cIdx].pos[1], 0] });
+      bonds.push({ i: cIdx, j: base + li, order: 1 });
+    }
+    for (const b of fragBonds) bonds.push({ i: base + b[0], j: base + b[1], order: 1 });
+    return { atoms: atoms, bonds: bonds, fragments: [] };
+  }
+  regMol(phenylX(["C"], [], "extra"), "Ethylbenzene", "乙苯", "C8H10");
+  // 邻二甲苯
+  regMol(buildMolecule([{ pos: 0, group: "CH3" }, { pos: 1, group: "CH3" }]), "o-Xylene", "邻二甲苯", "C8H10");
+  // 联苯
+  {
+    const bp = { atoms: [], bonds: [], fragments: [] };
+    for (let i = 0; i < 12; i++) bp.atoms.push({ el: "C", pos: [0, 0, 0] });
+    const edges = [[0,1],[1,2],[2,3],[3,4],[4,5],[5,0],[6,7],[7,8],[8,9],[9,10],[10,11],[11,6],[0,6]];
+    for (let i = 0; i < edges.length; i++) bp.bonds.push({ i: edges[i][0], j: edges[i][1], order: i === 12 ? 1 : 1.5 });
+    regMol(bp, "Biphenyl", "联苯", "C12H10");
+  }
+})();
+function identifyMolecule(mol){
+  const smi = canonicalSmiles(mol);
+  const hit = MOLECULE_NAMES[smi];
+  return { smiles: smi, formula: molFormula(mol), name: hit ? hit[0] : null, zh: hit ? hit[1] : null };
+}
+
+/* 粒子对应匹配（按格批量 + Morton 兜底）：
+   Phase 1 —— 同格贪心配对（0.6Å 格），再对未配对粒子查 27 邻域格：绝大多数粒子
+   只在邻近处流动，位移极小（电子云局部迁移）；
+   Phase 2 —— 剩余粒子 ↔ 剩余目标用 3D Morton 序按秩匹配：仅在原区域消失时发生
+   远距离迁移（电子离开该区域，物理上正确）。
+   保证一一对应（双射），O(N·k)。参考：three.js 论坛
+   "Morphing between geometries of Points system on GPU"
+   https://discourse.threejs.org/t/morphing-between-geometries-of-points-system-on-gpu/37688 */
+/* 分帧调度：work(t0) 返回 true 表示完成；每片让出主线程（stepMs 毫秒预算） */
+const _rafSched = typeof requestAnimationFrame === "function" ? requestAnimationFrame : function (f){ f(); };
+function _yieldChunks(stepMs, work, done){
+  // work(t0)：返回 undefined 表示继续分帧；返回任意值视为完成，原样透传给 done
+  const step = function (){
+    const t0 = performance.now();
+    let r;
+    do { r = work(t0); } while (r === undefined && performance.now() - t0 < stepMs);
+    if (r !== undefined) done(r);
+    else _rafSched(step);
+  };
+  _rafSched(step);
+}
+function matchSameCellBatchC(oldPos, targets, count, cell, shift, claimed, map, stepMs, onDone){
+  const LO = -5.5 + shift, HI = 5.5 + shift;
+  const CN = Math.ceil((HI - LO) / cell) + 1;
+  const cellOf = function (v){
+    let c = Math.floor((v - LO) / cell);
+    return c < 0 ? 0 : c > CN - 1 ? CN - 1 : c;
+  };
+  const cellIdx = function (cx, cy, cz){ return (cz * CN + cy) * CN + cx; };
+  const tCells = new Map();
+  const oCells = new Map();
+  const leftovers = [];
+  // 3D 交织键（近似 Morton）：格内按此排序后按秩配对，保证邻近粒子配对不交叉
+  const m1 = function (v){
+    let x = Math.round((v + 5.5) * 12);
+    if (x < 0) x = 0; else if (x > 255) x = 255;
+    x = (x | (x << 4)) & 0x0F0F0F0F;
+    x = (x | (x << 2)) & 0x33333333;
+    x = (x | (x << 1)) & 0x55555555;
+    return x >>> 0;
+  };
+  const key3 = function (arr, i){
+    return (m1(arr[i * 3]) | (m1(arr[i * 3 + 1]) << 1) | (m1(arr[i * 3 + 2]) << 2)) >>> 0;
+  };
+  let i = 0;         // 构建游标
+  let ci = 0;        // 格处理游标
+  let cellList = null;
+  _yieldChunks(stepMs, function (t0){
+    while (true){
+      if (cellList === null){
+        if (i < count){
+          const end = Math.min(i + 6000, count);
+          for (; i < end; i++){
+            if (!claimed[i]){
+              const c = cellIdx(cellOf(targets[i * 3]), cellOf(targets[i * 3 + 1]), cellOf(targets[i * 3 + 2]));
+              let arr = tCells.get(c);
+              if (!arr){ arr = []; tCells.set(c, arr); }
+              arr.push(i);
+            }
+            if (map[i] < 0){
+              const c = cellIdx(cellOf(oldPos[i * 3]), cellOf(oldPos[i * 3 + 1]), cellOf(oldPos[i * 3 + 2]));
+              let arr = oCells.get(c);
+              if (!arr){ arr = []; oCells.set(c, arr); }
+              arr.push(i);
+            }
+          }
+          return undefined;
+        }
+        cellList = [];
+        for (const e of oCells) cellList.push(e);
+      } else if (ci < cellList.length){
+        const end = Math.min(ci + 120, cellList.length);
+        for (; ci < end; ci++){
+          const entry = cellList[ci];
+          const c = entry[0], olds = entry[1];
+          const ts = tCells.get(c);
+          if (!ts){ for (const o of olds) leftovers.push(o); continue; }
+          if (olds.length * ts.length > 4096){
+            // 大格：排序按秩配对 O(n log n)，替代 O(n²) 全扫描（同格内位移 < 1.3Å，秩配对等价）
+            const os = olds.slice().sort(function (a, b){ return key3(oldPos, a) - key3(oldPos, b); });
+            const tt = ts.slice().sort(function (a, b){ return key3(targets, a) - key3(targets, b); });
+            const mm = Math.min(os.length, tt.length);
+            for (let k = 0; k < mm; k++){
+              const o = os[k], ti = tt[k];
+              if (!claimed[ti]){ claimed[ti] = 1; map[o] = ti; }
+              else leftovers.push(o);
+            }
+            for (let k = mm; k < os.length; k++) leftovers.push(os[k]);
+            continue;
+          }
+          for (let k = olds.length - 1; k > 0; k--){
+            const j = (seededRand() * (k + 1)) | 0;
+            const t = olds[k]; olds[k] = olds[j]; olds[j] = t;
+          }
+          for (const o of olds){
+            const ox = oldPos[o * 3], oy = oldPos[o * 3 + 1], oz = oldPos[o * 3 + 2];
+            let best = -1, bestD2 = Infinity;
+            for (const ti of ts){
+              if (!claimed[ti]){
+                const dxx = targets[ti * 3] - ox, dyy = targets[ti * 3 + 1] - oy, dzz = targets[ti * 3 + 2] - oz;
+                const d2 = dxx * dxx + dyy * dyy + dzz * dzz;
+                if (d2 < bestD2){ bestD2 = d2; best = ti; }
+              }
+            }
+            if (best >= 0){ claimed[best] = 1; map[o] = best; }
+            else leftovers.push(o);
+          }
+        }
+        return undefined;
+      } else {
+        return leftovers;
+      }
+    }
+  }, onDone);
+}
+function matchCloudTargetsAsync(oldPos, targets, count, onDone){
+  const claimed = new Uint8Array(count);
+  const map = new Int32Array(count);
+  map.fill(-1);
+  const STEP = 15;
+  const runMorton = function (leftovers){
+    // Phase 2：Morton 序秩匹配剩余（未配对粒子对应「区域真正变化处」的迁移）
+    const QUANT = 256, SCALE = QUANT / 11.0;
+    const q = function (v){
+      let c = Math.round((v + 5.5) * SCALE);
+      return c < 0 ? 0 : c > 255 ? 255 : c;
+    };
+    const spread8 = function (v){
+      let x = v & 0xFF;
+      x = (x | (x << 4)) & 0x0F0F0F0F;
+      x = (x | (x << 2)) & 0x33333333;
+      x = (x | (x << 1)) & 0x55555555;
+      return x >>> 0;
+    };
+    const keyOf = function (arr, i){
+      const sx = spread8(q(arr[i * 3]));
+      const sy = spread8(q(arr[i * 3 + 1]));
+      const sz = spread8(q(arr[i * 3 + 2]));
+      return (sx | (sy << 1) | (sz << 2)) >>> 0;
+    };
+    const unclaimed = [];
+    for (let i = 0; i < count; i++) if (!claimed[i]) unclaimed.push(i);
+    if (leftovers.length){
+      const nf = leftovers.length;
+      const nk = new Uint32Array(nf);
+      const uk = new Uint32Array(nf);
+      const ni = new Array(nf);
+      const ui = new Array(nf);
+      for (let k = 0; k < nf; k++){
+        nk[k] = keyOf(oldPos, leftovers[k]);
+        uk[k] = keyOf(targets, unclaimed[k]);
+        ni[k] = k;
+        ui[k] = k;
+      }
+      ni.sort(function (a, b){ return nk[a] - nk[b]; });
+      ui.sort(function (a, b){ return uk[a] - uk[b]; });
+      for (let k = 0; k < nf; k++){
+        map[leftovers[ni[k]]] = unclaimed[ui[k]];
+      }
+    }
+    onDone({ map: map });
+  };
+  // Phase 1：0.75Å 格与其偏移半格的同格配对（两遍大幅减少远飞粒子）
+  matchSameCellBatchC(oldPos, targets, count, 0.75, 0, claimed, map, STEP, function (left){
+    if (left.length > count * 0.02){
+      matchSameCellBatchC(oldPos, targets, count, 0.75, 0.375, claimed, map, STEP, function (left2){
+        runMorton(left2);
+      });
+    } else {
+      runMorton(left);
+    }
+  });
+}
+
+/* ================= 依赖导入 ================= */
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+
+/* ================= 粒子着色器 ================= */
+/* 噪声实现：Ashima Arts / Stefan Gustavson 的 3D simplex noise（MIT License，保留原出处）。
+   curl noise 采用 Bridson 2007 有限差分法。 */
+const CLOUD_VERTEX = [
+"uniform float uTime;",
+"uniform float uTransStart;",
+"uniform float uTransDur;",
+"uniform float uPixelRatio;",
+"uniform float uScale;",
+"uniform float uParticleSize;",
+"uniform float uNoiseAmp;",
+"uniform float uBreathAmp;",
+"uniform float uFlowAmp;",
+"uniform float uCloudAlpha;",
+"uniform vec3 uCenter;",
+"uniform vec3 uAnchor;",
+"attribute vec4 aOldProps;",
+"attribute vec4 aSeed;",
+"attribute vec4 aProps;",
+"attribute vec3 aPath0;",
+"attribute vec3 aPath1;",
+"attribute vec3 aPath2;",
+"attribute vec3 aPath3;",
+"attribute vec3 aPath4;",
+"attribute vec3 aPath5;",
+"attribute vec3 aPath6;",
+"attribute vec3 aPath7;",
+"attribute vec3 aPath8;",
+"attribute float aPathCount;",
+"varying float vBright;",
+"varying float vDensity;",
+"",
+"vec3 mod289(vec3 x){ return x - floor(x * (1.0/289.0)) * 289.0; }",
+"vec4 mod289(vec4 x){ return x - floor(x * (1.0/289.0)) * 289.0; }",
+"vec4 permute(vec4 x){ return mod289(((x*34.0)+1.0)*x); }",
+"vec4 taylorInvSqrt(vec4 r){ return 1.79284291400159 - 0.85373472095314 * r; }",
+"float snoise(vec3 v){",
+"  const vec2 C = vec2(1.0/6.0, 1.0/3.0);",
+"  const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);",
+"  vec3 i  = floor(v + dot(v, C.yyy));",
+"  vec3 x0 = v - i + dot(i, C.xxx);",
+"  vec3 g = step(x0.yzx, x0.xyz);",
+"  vec3 l = 1.0 - g;",
+"  vec3 i1 = min(g.xyz, l.zxy);",
+"  vec3 i2 = max(g.xyz, l.zxy);",
+"  vec3 x1 = x0 - i1 + C.xxx;",
+"  vec3 x2 = x0 - i2 + C.yyy;",
+"  vec3 x3 = x0 - D.yyy;",
+"  i = mod289(i);",
+"  vec4 p = permute(permute(permute(",
+"      i.z + vec4(0.0, i1.z, i2.z, 1.0))",
+"    + i.y + vec4(0.0, i1.y, i2.y, 1.0))",
+"    + i.x + vec4(0.0, i1.x, i2.x, 1.0));",
+"  float n_ = 0.142857142857;",
+"  vec3 ns = n_ * D.wyz - D.xzx;",
+"  vec4 j = p - 49.0 * floor(p * ns.z * ns.z);",
+"  vec4 x_ = floor(j * ns.z);",
+"  vec4 y_ = floor(j - 7.0 * x_);",
+"  vec4 x = x_ * ns.x + ns.yyyy;",
+"  vec4 y = y_ * ns.x + ns.yyyy;",
+"  vec4 h = 1.0 - abs(x) - abs(y);",
+"  vec4 b0 = vec4(x.xy, y.xy);",
+"  vec4 b1 = vec4(x.zw, y.zw);",
+"  vec4 s0 = floor(b0)*2.0 + 1.0;",
+"  vec4 s1 = floor(b1)*2.0 + 1.0;",
+"  vec4 sh = -step(h, vec4(0.0));",
+"  vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;",
+"  vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;",
+"  vec3 p0 = vec3(a0.xy, h.x);",
+"  vec3 p1 = vec3(a0.zw, h.y);",
+"  vec3 p2 = vec3(a1.xy, h.z);",
+"  vec3 p3 = vec3(a1.zw, h.w);",
+"  vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));",
+"  p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;",
+"  vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);",
+"  m = m * m;",
+"  return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));",
+"}",
+"vec3 snoiseVec3(vec3 x){",
+"  float s  = snoise(x);",
+"  float s1 = snoise(vec3(x.y - 19.1, x.z + 33.4, x.x + 47.2));",
+"  float s2 = snoise(vec3(x.z + 74.2, x.x - 124.5, x.y + 99.4));",
+"  return vec3(s, s1, s2);",
+"}",
+"vec3 curlNoise(vec3 p){",
+"  const float e = 0.12;",
+"  vec3 dx = vec3(e, 0.0, 0.0);",
+"  vec3 dy = vec3(0.0, e, 0.0);",
+"  vec3 dz = vec3(0.0, 0.0, e);",
+"  vec3 px0 = snoiseVec3(p - dx);",
+"  vec3 px1 = snoiseVec3(p + dx);",
+"  vec3 py0 = snoiseVec3(p - dy);",
+"  vec3 py1 = snoiseVec3(p + dy);",
+"  vec3 pz0 = snoiseVec3(p - dz);",
+"  vec3 pz1 = snoiseVec3(p + dz);",
+"  float x = py1.z - py0.z - pz1.y + pz0.y;",
+"  float y = pz1.x - pz0.x - px1.z + px0.z;",
+"  float z = px1.y - px0.y - py1.x + py0.x;",
+"  vec3 c = vec3(x, y, z) * (1.0 / (2.0 * e));",
+"  return c / (length(c) + 0.0001);",
+"}",
+"float easeInOut(float t){ return t*t*(3.0 - 2.0*t); }",
+"void main(){",
+"  float tt = uTransDur > 0.001 ? clamp((uTime - uTransStart - aSeed.w*0.6*uTransDur)/uTransDur, 0.0, 1.0) : 1.0;",
+"  float e = easeInOut(tt);",
+"  float es = mix(aOldProps.x, aProps.x, e);",
+"  // 沿 σ 骨架折线路径流动：所有跨原子迁移一律途经原子序列（折点恰在原子处），",
+"  // 骨架弯折处粒子严格跟随折线，不切角",
+"  float pp = e * aPathCount;",
+"  vec3 rest;",
+"  if (pp <= 1.0) rest = mix(aPath0, aPath1, pp);",
+"  else if (pp <= 2.0) rest = mix(aPath1, aPath2, pp - 1.0);",
+"  else if (pp <= 3.0) rest = mix(aPath2, aPath3, pp - 2.0);",
+"  else if (pp <= 4.0) rest = mix(aPath3, aPath4, pp - 3.0);",
+"  else if (pp <= 5.0) rest = mix(aPath4, aPath5, pp - 4.0);",
+"  else if (pp <= 6.0) rest = mix(aPath5, aPath6, pp - 5.0);",
+"  else if (pp <= 7.0) rest = mix(aPath6, aPath7, pp - 6.0);",
+"  else if (pp <= 8.0) rest = mix(aPath7, aPath8, pp - 7.0);",
+"  else rest = aPath8;",
+"  float ttg = uTransDur > 0.001 ? clamp((uTime - uTransStart)/uTransDur, 0.0, 1.0) : 0.0;",
+"  float env = sin(3.14159265*ttg);",
+"  // 过渡期间路径粒子适度收紧但保留弥散：带状电子流贴骨架流动，又不被键模型完全遮挡",
+"  float routed = step(1.5, aPathCount);",
+"  float tight = mix(1.0, 0.55, env * routed);",
+"  float n = snoise(aSeed.xyz*6.31 + rest*1.8 + vec3(0.0, uTime*0.22, 0.0));",
+"  vec3 wob = curlNoise(rest*1.65 + aSeed.xyz*2.4 + vec3(0.0, uTime*0.15, uTime*0.11)) * uNoiseAmp * (0.5 + 0.5*n) * tight;",
+"  vec3 rd = rest - uCenter;",
+"  float rl = length(rd) + 0.001;",
+"  vec3 rdir = rd / rl;",
+"  float breath = sin(uTime*1.1 + aSeed.y*6.2831853) * uBreathAmp * smoothstep(0.0, 2.6, rl) * tight;",
+"  vec3 disp = position - aPath0;",
+"  float dl = length(disp) + 0.0001;",
+"  vec3 ddir = disp / dl;",
+"  // 定向涌动：沿迁移方向推进（像电子流），路径粒子几乎无垂直分量",
+"  vec3 flow = ddir * uFlowAmp * env * 0.5 * (1.0 - 0.7 * routed);",
+"  flow += cross(ddir, curlNoise(rest*2.9 + vec3(0.0, uTime*0.3, uTime*0.2))) * uFlowAmp * env * 0.18 * tight;",
+"  vec3 pos = rest + wob + rdir*breath + flow;",
+"  vec4 mv = modelViewMatrix * vec4(pos, 1.0);",
+"  gl_Position = projectionMatrix * mv;",
+"  gl_PointSize = clamp(uParticleSize * es * uScale / max(-mv.z, 0.001), 1.0, 90.0);",
+"  float fadeIn = smoothstep(0.0, 1.4, uTime);",
+"  vBright = mix(aOldProps.y, aProps.y, e) * uCloudAlpha * fadeIn;",
+"  vDensity = mix(aOldProps.z, aProps.z, e);",
+"}",
+].join("\n");
+
+const CLOUD_FRAGMENT = [
+"uniform sampler2D uDensityTex;",
+"uniform float uDensGamma;",
+"varying float vBright;",
+"varying float vDensity;",
+"void main(){",
+"  vec2 uv = gl_PointCoord*2.0 - 1.0;",
+"  float d2 = dot(uv, uv);",
+"  if (d2 > 1.0) discard;",
+"  float d = sqrt(d2);",
+"  float a = pow(1.0 - d, 2.4);",
+"  a *= smoothstep(1.0, 0.3, d);",
+"  vec3 col = texture2D(uDensityTex, vec2(pow(clamp(vDensity, 0.0, 1.0), uDensGamma), 0.5)).rgb;",
+"  gl_FragColor = vec4(col, a * vBright);",
+"}",
+].join("\n");
+
+/* ================= three.js 场景 ================= */
+const DEBUG = new URLSearchParams(location.search).has("debug");
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x04060a);
+const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(0, 1.6, 10.5);
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+document.getElementById("scene").appendChild(renderer.domElement);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 3.2;
+controls.maxDistance = 18;
+controls.rotateSpeed = 0.7;
+controls.enabled = false;
+
+scene.add(new THREE.AmbientLight(0x8fa3c4, 0.75));
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.7);
+keyLight.position.set(4, 6, 7);
+scene.add(keyLight);
+const rimLight = new THREE.DirectionalLight(0x7ea6ff, 1.0);
+rimLight.position.set(-5, -2, 3);
+scene.add(rimLight);
+const fillLight = new THREE.PointLight(0xbfd8ff, 0.25, 30);
+fillLight.position.set(0, 0, 3);
+scene.add(fillLight);
+
+let composer = null;
+let bloomPass = null;
+function buildComposer(){
+  const rt = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, { type: THREE.HalfFloatType });
+  composer = new EffectComposer(renderer, rt);
+  composer.addPass(new RenderPass(scene, camera));
+  bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.5, 0.55, 0.45);
+  composer.addPass(bloomPass);
+  composer.addPass(new OutputPass());
+}
+buildComposer();
+
+/* ================= 分子网格 ================= */
+const moleculeGroup = new THREE.Group();
+scene.add(moleculeGroup);
+let atomMeshes = {};
+let atomRecords = [];
+let bondMeshes = {};
+let bondRecords = [];
+let dyingList = [];
+let pickMeshes = [];
+
+const _m4 = new THREE.Matrix4();
+const _q = new THREE.Quaternion();
+const _v3 = new THREE.Vector3();
+const _s3 = new THREE.Vector3();
+const _upY = new THREE.Vector3(0, 1, 0);
+
+function disposeAtomMesh(el){
+  const m = atomMeshes[el];
+  if (m){ moleculeGroup.remove(m); m.geometry.dispose(); m.material.dispose(); delete atomMeshes[el]; }
+}
+function disposeBondMesh(cls){
+  const m = bondMeshes[cls];
+  if (m){ moleculeGroup.remove(m); m.geometry.dispose(); m.material.dispose(); delete bondMeshes[cls]; }
+}
+function ensureAtomMesh(el, count){
+  let m = atomMeshes[el];
+  if (m) return m;
+  const e = ELEMENTS[el];
+  const geo = new THREE.SphereGeometry(e.ball, 26, 18);
+  const mat = new THREE.MeshStandardMaterial({ color: e.color, roughness: 0.36, metalness: 0.16, emissive: e.color, emissiveIntensity: e.emissive });
+  m = new THREE.InstancedMesh(geo, mat, Math.max(count, 1));
+  m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  m.frustumCulled = false;
+  m.renderOrder = 1;
+  moleculeGroup.add(m);
+  atomMeshes[el] = m;
+  return m;
+}
+const BOND_CFG = {
+  single:   { r: 0.088, n: 1 },
+  aromatic: { r: 0.102, n: 1 },
+  double:   { r: 0.052, n: 2 },
+  triple:   { r: 0.042, n: 3 },
+};
+function ensureBondMesh(cls, count){
+  let m = bondMeshes[cls];
+  if (m) return m;
+  const cfg = BOND_CFG[cls];
+  const geo = new THREE.CylinderGeometry(cfg.r, cfg.r, 1, 16);
+  const mat = new THREE.MeshStandardMaterial({ color: cls === "aromatic" ? 0x9fb8d6 : 0xbfc9d6, roughness: 0.42, metalness: 0.22, emissive: 0x223344, emissiveIntensity: 0.4 });
+  m = new THREE.InstancedMesh(geo, mat, Math.max(count * cfg.n, 1));
+  m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  m.frustumCulled = false;
+  m.renderOrder = 1;
+  moleculeGroup.add(m);
+  bondMeshes[cls] = m;
+  return m;
+}
+function bondOffsets(cls, dir){
+  const u = new THREE.Vector3().crossVectors(dir, _upY);
+  if (u.lengthSq() < 1e-6) u.set(1, 0, 0);
+  u.normalize();
+  const v = new THREE.Vector3().crossVectors(dir, u).normalize();
+  if (cls === "double"){
+    return [ u.clone().multiplyScalar(0.085), u.clone().multiplyScalar(-0.085) ];
+  }
+  if (cls === "triple"){
+    const out = [];
+    for (let k = 0; k < 3; k++){
+      const th = k * 2.094395;
+      out.push(new THREE.Vector3().addScaledVector(u, Math.cos(th) * 0.085).addScaledVector(v, Math.sin(th) * 0.085));
+    }
+    return out;
+  }
+  return [ new THREE.Vector3() ];
+}
+function composeAtom(mesh, rec, scale){
+  const s = scale * (1 + 0.22 * (rec.hoverScale || 0));
+  _v3.set(rec.pos[0], rec.pos[1], rec.pos[2]);
+  _s3.set(s, s, s);
+  _q.identity();
+  _m4.compose(_v3, _q, _s3);
+  mesh.setMatrixAt(rec.instanceIdx, _m4);
+}
+function composeBond(mesh, rec, f){
+  const len = rec.len;
+  const half = len * f * 0.5;
+  _s3.set(1, Math.max(len * f, 1e-4), 1);
+  for (let k = 0; k < rec.offsets.length; k++){
+    _v3.copy(rec.a).add(rec.offsets[k]).addScaledVector(rec.dir, half);
+    _m4.compose(_v3, rec.q, _s3);
+    mesh.setMatrixAt(rec.instanceIdx * rec.offsets.length + k, _m4);
+  }
+}
+
+let currentMol = null;
+let currentField = null;
+
+function buildMoleculeMeshes(mol){
+  for (const el in atomMeshes) disposeAtomMesh(el);
+  for (const cls in bondMeshes) disposeBondMesh(cls);
+  atomRecords = [];
+  bondRecords = [];
+  pickMeshes = [];
+  const byEl = {};
+  for (let i = 0; i < mol.atoms.length; i++){
+    const a = mol.atoms[i];
+    (byEl[a.el] = byEl[a.el] || []).push(i);
+  }
+  for (const el in byEl){
+    const list = byEl[el];
+    const mesh = ensureAtomMesh(el, list.length);
+    for (let idx = 0; idx < list.length; idx++){
+      const a = mol.atoms[list[idx]];
+      const rec = { pos: a.pos, key: a.key, el: a.el, ringPos: a.ringPos, fragGroup: a.fragGroup, localIdx: a.localIdx, state: "steady", t0: 0, hover: 0, hoverScale: 0, hoverBase: 0, hoverT: -99, instanceIdx: idx, mesh: mesh, atomIdx: list[idx] };
+      atomRecords.push(rec);
+      composeAtom(mesh, rec, 1);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    pickMeshes.push(mesh);
+  }
+  const byCls = {};
+  for (let i = 0; i < mol.bonds.length; i++){
+    const b = mol.bonds[i];
+    const cls = b.order >= 3 ? "triple" : b.order >= 2 ? "double" : b.order >= 1.5 ? "aromatic" : "single";
+    (byCls[cls] = byCls[cls] || []).push(i);
+  }
+  for (const cls in byCls){
+    const list = byCls[cls];
+    const mesh = ensureBondMesh(cls, list.length);
+    for (let idx = 0; idx < list.length; idx++){
+      const b = mol.bonds[list[idx]];
+      const a = mol.atoms[b.i].pos, bb = mol.atoms[b.j].pos;
+      const rec = {
+        a: new THREE.Vector3(a[0], a[1], a[2]),
+        b: new THREE.Vector3(bb[0], bb[1], bb[2]),
+        cls: cls, state: "steady", t0: 0, instanceIdx: idx, mesh: mesh, bondIdx: list[idx],
+      };
+      rec.dir = new THREE.Vector3().subVectors(rec.b, rec.a);
+      rec.len = rec.dir.length();
+      rec.dir.normalize();
+      rec.q = new THREE.Quaternion().setFromUnitVectors(_upY, rec.dir);
+      rec.offsets = bondOffsets(cls, rec.dir);
+      bondRecords.push(rec);
+      composeBond(mesh, rec, 1);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+  }
+}
+
+function spawnDying(atoms, molA, bonds, t){
+  if (!atoms.length && !bonds.length) return;
+  const byEl = {};
+  atoms.forEach(function (a){ (byEl[a.el] = byEl[a.el] || []).push(a); });
+  for (const el in byEl){
+    const list = byEl[el];
+    const e = ELEMENTS[el];
+    const geo = new THREE.SphereGeometry(e.ball, 20, 14);
+    const mat = new THREE.MeshStandardMaterial({ color: e.color, roughness: 0.36, metalness: 0.16, emissive: e.color, emissiveIntensity: e.emissive });
+    const mesh = new THREE.InstancedMesh(geo, mat, list.length);
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 1;
+    moleculeGroup.add(mesh);
+    const recs = list.map(function (a, idx){ return { pos: a.pos, idx: idx, mesh: mesh }; });
+    recs.forEach(function (r){
+      _v3.set(r.pos[0], r.pos[1], r.pos[2]);
+      _s3.set(1, 1, 1);
+      _q.identity();
+      _m4.compose(_v3, _q, _s3);
+      mesh.setMatrixAt(r.idx, _m4);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    dyingList.push({ mesh: mesh, kind: "atom", recs: recs, t0: t, dur: 0.42 });
+  }
+  const byCls = {};
+  bonds.forEach(function (b){
+    const cls = b.order >= 3 ? "triple" : b.order >= 2 ? "double" : b.order >= 1.5 ? "aromatic" : "single";
+    (byCls[cls] = byCls[cls] || []).push(b);
+  });
+  for (const cls in byCls){
+    const list = byCls[cls];
+    const cfg = BOND_CFG[cls];
+    const geo = new THREE.CylinderGeometry(cfg.r, cfg.r, 1, 16);
+    const mat = new THREE.MeshStandardMaterial({ color: cls === "aromatic" ? 0x9fb8d6 : 0xbfc9d6, roughness: 0.42, metalness: 0.22, emissive: 0x223344, emissiveIntensity: 0.4 });
+    const mesh = new THREE.InstancedMesh(geo, mat, list.length * cfg.n);
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 1;
+    moleculeGroup.add(mesh);
+    const recs = list.map(function (b){
+      const a = molA.atoms[b.i].pos, bb = molA.atoms[b.j].pos;
+      const va = new THREE.Vector3(a[0], a[1], a[2]);
+      const vb = new THREE.Vector3(bb[0], bb[1], bb[2]);
+      const dir = new THREE.Vector3().subVectors(vb, va);
+      const len = dir.length();
+      dir.normalize();
+      const qq = new THREE.Quaternion().setFromUnitVectors(_upY, dir);
+      return { va: va, dir: dir, len: len, offs: bondOffsets(cls, dir), qq: qq, idx: 0, mesh: mesh };
+    });
+    recs.forEach(function (r, idx){
+      r.idx = idx;
+      _s3.set(1, Math.max(r.len, 1e-4), 1);
+      for (let k = 0; k < r.offs.length; k++){
+        _v3.copy(r.va).add(r.offs[k]).addScaledVector(r.dir, r.len * 0.5);
+        _m4.compose(_v3, r.qq, _s3);
+        mesh.setMatrixAt(idx * r.offs.length + k, _m4);
+      }
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    dyingList.push({ mesh: mesh, kind: "bond", recs: recs, t0: t, dur: 0.42 });
+  }
+}
+
+function updateDying(t){
+  for (let d = dyingList.length - 1; d >= 0; d--){
+    const D = dyingList[d];
+    const k = (t - D.t0) / D.dur;
+    if (k >= 1){
+      moleculeGroup.remove(D.mesh);
+      D.mesh.geometry.dispose();
+      D.mesh.material.dispose();
+      dyingList.splice(d, 1);
+      continue;
+    }
+    const f = 1 - easeInCubic(clamp(k, 0, 1));
+    if (D.kind === "atom"){
+      D.recs.forEach(function (r){
+        _v3.set(r.pos[0], r.pos[1], r.pos[2]);
+        _s3.set(f, f, f);
+        _q.identity();
+        _m4.compose(_v3, _q, _s3);
+        r.mesh.setMatrixAt(r.idx, _m4);
+      });
+    } else {
+      D.recs.forEach(function (r){
+        const len = Math.max(r.len * f, 1e-4);
+        _s3.set(1, len, 1);
+        for (let kk = 0; kk < r.offs.length; kk++){
+          _v3.copy(r.va).add(r.offs[kk]).addScaledVector(r.dir, len * 0.5);
+          _m4.compose(_v3, r.qq, _s3);
+          r.mesh.setMatrixAt(r.idx * r.offs.length + kk, _m4);
+        }
+      });
+    }
+    D.mesh.instanceMatrix.needsUpdate = true;
+  }
+}
+
+const hoverAnims = [];
+function setHover(rec, on){
+  if (!rec) return;
+  rec.hover = on ? 1 : 0;
+  rec.hoverBase = rec.hoverScale || 0;
+  rec.hoverT = performance.now() / 1000;
+  if (hoverAnims.indexOf(rec) < 0) hoverAnims.push(rec);
+}
+function updateMoleculeAnims(t){
+  // 悬停缩放动画：渐渐变大 / 渐渐恢复
+  for (let hi = hoverAnims.length - 1; hi >= 0; hi--){
+    const rec = hoverAnims[hi];
+    const target = rec.hover ? 1 : 0;
+    const k = clamp((performance.now() / 1000 - rec.hoverT) / 0.22, 0, 1);
+    const e = easeInOutCubic(k);
+    rec.hoverScale = target ? rec.hoverBase + (1 - rec.hoverBase) * e : rec.hoverBase * (1 - e);
+    composeAtom(rec.mesh, rec, 1);
+    rec.mesh.instanceMatrix.needsUpdate = true;
+    if (k >= 1){
+      if (!target) rec.hoverScale = 0;
+      hoverAnims.splice(hi, 1);
+    }
+  }
+  let atomNeeds = {};
+  for (const r of atomRecords){
+    if (r.state === "in"){
+      const k = clamp((t - r.t0) / 0.5, 0, 1);
+      composeAtom(r.mesh, r, easeOutBack(k));
+      atomNeeds[r.mesh.uuid] = r.mesh;
+      if (k >= 1) r.state = "steady";
+    }
+  }
+  let bondNeeds = {};
+  for (const r of bondRecords){
+    if (r.state === "in"){
+      const k = clamp((t - r.t0) / 0.5, 0, 1);
+      composeBond(r.mesh, r, easeOutBack(k));
+      bondNeeds[r.mesh.uuid] = r.mesh;
+      if (k >= 1) r.state = "steady";
+    }
+  }
+  for (const k in atomNeeds) atomNeeds[k].instanceMatrix.needsUpdate = true;
+  for (const k in bondNeeds) bondNeeds[k].instanceMatrix.needsUpdate = true;
+}
+
+/* ================= 粒子系统 ================= */
+let cloud = null;
+function createCloud(n){
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  geo.setAttribute("aOldPos", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  geo.setAttribute("aOldProps", new THREE.BufferAttribute(new Float32Array(n * 4), 4));
+  geo.setAttribute("aSeed", new THREE.BufferAttribute(new Float32Array(n * 4), 4)); // xyz 噪声种子, w=延迟
+  geo.setAttribute("aProps", new THREE.BufferAttribute(new Float32Array(n * 4), 4));
+  geo.setAttribute("aPath0", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  geo.setAttribute("aPath1", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  geo.setAttribute("aPath2", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  geo.setAttribute("aPath3", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  geo.setAttribute("aPath4", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  geo.setAttribute("aPath5", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  geo.setAttribute("aPath6", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  geo.setAttribute("aPath7", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  geo.setAttribute("aPath8", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  geo.setAttribute("aPathCount", new THREE.BufferAttribute(new Float32Array(n), 1));
+  const uniforms = {
+    uTime: { value: 0 },
+    uTransStart: { value: -999 },
+    uTransDur: { value: 0 },
+    uPixelRatio: { value: Math.min(window.devicePixelRatio || 1, 2) },
+    uScale: { value: 1300 },
+    uParticleSize: { value: QUALITY[SETTINGS.quality].psize },
+    uNoiseAmp: { value: SETTINGS.noiseAmp },
+    uBreathAmp: { value: SETTINGS.breathAmp },
+    uFlowAmp: { value: SETTINGS.flowAmp },
+    uCloudAlpha: { value: SETTINGS.cloudAlpha },
+    uCenter: { value: new THREE.Vector3(0, 0, 0) },
+    uAnchor: { value: new THREE.Vector3(0, 0, 0) },
+    uDensityTex: { value: buildLUTTexture(COLORMAPS[SETTINGS.colormap].stops) },
+    uDensGamma: { value: SETTINGS.densGamma },
+  };
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: CLOUD_VERTEX,
+    fragmentShader: CLOUD_FRAGMENT,
+    uniforms: uniforms,
+    transparent: true,
+    depthWrite: false,
+    depthTest: true,
+    blending: THREE.AdditiveBlending,
+  });
+  const pts = new THREE.Points(geo, mat);
+  pts.frustumCulled = false;
+  pts.renderOrder = 3;
+  scene.add(pts);
+  return { geo: geo, mat: mat, pts: pts, count: n, uniforms: uniforms };
+}
+
+function buildLUTTexture(stops){
+  const SIZE = 256;
+  const data = new Uint8Array(SIZE * 4);
+  for (let i = 0; i < SIZE; i++){
+    const c = sampleStops(stops, i / (SIZE - 1));
+    data[i*4] = c[0]; data[i*4+1] = c[1]; data[i*4+2] = c[2]; data[i*4+3] = 255;
+  }
+  const tex = new THREE.DataTexture(data, SIZE, 1, THREE.RGBAFormat);
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
+  tex.needsUpdate = true;
+  return tex;
+}
+let densityLUT = null;
+function setColormap(name){
+  if (!COLORMAPS[name]) return;
+  SETTINGS.colormap = name;
+  const tex = buildLUTTexture(COLORMAPS[name].stops);
+  if (cloud){
+    if (densityLUT) densityLUT.dispose();
+    densityLUT = tex;
+    cloud.uniforms.uDensityTex.value = tex;
+  }
+  const sel = document.getElementById("cmapSel");
+  if (sel) sel.value = name;
+  const bar = document.getElementById("cmapBar");
+  if (bar) bar.style.background = colormapCSS(COLORMAPS[name].stops);
+}
+
+function nearestAtomIdx(mol, x, y, z){
+  let best = 0, bestD2 = Infinity;
+  for (let i = 0; i < mol.atoms.length; i++){
+    const p = mol.atoms[i].pos;
+    const d2 = (p[0]-x)*(p[0]-x) + (p[1]-y)*(p[1]-y) + (p[2]-z)*(p[2]-z);
+    if (d2 < bestD2){ bestD2 = d2; best = i; }
+  }
+  return best;
+}
+function bfsPath(adj, a, b){
+  if (a === b) return [a];
+  const prev = new Int32Array(adj.length);
+  prev.fill(-1);
+  const queue = [a];
+  prev[a] = a;
+  let found = false;
+  while (queue.length && !found){
+    const cur = queue.shift();
+    for (const nb of adj[cur]){
+      if (prev[nb] === -1){
+        prev[nb] = cur;
+        if (nb === b){ found = true; break; }
+        queue.push(nb);
+      }
+    }
+  }
+  if (!found) return [a, b];
+  const path = [b];
+  let cur = b;
+  while (cur !== a){ cur = prev[cur]; path.push(cur); }
+  return path.reverse();
+}
+/* 沿 σ 骨架折线路径：远距离粒子途经键中点流动，而非直线飞越 */
+function buildFlowPaths(mol, fromArr, toArr, count, onDone){
+  const nAt = mol.atoms.length;
+  const adj = [];
+  for (let i = 0; i < nAt; i++) adj.push([]);
+  for (const b of mol.bonds){ adj[b.i].push(b.j); adj[b.j].push(b.i); }
+  // 原子对最短路径缓存（图很小，n² 次 BFS 开销可忽略；省去逐粒子 BFS）
+  const pathCache = new Map();
+  for (let a = 0; a < nAt; a++){
+    for (let b = 0; b < nAt; b++){
+      if (a !== b) pathCache.set(a * nAt + b, bfsPath(adj, a, b));
+    }
+  }
+  // 空间哈希（1.4Å 格，固定 10³ 整数索引网格）最近原子查询：纯整数算术，O(1) 而非 O(原子数)
+  const AC = 1.4, GS = 10, GO = 5;
+  const atomCells = new Array(GS * GS * GS);
+  const cellI = function (x, y, z){
+    const ix = Math.floor(x / AC) + GO, iy = Math.floor(y / AC) + GO, iz = Math.floor(z / AC) + GO;
+    const cx = ix < 0 ? 0 : ix > GS - 1 ? GS - 1 : ix;
+    const cy = iy < 0 ? 0 : iy > GS - 1 ? GS - 1 : iy;
+    const cz = iz < 0 ? 0 : iz > GS - 1 ? GS - 1 : iz;
+    return (cz * GS + cy) * GS + cx;
+  };
+  for (let i = 0; i < nAt; i++){
+    const p = mol.atoms[i].pos;
+    const k = cellI(p[0], p[1], p[2]);
+    if (!atomCells[k]) atomCells[k] = [];
+    atomCells[k].push(i);
+  }
+  const nearest = function (x, y, z){
+    let best = 0, bestD2 = Infinity;
+    const cx = Math.floor(x / AC) + GO, cy = Math.floor(y / AC) + GO, cz = Math.floor(z / AC) + GO;
+    const x0 = cx - 1 < 0 ? 0 : cx - 1, x1 = cx + 1 > GS - 1 ? GS - 1 : cx + 1;
+    const y0 = cy - 1 < 0 ? 0 : cy - 1, y1 = cy + 1 > GS - 1 ? GS - 1 : cy + 1;
+    const z0 = cz - 1 < 0 ? 0 : cz - 1, z1 = cz + 1 > GS - 1 ? GS - 1 : cz + 1;
+    for (let iz = z0; iz <= z1; iz++){
+      for (let iy = y0; iy <= y1; iy++){
+        for (let ix = x0; ix <= x1; ix++){
+          const arr = atomCells[(iz * GS + iy) * GS + ix];
+          if (!arr) continue;
+          for (const i of arr){
+            const p = mol.atoms[i].pos;
+            const d2 = (p[0]-x)*(p[0]-x) + (p[1]-y)*(p[1]-y) + (p[2]-z)*(p[2]-z);
+            if (d2 < bestD2){ bestD2 = d2; best = i; }
+          }
+        }
+      }
+    }
+    return best;
+  };
+  const NW = 9; // 路点数（8 段）——骨架折线：折点恰在原子处，弯折严格贴 σ 骨架
+  const pathArr = [];
+  for (let k = 0; k < NW; k++) pathArr.push(new Float32Array(count * 3));
+  const pc = new Float32Array(count);
+  let pi = 0;
+  _yieldChunks(13, function (t0){
+    const end = Math.min(pi + 24000, count);
+    for (; pi < end; pi++){
+      const oi = pi * 3;
+      const ox = fromArr[oi], oy = fromArr[oi + 1], oz = fromArr[oi + 2];
+      const nx = toArr[oi], ny = toArr[oi + 1], nz = toArr[oi + 2];
+      pathArr[0][oi] = ox; pathArr[0][oi + 1] = oy; pathArr[0][oi + 2] = oz;
+      let nW = 1;
+      const ai = nearest(ox, oy, oz);
+      const bi = nearest(nx, ny, nz);
+      if (ai !== bi && ai >= 0 && bi >= 0){
+        // 跨原子迁移：一律沿 σ 骨架（BFS 键路径，途经原子）流动，无直飞捷径
+        const along = pathCache.get(ai * nAt + bi);
+        if (along){
+          for (let k = 0; k < along.length && nW < NW - 1; k++){
+            const p = mol.atoms[along[k]].pos;
+            pathArr[nW][oi] = p[0]; pathArr[nW][oi + 1] = p[1]; pathArr[nW][oi + 2] = p[2];
+            nW++;
+          }
+        }
+      }
+      pathArr[nW][oi] = nx; pathArr[nW][oi + 1] = ny; pathArr[nW][oi + 2] = nz;
+      nW++;
+      for (let k = 0; k < NW; k++){
+        const idx = Math.min(k, nW - 1);
+        pathArr[k][oi] = pathArr[idx][oi];
+        pathArr[k][oi + 1] = pathArr[idx][oi + 1];
+        pathArr[k][oi + 2] = pathArr[idx][oi + 2];
+      }
+      pc[pi] = Math.max(nW - 1, 1);
+    }
+    return pi >= count ? { p0: pathArr[0], p1: pathArr[1], p2: pathArr[2], p3: pathArr[3], p4: pathArr[4], p5: pathArr[5], p6: pathArr[6], p7: pathArr[7], p8: pathArr[8], pc: pc } : undefined;
+  }, onDone);
+}
+function walkPathJS(paths, pc, i, e){
+  const segs = pc[i];
+  const pp = e * segs;
+  const oi = i * 3;
+  const s = Math.min(Math.floor(pp), 7);
+  const f = pp - s;
+  const a = paths[s], b = paths[Math.min(s + 1, 8)];
+  return [a[oi] + (b[oi] - a[oi]) * f, a[oi + 1] + (b[oi + 1] - a[oi + 1]) * f, a[oi + 2] + (b[oi + 2] - a[oi + 2]) * f];
+}
+function padCloudPaths(posArr, geo){
+  for (let k = 0; k < 9; k++){
+    geo.attributes["aPath" + k].array.set(posArr);
+    geo.attributes["aPath" + k].needsUpdate = true;
+  }
+  geo.attributes.aPathCount.array.fill(1);
+  geo.attributes.aPathCount.needsUpdate = true;
+}
+let transitionGen = 0;
+function transitionCloud(field, anchorPos){
+  if (!cloud) return;
+  const geo = cloud.geo;
+  const oldArr = geo.attributes.position.array;
+  const oldSnapshot = new Float32Array(oldArr); // 快照：后续 position 会被覆盖
+  const prevStart = cloud.uniforms.uTransStart.value;
+  const prevDur = cloud.uniforms.uTransDur.value;
+  let fromArr = oldSnapshot;
+  if (prevDur > 0.001 && simTime - prevStart < prevDur && cloud.count){
+    // 过渡进行中被再次触发：沿旧路径取「当前显示位置」续接，避免跳变
+    const darr = geo.attributes.aSeed.array;
+    const paths = [];
+    for (let k = 0; k < 9; k++) paths.push(geo.attributes["aPath" + k].array);
+    const ppc = geo.attributes.aPathCount.array;
+    const tmp = new Float32Array(cloud.count * 3);
+    for (let i = 0; i < cloud.count; i++){
+      const tt = clamp((simTime - prevStart - darr[i * 4 + 3] * 0.6 * prevDur) / prevDur, 0, 1);
+      const e = tt * tt * (3 - 2 * tt);
+      const w = walkPathJS(paths, ppc, i, e);
+      const oi = i * 3;
+      tmp[oi] = w[0]; tmp[oi + 1] = w[1]; tmp[oi + 2] = w[2];
+    }
+    geo.attributes.aOldPos.array.set(tmp);
+    fromArr = tmp;
+  } else {
+    geo.attributes.aOldPos.array.set(oldSnapshot);
+  }
+  geo.attributes.aOldPos.needsUpdate = true;
+  const grid = buildDensityGrid(field);
+  const data = sampleCloud(field, cloud.count, null, grid);
+  // 保存旧属性供过渡插值（位置/尺寸/亮度/密度同步丝滑过渡）
+  geo.attributes.aOldProps.array.set(geo.attributes.aProps.array);
+  geo.attributes.aOldProps.needsUpdate = true;
+  const gen = ++transitionGen;
+  // 分帧匹配（不再冻结主线程）；完成后立即写入目标并分帧算骨架路径，就绪后启动过渡
+  matchCloudTargetsAsync(oldSnapshot, data.pos, cloud.count, function (m){
+    if (gen !== transitionGen) return; // 已被更新的过渡取代
+    const pos = new Float32Array(cloud.count * 3);
+    const size = new Float32Array(cloud.count);
+    const bright = new Float32Array(cloud.count);
+    const density = new Float32Array(cloud.count);
+    for (let i = 0; i < cloud.count; i++){
+      const ti = m.map[i];
+      const oi = i * 3, tj = ti * 3;
+      pos[oi] = data.pos[tj];
+      pos[oi + 1] = data.pos[tj + 1];
+      pos[oi + 2] = data.pos[tj + 2];
+      size[i] = data.size[ti];
+      bright[i] = data.bright[ti];
+      density[i] = data.density[ti];
+    }
+    geo.attributes.position.array.set(pos);
+    geo.attributes.position.needsUpdate = true;
+    // 沿 σ 骨架路径流动（分帧）
+    buildFlowPaths(currentMol, fromArr, pos, cloud.count, function (paths){
+      if (gen !== transitionGen) return;
+      geo.attributes.aPath0.array.set(paths.p0);
+      geo.attributes.aPath0.needsUpdate = true;
+      geo.attributes.aPath1.array.set(paths.p1);
+      geo.attributes.aPath1.needsUpdate = true;
+      geo.attributes.aPath2.array.set(paths.p2);
+      geo.attributes.aPath2.needsUpdate = true;
+      geo.attributes.aPath3.array.set(paths.p3);
+      geo.attributes.aPath3.needsUpdate = true;
+      geo.attributes.aPath4.array.set(paths.p4);
+      geo.attributes.aPath4.needsUpdate = true;
+      geo.attributes.aPath5.array.set(paths.p5);
+      geo.attributes.aPath5.needsUpdate = true;
+      geo.attributes.aPath6.array.set(paths.p6);
+      geo.attributes.aPath6.needsUpdate = true;
+      geo.attributes.aPath7.array.set(paths.p7);
+      geo.attributes.aPath7.needsUpdate = true;
+      geo.attributes.aPath8.array.set(paths.p8);
+      geo.attributes.aPath8.needsUpdate = true;
+      geo.attributes.aPathCount.array.set(paths.pc);
+      geo.attributes.aPathCount.needsUpdate = true;
+      const props = new Float32Array(cloud.count * 4);
+      for (let i = 0; i < cloud.count; i++){
+        props[i * 4] = size[i];
+        props[i * 4 + 1] = bright[i];
+        props[i * 4 + 2] = density[i];
+      }
+      geo.attributes.aProps.array.set(props);
+      geo.attributes.aProps.needsUpdate = true;
+      geo.attributes.aSeed.array.set(data.seed);
+      const sd = geo.attributes.aSeed.array;
+      const maxD = 3.6;
+      for (let i = 0; i < cloud.count; i++){
+        const oi = i * 3;
+        // 锚点距离：替换点附近的粒子先动，形成向外的流动波
+        const dd = Math.hypot(pos[oi] - anchorPos[0], pos[oi + 1] - anchorPos[1], pos[oi + 2] - anchorPos[2]);
+        // 位移大小：远距离粒子稍后出发，先局部形变、后整体迁移，读起来是有序流动
+        const dis = Math.hypot(pos[oi] - fromArr[oi], pos[oi + 1] - fromArr[oi + 1], pos[oi + 2] - fromArr[oi + 2]);
+        sd[i * 4 + 3] = clamp(0.36 * Math.pow(clamp(dd / maxD, 0, 1), 1.6) + 0.46 * clamp(dis / 3.0, 0, 1) + 0.14 * seededRand(), 0, 0.95);
+      }
+      geo.attributes.aSeed.needsUpdate = true;
+      cloud.uniforms.uTransStart.value = simTime;
+      cloud.uniforms.uTransDur.value = SETTINGS.transDur;
+      cloud.uniforms.uAnchor.value.set(anchorPos[0], anchorPos[1], anchorPos[2]);
+    });
+  });
+}
+function setParticleCount(n){
+  if (cloud){
+    scene.remove(cloud.pts);
+    cloud.geo.dispose();
+    cloud.mat.dispose();
+    cloud = null;
+  }
+  cloud = createCloud(n);
+  if (currentField){
+    const grid = buildDensityGrid(currentField);
+    const data = sampleCloud(currentField, n, null, grid);
+    cloud.geo.attributes.position.array.set(data.pos);
+    cloud.geo.attributes.position.needsUpdate = true;
+    padCloudPaths(data.pos, cloud.geo);
+    {
+      const props = new Float32Array(n * 4);
+      for (let i = 0; i < n; i++){ props[i * 4] = data.size[i]; props[i * 4 + 1] = data.bright[i]; props[i * 4 + 2] = data.density[i]; }
+      cloud.geo.attributes.aProps.array.set(props);
+      cloud.geo.attributes.aProps.needsUpdate = true;
+    }
+    cloud.geo.attributes.aSeed.array.set(data.seed);
+    cloud.geo.attributes.aSeed.needsUpdate = true;
+    cloud.uniforms.uTransStart.value = -999;
+    cloud.uniforms.uTransDur.value = 0;
+  }
+  updateParticleUI();
+}
+
+/* 悬停显示：把场模型的相对因子挂到碳记录上。
+   预置分子：苯环碳=1.00（原规范）；创造模式：所有碳平均=1.00（含碳架本征基线） */
+function updateRelDensities(){
+  if (!currentField || !currentField.factor || !atomRecords.length) return;
+  const isCustom = currentMol && currentMol.isCustom;
+  let mean = 1;
+  if (isCustom){
+    let s = 0, c = 0;
+    for (const rec of atomRecords){
+      if (rec.el === "C" && rec.atomIdx >= 0 && rec.atomIdx < creatorState.pts.length){
+        s += currentField.factor[rec.atomIdx]; c++;
+      }
+    }
+    if (c) mean = s / c;
+  }
+  for (const rec of atomRecords){
+    if (rec.el === "C") rec.rel = currentField.factor[rec.atomIdx] / mean;
+  }
+}
+
+/* ================= 分子变更与过渡 ================= */
+function changeMolecule(frags, anchorHint){
+  applyMol(buildMolecule(frags), anchorHint);
+}
+/* 应用任意分子对象（预设/创造模式共用管线：diff → 网格 → 场 → 云过渡） */
+function applyMol(next, anchorHint){
+  const t = simTime;
+  const prev = currentMol;
+  const prevKeys = new Set(prev.atoms.map(function (a){ return a.key; }));
+  const nextKeys = new Set(next.atoms.map(function (a){ return a.key; }));
+  const prevBonds = prev.bonds.map(function (b){ return bondKey(prev.atoms[b.i].key, prev.atoms[b.j].key, b.order); });
+  const nextBonds = next.bonds.map(function (b){ return bondKey(next.atoms[b.i].key, next.atoms[b.j].key, b.order); });
+  const prevBSet = new Set(prevBonds);
+  const nextBSet = new Set(nextBonds);
+  const removedAtoms = prev.atoms.filter(function (a){ return !nextKeys.has(a.key); });
+  const removedBonds = [];
+  prev.bonds.forEach(function (b, i){ if (!nextBSet.has(prevBonds[i])) removedBonds.push(b); });
+  spawnDying(removedAtoms, prev, removedBonds, t);
+  const addedKeys = new Set();
+  next.atoms.forEach(function (a){ if (!prevKeys.has(a.key)) addedKeys.add(a.key); });
+  currentMol = next;
+  buildMoleculeMeshes(next);
+  atomRecords.forEach(function (rec){
+    if (addedKeys.has(rec.key)){
+      rec.state = "in";
+      rec.t0 = t + 0.04 + Math.random() * 0.1;
+      composeAtom(rec.mesh, rec, 0.001);
+    }
+  });
+  bondRecords.forEach(function (rec){
+    const b = next.bonds[rec.bondIdx];
+    const bk = bondKey(next.atoms[b.i].key, next.atoms[b.j].key, b.order);
+    if (!prevBSet.has(bk)){
+      rec.state = "in";
+      rec.t0 = t + 0.05 + Math.random() * 0.1;
+      composeBond(rec.mesh, rec, 0.001);
+    }
+  });
+  atomRecords.forEach(function (rec){ if (rec.state === "in") rec.mesh.instanceMatrix.needsUpdate = true; });
+  bondRecords.forEach(function (rec){ if (rec.state === "in") rec.mesh.instanceMatrix.needsUpdate = true; });
+  currentField = computeField(next, SETTINGS.mode);
+  updateRelDensities();
+  let anchor = anchorHint || [0, 0, 0];
+  if (next.fragments && next.fragments.length){
+    const f0 = next.fragments[0];
+    if (f0.atomIdx !== undefined && next.atoms[f0.atomIdx]){
+      const ap = next.atoms[f0.atomIdx].pos;
+      anchor = [ap[0], ap[1], ap[2]];
+    }
+  }
+  transitionCloud(currentField, anchor);
+  rebuildLegend();
+  rebuildExplain();
+}
+
+/* ================= Explain 教学箭头 ================= */
+const explainGroup = new THREE.Group();
+explainGroup.visible = false;
+scene.add(explainGroup);
+function v3toTHREE(v){ return new THREE.Vector3(v[0], v[1], v[2]); }
+function makeLabelSprite(text, colorStr){
+  const c = document.createElement("canvas");
+  c.width = 160; c.height = 80;
+  const ctx = c.getContext("2d");
+  ctx.clearRect(0, 0, 160, 80);
+  ctx.font = "700 44px system-ui, -apple-system, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.shadowColor = "rgba(0,0,0,0.85)";
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = colorStr;
+  ctx.fillText(text, 80, 42);
+  const tex = new THREE.CanvasTexture(c);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+  const spr = new THREE.Sprite(mat);
+  spr.scale.set(0.9, 0.45, 1);
+  return spr;
+}
+function makeArrow(from, to, color, label){
+  const g = new THREE.Group();
+  const d = new THREE.Vector3().subVectors(to, from);
+  const len = d.length();
+  if (len < 0.01) return g;
+  d.normalize();
+  const shaftLen = len * 0.7;
+  const q = new THREE.Quaternion().setFromUnitVectors(_upY, d);
+  const geo = new THREE.CylinderGeometry(0.016, 0.016, 1, 10);
+  const mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.9 });
+  const shaft = new THREE.Mesh(geo, mat);
+  shaft.matrixAutoUpdate = false;
+  _v3.copy(from).addScaledVector(d, shaftLen * 0.5);
+  _s3.set(1, shaftLen, 1);
+  _m4.compose(_v3, q, _s3);
+  shaft.matrix.copy(_m4);
+  g.add(shaft);
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.14, 10), mat);
+  cone.matrixAutoUpdate = false;
+  _v3.copy(from).addScaledVector(d, shaftLen + 0.07);
+  _s3.set(1, 1, 1);
+  _m4.compose(_v3, q, _s3);
+  cone.matrix.copy(_m4);
+  g.add(cone);
+  if (label){
+    const spr = makeLabelSprite(label, "#" + color.toString(16).padStart(6, "0"));
+    _v3.copy(from).addScaledVector(d, len * 0.5);
+    spr.position.copy(_v3);
+    spr.position.y += 0.42;
+    g.add(spr);
+  }
+  return g;
+}
+function clearGroup(g){
+  while (g.children.length){
+    const c = g.children[0];
+    g.remove(c);
+    if (c.geometry) c.geometry.dispose();
+    if (c.material){
+      if (c.material.map) c.material.map.dispose();
+      c.material.dispose();
+    }
+  }
+}
+function rebuildExplain(){
+  clearGroup(explainGroup);
+  if (!currentMol) return;
+  currentMol.fragments.forEach(function (f, fi){
+    const g = GROUPS[f.group];
+    let ipso, first;
+    if (currentMol.isCustom){
+      // 创造模式：官能团原子位置来自已构建的分子
+      const ga = currentMol.atoms.find(function (a){ return a.fragId === fi && a.localIdx === 0; });
+      ipso = currentMol.atoms[f.atomIdx].pos;
+      first = ga ? ga.pos : [ipso[0], ipso[1] + 1.5, ipso[2]];
+    } else {
+      const th = Math.PI / 180 * (30 + 60 * f.pos);
+      const gd = MOLECULE_DATA.fragments[f.group];
+      const q0 = rotZ2(gd.atoms[0].p, th);
+      ipso = ringPos(f.pos);
+      first = [q0[0] + ipso[0], q0[1] + ipso[1], q0[2]];
+    }
+    const ringC = [0, 0, 0];
+    if (g.sigmaM !== 0){
+      const from = g.sigmaM < 0 ? first : ipso;
+      const to = g.sigmaM < 0 ? ipso : first;
+      explainGroup.add(makeArrow(v3toTHREE(from), v3toTHREE(to), 0xffb35c, signLabel(g.sigmaM) + "I"));
+    }
+    if (g.sigmaP - g.sigmaM !== 0){
+      const from = g.sigmaP - g.sigmaM < 0 ? first : ringC;
+      const to = g.sigmaP - g.sigmaM < 0 ? ringC : first;
+      explainGroup.add(makeArrow(v3toTHREE(from), v3toTHREE(to), 0xb893ff, signLabel(g.sigmaP - g.sigmaM) + "M"));
+    }
+  });
+}
+
+/* ================= 拾取 ================= */
+/* 屏幕投影拾取：原子投影到屏幕做 2D 圆判定，取最近者。
+   不依赖网格实例/动画缩放——「生长中」的小球、SwiftShader 慢速 rAF 下依然稳定可点。 */
+const _pv = new THREE.Vector3();
+function pickAtom(event){
+  const rect = renderer.domElement.getBoundingClientRect();
+  const mx = event.clientX - rect.left, my = event.clientY - rect.top;
+  const camPos = camera.position;
+  const fovHalf = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  let best = null, bestD = Infinity;
+  for (const rec of atomRecords){
+    const px = rec.pos[0], py = rec.pos[1], pz = rec.pos[2];
+    _pv.set(px, py, pz).project(camera);
+    if (_pv.z > 1) continue; // 相机后方
+    const dist = Math.hypot(px - camPos.x, py - camPos.y, pz - camPos.z);
+    if (dist < 0.1) continue;
+    const ballR = ELEMENTS[rec.el] ? ELEMENTS[rec.el].ball : 0.34;
+    let rPx = (ballR * rect.height) / (2 * fovHalf * dist);
+    if (rPx < 8) rPx = 8; // 最小可点半径
+    const sx = (_pv.x * 0.5 + 0.5) * rect.width;
+    const sy = (-_pv.y * 0.5 + 0.5) * rect.height;
+    const ddx = mx - sx, ddy = my - sy;
+    const d2 = ddx * ddx + ddy * ddy;
+    if (d2 < rPx * rPx && d2 < bestD){ bestD = d2; best = rec; }
+  }
+  return best;
+}
+
+/* ================= UI 交互 ================= */
+const popoverEl = document.getElementById("popover");
+const popoverState = { open: false, pos: [0, 0, 0], ringPos: -1, customAtom: -1, customDir: null };
+
+function fmtCount(n){ return n >= 1000 ? Math.round(n / 1000) + "k" : String(n); }
+function updateParticleUI(){
+  const el = document.getElementById("particleCount");
+  if (el) el.textContent = fmtCount(cloud ? cloud.count : 0);
+}
+
+/* 分子选择栏 */
+function buildMoleculeBar(){
+  const el = document.getElementById("moleculeBar");
+  let html = "";
+  for (const m of MOLECULE_LIST){
+    html += "<button class='mol-chip' data-k='" + m.key + "'><span>" + m.name + "</span><span class='zh'>" + m.zh + "</span></button>";
+  }
+  el.innerHTML = html;
+  el.querySelectorAll(".mol-chip").forEach(function (b){
+    b.addEventListener("click", function (){ selectMolecule(b.dataset.k); });
+  });
+  setActiveMoleculeChip("benzene");
+}
+function setActiveMoleculeChip(key){
+  document.querySelectorAll(".mol-chip").forEach(function (b){ b.classList.toggle("active", b.dataset.k === key); });
+}
+
+/* 模式与画质 */
+function wireSegments(){
+  document.querySelectorAll("#modeSeg .seg-btn").forEach(function (b){
+    b.addEventListener("click", function (){ setMode(b.dataset.mode); });
+  });
+  document.querySelectorAll("#qualitySeg .seg-btn").forEach(function (b){
+    b.addEventListener("click", function (){ setQuality(b.dataset.q, false); });
+  });
+}
+function setMode(m){
+  SETTINGS.mode = m;
+  document.querySelectorAll("#modeSeg .seg-btn").forEach(function (b){ b.classList.toggle("active", b.dataset.mode === m); });
+  if (currentMol){
+    currentField = computeField(currentMol, m);
+    updateRelDensities();
+    transitionCloud(currentField, [0, 0, 0]);
+  }
+}
+function setQuality(q, auto){
+  SETTINGS.quality = q;
+  if (!auto) manualQualityAt = simTime;
+  const Q = QUALITY[q];
+  bloomPass.strength = Q.bloom;
+  bloomPass.radius = Q.radius;
+  bloomPass.threshold = Q.threshold;
+  if (cloud) cloud.uniforms.uParticleSize.value = Q.psize;
+  if (cloud && cloud.count !== Q.count) setParticleCount(Q.count);
+  document.querySelectorAll("#qualitySeg .seg-btn").forEach(function (b){ b.classList.toggle("active", b.dataset.q === q); });
+  updateParticleUI();
+}
+
+/* 分子切换与官能团取代 */
+function selectMolecule(key){
+  const m = MOLECULE_LIST.find(function (x){ return x.key === key; });
+  if (!m) return;
+  setActiveMoleculeChip(key);
+  changeMolecule(m.fragments, ringPos(m.fragments.length ? m.fragments[0].pos : 0));
+}
+function substitute(pos, group){
+  closePopover();
+  if (!currentMol) return;
+  const frags = currentMol.fragments.slice();
+  const idx = frags.findIndex(function (f){ return f.pos === pos; });
+  if (group === null){
+    if (idx >= 0) frags.splice(idx, 1);
+  } else {
+    if (idx >= 0) frags[idx] = { pos: pos, group: group };
+    else frags.push({ pos: pos, group: group });
+  }
+  changeMolecule(frags, ringPos(pos));
+}
+
+/* 点击原子 → 官能团选择弹层 */
+function openPopover(rec){
+  popoverState.open = true;
+  popoverState.pos = rec.pos;
+  if (currentMol && currentMol.isCustom){
+    // 创造模式：点碳/H/基团原子 → 弹层增删官能团（取代 H，规格同苯）
+    let cIdx = -1;
+    let hDir = null; // 点击 H 时：碳→H 的单位方向（挂载时取代该 H，而非碳上其他 H）
+    if (rec.el === "C" && rec.atomIdx < creatorState.pts.length) cIdx = rec.atomIdx;
+    else if (rec.fragId >= 0 && currentMol.fragments[rec.fragId]) cIdx = currentMol.fragments[rec.fragId].atomIdx;
+    else {
+      for (const b of currentMol.bonds){
+        let o = -1;
+        if (b.i === rec.atomIdx) o = b.j; else if (b.j === rec.atomIdx) o = b.i;
+        if (o >= 0 && currentMol.atoms[o].el === "C" && currentMol.atoms[o].atomIdx < creatorState.pts.length){
+          cIdx = currentMol.atoms[o].atomIdx;
+          if (rec.el === "H"){
+            const cp = currentMol.atoms[o].pos, hp = rec.pos;
+            const dx = hp[0]-cp[0], dy = hp[1]-cp[1], dz = hp[2]-cp[2];
+            const l = Math.hypot(dx, dy, dz);
+            if (l > 1e-6) hDir = [dx/l, dy/l, dz/l];
+          }
+          break;
+        }
+      }
+    }
+    if (cIdx >= 0){
+      popoverState.customAtom = cIdx;
+      popoverState.customDir = hDir;
+      popoverState.ringPos = -1;
+      const existing = crGroupsAt(creatorState, cIdx);
+      // 规格同苯：取代 H → 挂官能团；已有基团 → 替换/移除
+      const title = "C" + (cIdx + 1) + (existing.length ? " · " + existing.map(function (x){ return GROUP_LABEL[x.group]; }).join("+") + " — 替换基团" : "–H · 替换 H");
+      let html = "<div class='pv-title'><b>" + title + "</b><span class='pv-close' id='pvClose'>✕</span></div><div class='pv-grid'>" + crChipsHTML(cIdx) + "</div>";
+      popoverEl.innerHTML = html;
+      popoverEl.classList.add("show");
+      document.getElementById("pvClose").addEventListener("click", closePopover);
+      popoverEl.querySelectorAll(".cr-gp").forEach(function (btn){
+        btn.addEventListener("click", function (){
+          substituteCustom(popoverState.customAtom, btn.dataset.g === "" ? null : btn.dataset.g);
+        });
+      });
+      updatePopoverPos();
+      return;
+    }
+  }
+  popoverState.customAtom = -1;
+  popoverState.ringPos = rec.ringPos;
+  const frag = currentMol.fragments.find(function (f){ return f.pos === rec.ringPos; });
+  const title = frag ? "C" + (rec.ringPos + 1) + " · " + GROUPS[frag.group].zh + " — 替换基团" : "C" + (rec.ringPos + 1) + "–H · 替换 H";
+  let html = "<div class='pv-title'><b>" + title + "</b><span class='pv-close' id='pvClose'>✕</span></div><div class='pv-grid'>";
+  for (const k of GROUP_KEYS){
+    html += "<button class='pv-chip' data-g='" + k + "'>" + k + "</button>";
+  }
+  if (frag) html += "<button class='pv-chip remove' data-g=''>移除 (H)</button>";
+  html += "</div>";
+  popoverEl.innerHTML = html;
+  popoverEl.classList.add("show");
+  document.getElementById("pvClose").addEventListener("click", closePopover);
+  popoverEl.querySelectorAll(".pv-chip").forEach(function (btn){
+    btn.addEventListener("click", function (){
+      const g = btn.dataset.g;
+      substitute(popoverState.ringPos, g === "" ? null : g);
+    });
+  });
+  updatePopoverPos();
+}
+function updatePopoverPos(){
+  const v = new THREE.Vector3(popoverState.pos[0], popoverState.pos[1], popoverState.pos[2]);
+  v.project(camera);
+  const x = (v.x * 0.5 + 0.5) * window.innerWidth;
+  const y = (-v.y * 0.5 + 0.5) * window.innerHeight;
+  const w = popoverEl.offsetWidth || 190;
+  const h = popoverEl.offsetHeight || 130;
+  popoverEl.style.left = clamp(x - w / 2, 8, window.innerWidth - w - 8) + "px";
+  popoverEl.style.top = clamp(y - h - 14, 8, window.innerHeight - h - 8) + "px";
+}
+function closePopover(){
+  popoverState.open = false;
+  popoverEl.classList.remove("show");
+}
+
+/* 图例与信息卡 */
+function findMoleculeName(){
+  if (currentMol && currentMol.isCustom){
+    const nC = currentMol.atoms.filter(function (a){ return a.el === "C"; }).length;
+    const id = creatorState.lastIdent;
+    if (id && id.name) return { name: id.name + "（" + id.zh + "）", formula: id.formula };
+    return { name: "自定义碳架", formula: "C" + nC + " · " + (id ? id.formula : "自由绘制") };
+  }
+  const frags = currentMol ? currentMol.fragments : [];
+  for (const m of MOLECULE_LIST){
+    if (m.fragments.length === frags.length && m.fragments.every(function (f){
+      return frags.some(function (x){ return x.pos === f.pos && x.group === f.group; });
+    })){
+      return m;
+    }
+  }
+  return { name: "Benzene 衍生物", formula: "C6H5X" };
+}
+function rebuildLegend(){
+  const el = document.getElementById("legend");
+  if (!currentMol) return;
+  const frags = currentMol.fragments;
+  const name = findMoleculeName();
+  let html = "<div class='mol'>" + name.name + " <span class='formula'>" + name.formula + "</span></div>";
+  if (frags.length){
+    html += "<div class='fxrow'>";
+    for (const f of frags){
+      const g = GROUPS[f.group];
+      html += "<span class='fx-badge' data-g='" + f.group + "'>" + f.group + " <span class='i'>" + signLabel(g.sigmaM) + "I</span> <span class='m'>" + signLabel(g.sigmaP - g.sigmaM) + "M</span></span>";
+    }
+    html += "</div>";
+  }
+  html += "<div class='cmaprow'><span class='cmaplabel'>低密度</span><div class='cmapbar' id='cmapBar'></div><span class='cmaplabel'>高密度</span></div>";
+  html += "<div class='densityhint'>悬停碳原子显示 ρ（" + (currentMol && currentMol.isCustom ? "碳均=1.00" : "苯环=1.00") + "）· 随模式变化</div>";
+  el.innerHTML = html;
+  const bar = document.getElementById("cmapBar");
+  if (bar) bar.style.background = colormapCSS(COLORMAPS[SETTINGS.colormap].stops);
+  el.querySelectorAll(".fx-badge").forEach(function (b){
+    b.addEventListener("click", function (){ showInfoCard(b.dataset.g); });
+  });
+}
+function showInfoCard(gk){
+  const g = GROUPS[gk];
+  const el = document.getElementById("infoCard");
+  el.innerHTML = "<h3>" + g.name + " <span class='zh'>" + g.zh + "</span> <span class='close' id='icClose'>✕</span></h3>"
+    + "<div class='kv'>"
+    + "<div class='kv-row'><span>Inductive · σ<sub>m</sub></span><span class='val i'>" + signLabel(g.sigmaM) + "I · " + Math.abs(g.sigmaM).toFixed(2) + "</span></div>"
+    + "<div class='kv-row'><span>Resonance · σ<sub>p</sub>−σ<sub>m</sub></span><span class='val m'>" + signLabel(g.sigmaP - g.sigmaM) + "M · " + Math.abs(g.sigmaP - g.sigmaM).toFixed(2) + "</span></div>"
+    + "<div class='kv-row'><span>Overall</span><span class='val'>" + overallVerdict(g) + "</span></div>"
+    + "</div><div class='desc'>" + g.desc + "</div>";
+  el.classList.add("show");
+  document.getElementById("icClose").addEventListener("click", function (){ el.classList.remove("show"); });
+}
+
+/* 提示 */
+let toastTimer = null;
+function toast(msg){
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function (){ el.classList.remove("show"); }, 2400);
+}
+
+/* 悬停碳原子 → 相对电子密度标签（苯环=1.00，随模式实时变化） */
+let densityTarget = null;
+function updateDensityHover(){
+  const tag = document.getElementById("densityTag");
+  const isSkeletonC = hoverRec && hoverRec.el === "C" && hoverRec.rel !== undefined && (hoverRec.ringPos !== undefined || (currentMol && currentMol.isCustom && hoverRec.atomIdx < creatorState.pts.length));
+  if (isSkeletonC){
+    densityTarget = { pos: hoverRec.pos, rel: hoverRec.rel, ringPos: hoverRec.ringPos };
+    const custom = currentMol && currentMol.isCustom;
+    const cNo = custom ? hoverRec.atomIdx + 1 : hoverRec.ringPos + 1;
+    tag.innerHTML = "<span class='dt-val'>" + hoverRec.rel.toFixed(2) + "</span><span class='dt-cap'>C" + cNo + " · ρ · " + (custom ? "碳均=1.00" : "苯环=1.00") + "</span>";
+    // 颜色取自当前电子云色图 LUT（该密度对应的云色），发光文字与云色调一致
+    const t = clamp((hoverRec.rel - 0.2) / 1.8, 0, 1);
+    const c = sampleStops(COLORMAPS[SETTINGS.colormap].stops, t);
+    const cr = Math.round(c[0]), cg = Math.round(c[1]), cb = Math.round(c[2]);
+    tag.style.borderColor = "rgb(" + cr + "," + cg + "," + cb + ")";
+    tag.style.boxShadow = "0 0 22px rgba(" + cr + "," + cg + "," + cb + ",0.35), 0 8px 28px rgba(0,0,0,0.45)";
+    const val = tag.querySelector(".dt-val");
+    if (val) val.style.textShadow = "0 0 6px rgb(" + cr + "," + cg + "," + cb + "), 0 0 16px rgb(" + cr + "," + cg + "," + cb + ")";
+    tag.classList.add("show");
+    updateDensityTag();
+  } else {
+    densityTarget = null;
+    if (tag) tag.classList.remove("show");
+  }
+}
+function updateDensityTag(){
+  if (!densityTarget) return;
+  const tag = document.getElementById("densityTag");
+  const v = new THREE.Vector3(densityTarget.pos[0], densityTarget.pos[1], densityTarget.pos[2]);
+  v.project(camera);
+  if (v.z > 1){ tag.classList.remove("show"); return; }
+  const x = (v.x * 0.5 + 0.5) * window.innerWidth;
+  const y = (-v.y * 0.5 + 0.5) * window.innerHeight;
+  const w = tag.offsetWidth || 60;
+  const h = tag.offsetHeight || 34;
+  tag.style.left = clamp(x - w / 2, 8, window.innerWidth - w - 8) + "px";
+  tag.style.top = clamp(y - h - 14, 8, window.innerHeight - h - 8) + "px";
+}
+
+/* 指针交互（悬停高亮 + 点击选择） */
+let hoverRec = null;
+renderer.domElement.addEventListener("pointermove", function (e){
+  const rec = pickAtom(e);
+  if (rec !== hoverRec){
+    if (hoverRec) setHover(hoverRec, false);
+    hoverRec = rec;
+    if (hoverRec) setHover(hoverRec, true);
+    renderer.domElement.style.cursor = rec ? "pointer" : "";
+  }
+  updateDensityHover();
+});
+renderer.domElement.addEventListener("click", function (e){
+  const rec = pickAtom(e);
+  if (rec) openPopover(rec);
+  else closePopover();
+});
+document.getElementById("explainBtn").addEventListener("click", function (){
+  const on = !explainGroup.visible;
+  explainGroup.visible = on;
+  this.classList.toggle("on", on);
+});
+
+/* 调试面板（?debug=1） */
+function recomputeAfterFx(){
+  if (currentMol){
+    currentField = computeField(currentMol, SETTINGS.mode);
+    updateRelDensities();
+    transitionCloud(currentField, [0, 0, 0]);
+  }
+}
+function setupColormapUI(){
+  const sel = document.getElementById("cmapSel");
+  if (!sel) return;
+  sel.value = SETTINGS.colormap;
+  sel.addEventListener("change", function (){ setColormap(sel.value); });
+  const bar = document.getElementById("cmapBar");
+  if (bar) bar.style.background = colormapCSS(COLORMAPS[SETTINGS.colormap].stops);
+}
+function buildDebug(){
+  if (!DEBUG) return;
+  const el = document.getElementById("debugPanel");
+  el.classList.add("show");
+  const rows = [
+    { key: "count", label: "Particles", min: 10000, max: 300000, step: 10000, get: function (){ return cloud ? cloud.count : 0; }, set: function (v){ setParticleCount(v); } },
+    { key: "psize", label: "Particle size", min: 0.02, max: 0.09, step: 0.002, get: function (){ return cloud.uniforms.uParticleSize.value; }, set: function (v){ cloud.uniforms.uParticleSize.value = v; } },
+    { key: "noise", label: "Noise amp", min: 0, max: 0.3, step: 0.005, get: function (){ return SETTINGS.noiseAmp; }, set: function (v){ SETTINGS.noiseAmp = v; } },
+    { key: "breath", label: "Breath amp", min: 0, max: 0.15, step: 0.005, get: function (){ return SETTINGS.breathAmp; }, set: function (v){ SETTINGS.breathAmp = v; } },
+    { key: "flow", label: "Flow amp", min: 0, max: 2, step: 0.05, get: function (){ return SETTINGS.flowAmp; }, set: function (v){ SETTINGS.flowAmp = v; } },
+    { key: "alpha", label: "Cloud alpha", min: 0.1, max: 1.4, step: 0.05, get: function (){ return SETTINGS.cloudAlpha; }, set: function (v){ SETTINGS.cloudAlpha = v; } },
+    { key: "bloomS", label: "Bloom strength", min: 0, max: 1.5, step: 0.05, get: function (){ return bloomPass.strength; }, set: function (v){ bloomPass.strength = v; } },
+    { key: "bloomR", label: "Bloom radius", min: 0.1, max: 1.2, step: 0.05, get: function (){ return bloomPass.radius; }, set: function (v){ bloomPass.radius = v; } },
+    { key: "bloomT", label: "Bloom threshold", min: 0.1, max: 0.9, step: 0.02, get: function (){ return bloomPass.threshold; }, set: function (v){ bloomPass.threshold = v; } },
+    { key: "trans", label: "Transition s", min: 0.6, max: 4.5, step: 0.1, get: function (){ return SETTINGS.transDur; }, set: function (v){ SETTINGS.transDur = v; } },
+    { key: "dgamma", label: "Density gamma", min: 0.3, max: 3, step: 0.05, get: function (){ return SETTINGS.densGamma; }, set: function (v){ SETTINGS.densGamma = v; if (cloud) cloud.uniforms.uDensGamma.value = v; } },
+    { key: "ind", label: "Inductive x", min: 0, max: 2, step: 0.05, get: function (){ return SETTINGS.indScale; }, set: function (v){ SETTINGS.indScale = v; recomputeAfterFx(); } },
+    { key: "res", label: "Resonance x", min: 0, max: 2, step: 0.05, get: function (){ return SETTINGS.resScale; }, set: function (v){ SETTINGS.resScale = v; recomputeAfterFx(); } },
+  ];
+  let html = "<h4>DEBUG · <span id='dbgFps'>--</span></h4>";
+  for (const r of rows){
+    html += "<div class='dbg-row'><span>" + r.label + "</span><input type='range' min='" + r.min + "' max='" + r.max + "' step='" + r.step + "' data-k='" + r.key + "'><span class='dbg-val' id='dbgv_" + r.key + "'></span></div>";
+  }
+  el.innerHTML = html;
+  el.querySelectorAll("input[type=range]").forEach(function (inp){
+    const r = rows.find(function (x){ return x.key === inp.dataset.k; });
+    inp.value = r.get();
+    document.getElementById("dbgv_" + r.key).textContent = (+inp.value).toFixed(3);
+    inp.addEventListener("input", function (){
+      const v = parseFloat(inp.value);
+      r.set(v);
+      document.getElementById("dbgv_" + r.key).textContent = (+v).toFixed(3);
+    });
+  });
+}
+
+/* ================= 创造模式：自由绘制碳架 ================= */
+const creatorState = { open:false, pts:[], bonds:[], groups:[], tool:"atom", bondOrder:1, sel:-1, customAtom:-1 };
+const GROUP_LABEL = { CH3:"CH₃", OH:"OH", OMe:"OCH₃", NH2:"NH₂", F:"F", Cl:"Cl", CF3:"CF₃", CN:"CN", NO2:"NO₂", CHO:"CHO", COOH:"COOH" };
+/* 创造模式价键工具：剩余价键 = 4 − Σ(键级) − 已挂基团数（键级：单 1 / 芳香 1.5 / 双 2 / 三 3） */
+function crBondOrderSum(graph, i){
+  let s = 0;
+  for (const b of graph.bonds) if (b[0] === i || b[1] === i) s += (b[2] || 1);
+  return s;
+}
+function crGroupsAt(graph, i){ return graph.groups.filter(function (g){ return g.i === i; }); }
+function crFreeValence(graph, i){
+  return Math.max(0, Math.round(4 - crBondOrderSum(graph, i)) - crGroupsAt(graph, i).length);
+}
+const crCanvas = document.getElementById("crCanvas");
+const crCtx = crCanvas ? crCanvas.getContext("2d") : null;
+const HEX = 1.4;
+const CR_SCALE = 24;
+const CR_CX = 172, CR_CY = 150;
+
+function crHexCenter(row, col){
+  return [ (col + (row % 2 ? 0.5 : 0)) * HEX, row * 0.866 * HEX ];
+}
+function crSnap(px, py){
+  const x = (px - CR_CX) / CR_SCALE, y = (py - CR_CY) / CR_SCALE;
+  const r = Math.round(y / (0.866 * HEX));
+  const c = Math.round((x - (r % 2 ? 0.5 : 0) * HEX) / HEX);
+  let best = null, bestD = Infinity;
+  for (let dr = -1; dr <= 1; dr++){
+    for (let dc = -1; dc <= 1; dc++){
+      const p = crHexCenter(r + dr, c + dc);
+      const d2 = (p[0]-x)*(p[0]-x) + (p[1]-y)*(p[1]-y);
+      if (d2 < bestD){ bestD = d2; best = p; }
+    }
+  }
+  return best;
+}
+function crNearest(x3, y3, maxD){
+  let best = -1, bestD = maxD * maxD;
+  for (let i = 0; i < creatorState.pts.length; i++){
+    const d2 = (creatorState.pts[i][0]-x3)*(creatorState.pts[i][0]-x3) + (creatorState.pts[i][1]-y3)*(creatorState.pts[i][1]-y3);
+    if (d2 < bestD){ bestD = d2; best = i; }
+  }
+  return best;
+}
+function crHasBond(a, b){
+  return creatorState.bonds.some(function (bb){ return (bb[0]===a && bb[1]===b) || (bb[0]===b && bb[1]===a); });
+}
+function crRemoveAtom(i){
+  creatorState.pts.splice(i, 1);
+  creatorState.bonds = creatorState.bonds.filter(function (bb){ return bb[0] !== i && bb[1] !== i; });
+  creatorState.groups = creatorState.groups.filter(function (g){ return g.i !== i; });
+  creatorState.bonds.forEach(function (bb){ if (bb[0] > i) bb[0]--; if (bb[1] > i) bb[1]--; });
+  creatorState.groups.forEach(function (g){ if (g.i > i) g.i--; });
+  creatorState.sel = -1;
+}
+/* 官能团选择器（3D 弹层，取代 H，规格同苯）：符号 + 中文名 + ±I/±M，标记已挂，无可取代 H 时禁用 */
+function crChipsHTML(atomIdx){
+  const existing = crGroupsAt(creatorState, atomIdx);
+  const freeLeft = Math.max(0, crFreeValence(creatorState, atomIdx));
+  let html = "<div class='cr-gp-info'>碳 " + (atomIdx + 1) + " · 可取代 H：" + freeLeft + (existing.length ? " · 已挂 " + existing.map(function (x){ return GROUP_LABEL[x.group]; }).join("+") : "") + "</div>";
+  for (const k of GROUP_KEYS){
+    const g = GROUPS[k];
+    const on = existing.some(function (x){ return x.group === k; });
+    html += "<button class='cr-gp" + (on ? " on" : "") + (freeLeft <= 0 ? " full" : "") + "' data-g='" + k + "' title='" + g.desc + "'>"
+      + "<span class='sym'>" + GROUP_LABEL[k] + "</span><span class='zh'>" + g.zh + "</span>"
+      + "<span class='fx'>" + signLabel(g.sigmaM) + "I " + signLabel(g.sigmaP - g.sigmaM) + "M</span></button>";
+  }
+  if (existing.length) html += "<button class='cr-gp remove' data-g='' title='移除该碳最后添加的基团'>移除" + (existing.length > 1 ? "（" + GROUP_LABEL[existing[existing.length - 1].group] + "）" : "") + "</button>";
+  return html;
+}
+/* 增/删官能团（价键校验；g==="" 移除该碳最后挂的基团） */
+function crSetGroupAt(atomIdx, g, dir){
+  const existing = crGroupsAt(creatorState, atomIdx);
+  if (g === ""){
+    const last = existing[existing.length - 1];
+    if (last){
+      creatorState.groups.splice(creatorState.groups.lastIndexOf(last), 1);
+      toast("已移除 " + GROUP_LABEL[last.group] + "（" + GROUPS[last.group].zh + "）");
+    }
+    return;
+  }
+  if (crFreeValence(creatorState, atomIdx) <= 0){
+    toast("该碳剩余价键为 0，无法再挂官能团");
+    return;
+  }
+  // dir：取代指定 H（点击的那个 H 的方向）；无 dir 时按「朝外」放置
+  creatorState.groups.push({ i: atomIdx, group: g, dir: dir || undefined });
+  toast("已添加 " + GROUP_LABEL[g] + "（" + GROUPS[g].zh + "）");
+}
+function crRedraw(){
+  if (!crCtx) return;
+  const ctx = crCtx;
+  ctx.clearRect(0, 0, crCanvas.width, crCanvas.height);
+  ctx.strokeStyle = "rgba(120,150,190,0.10)";
+  ctx.lineWidth = 1;
+  for (let r = -6; r <= 6; r++){
+    for (let c = -8; c <= 8; c++){
+      const p = crHexCenter(r, c);
+      ctx.beginPath();
+      ctx.arc(CR_CX + p[0]*CR_SCALE, CR_CY + p[1]*CR_SCALE, 2.2, 0, Math.PI*2);
+      ctx.stroke();
+    }
+  }
+  ctx.strokeStyle = "rgba(190,205,225,0.75)";
+  ctx.lineWidth = 2.5;
+  for (const b of creatorState.bonds){
+    const a = creatorState.pts[b[0]], c = creatorState.pts[b[1]];
+    const ax = CR_CX + a[0]*CR_SCALE, ay = CR_CY + a[1]*CR_SCALE;
+    const cx = CR_CX + c[0]*CR_SCALE, cy = CR_CY + c[1]*CR_SCALE;
+    const dx = cx - ax, dy = cy - ay, len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len;
+    const o = b[2] || 1;
+    const line = function (off){
+      ctx.beginPath();
+      ctx.moveTo(ax + nx*off, ay + ny*off);
+      ctx.lineTo(cx + nx*off, cy + ny*off);
+      ctx.stroke();
+    };
+    if (o >= 3){ line(-2.6); line(0); line(2.6); }
+    else if (o === 2){ line(-1.9); line(1.9); }
+    else if (o === 1.5){
+      line(0);
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(ax + nx*3.5, ay + ny*3.5); ctx.lineTo(cx + nx*3.5, cy + ny*3.5); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    else line(0);
+  }
+  for (let i = 0; i < creatorState.pts.length; i++){
+    const p = creatorState.pts[i];
+    const x = CR_CX + p[0]*CR_SCALE, y = CR_CY + p[1]*CR_SCALE;
+    ctx.beginPath();
+    ctx.arc(x, y, 6, 0, Math.PI*2);
+    ctx.fillStyle = i === creatorState.sel ? "rgba(124,199,255,0.55)" : "rgba(190,205,225,0.85)";
+    ctx.fill();
+  }
+}
+function crApply(){
+  if (!creatorState.pts.length) return;
+  const mol = buildCustomMolecule(creatorState);
+  applyMol(mol, [0, 0, 0]);
+  setActiveMoleculeChip("");
+  creatorState.lastIdent = identifyMolecule(mol);
+  const el = document.getElementById("crIdentify");
+  if (el){
+    const id = creatorState.lastIdent;
+    el.textContent = id.name ? ("已识别：" + id.zh + " " + id.name + " · " + id.formula) : ("未命名碳架 · " + id.formula + " · SMILES: " + id.smiles);
+  }
+  rebuildLegend();
+}
+function substituteCustom(atomIdx, group){
+  const dir = popoverState.customDir || null;
+  closePopover();
+  crSetGroupAt(atomIdx, group === null ? "" : group, dir);
+  crRedraw();
+  crApply();
+}
+function toggleCreator(show){
+  creatorState.open = show !== undefined ? show : !creatorState.open;
+  document.getElementById("creator").classList.toggle("show", creatorState.open);
+  document.getElementById("creatorBtn").classList.toggle("active", creatorState.open);
+  if (creatorState.open) crRedraw();
+}
+if (crCanvas){
+  crCanvas.addEventListener("click", function (e){
+    const rect = crCanvas.getBoundingClientRect();
+    const px = (e.clientX - rect.left) * (crCanvas.width / rect.width);
+    const py = (e.clientY - rect.top) * (crCanvas.height / rect.height);
+    const p = crSnap(px, py);
+    if (!p) return;
+    const tool = creatorState.tool;
+    if (tool === "atom"){
+      if (crNearest(p[0], p[1], 0.5) < 0) creatorState.pts.push(p);
+      creatorState.sel = -1;
+    } else if (tool === "bond"){
+      const i = crNearest(p[0], p[1], 0.9);
+      if (i < 0) creatorState.sel = -1;
+      else if (creatorState.sel < 0) creatorState.sel = i;
+      else {
+        if (creatorState.sel !== i){
+          const o = creatorState.bondOrder || 1;
+          const ex = creatorState.bonds.findIndex(function (bb){ return (bb[0]===creatorState.sel&&bb[1]===i)||(bb[0]===i&&bb[1]===creatorState.sel); });
+          if (ex >= 0) creatorState.bonds[ex][2] = o; // 已有键 → 升级键级
+          else creatorState.bonds.push([creatorState.sel, i, o]);
+          const bad = [creatorState.sel, i].some(function (k){ return crBondOrderSum(creatorState, k) > 4; });
+          if (bad){
+            if (ex >= 0) creatorState.bonds[ex][2] = 1;
+            else creatorState.bonds.pop();
+            toast("价键超过 4，已回退（碳最多 4 键）");
+          }
+        }
+        creatorState.sel = -1;
+      }
+    } else if (tool === "erase"){
+      const i = crNearest(p[0], p[1], 0.9);
+      if (i >= 0) crRemoveAtom(i);
+    }
+    crRedraw();
+  });
+  document.querySelectorAll(".cr-tool").forEach(function (b){
+    b.addEventListener("click", function (){
+      creatorState.tool = b.dataset.tool;
+      creatorState.sel = -1;
+      document.querySelectorAll(".cr-tool").forEach(function (x){ x.classList.toggle("active", x === b); });
+    });
+  });
+  document.querySelectorAll(".cr-bord").forEach(function (b){
+    b.addEventListener("click", function (){
+      creatorState.bondOrder = parseFloat(b.dataset.order);
+      document.querySelectorAll(".cr-bord").forEach(function (x){ x.classList.toggle("active", x === b); });
+    });
+  });
+  document.getElementById("creatorBtn").addEventListener("click", function (){ toggleCreator(); });
+  document.getElementById("crClose").addEventListener("click", function (){ toggleCreator(false); });
+  document.getElementById("crApply").addEventListener("click", crApply);
+  document.getElementById("crClear").addEventListener("click", function (){
+    creatorState.pts = [];
+    creatorState.bonds = [];
+    creatorState.groups = [];
+    creatorState.sel = -1;
+    crRedraw();
+  });
+  document.getElementById("crLoadBz").addEventListener("click", function (){
+    const pts = [];
+    for (let k = 0; k < 6; k++){
+      const a = Math.PI / 6 + k * Math.PI / 3;
+      pts.push([1.4 * Math.cos(a), 1.4 * Math.sin(a)]);
+    }
+    creatorState.pts = pts;
+    creatorState.bonds = [[0,1,1.5],[1,2,1.5],[2,3,1.5],[3,4,1.5],[4,5,1.5],[5,0,1.5]];
+    creatorState.groups = [];
+    creatorState.sel = -1;
+    crRedraw();
+  });
+}
+
+/* ================= 主循环 ================= */
+const clock = new THREE.Clock();
+let simTime = 0;
+let introT = 0;
+let introDone = false;
+const INTRO_DUR = 2.0;
+const camFrom = new THREE.Vector3(0, 5.4, 21.0);
+const camTo = new THREE.Vector3(0, 0.6, 11.0);
+let fpsEma = 60;
+let lowFpsTime = 0;
+let manualQualityAt = -99;
+
+function onResize(){
+  const w = window.innerWidth, h = window.innerHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+  composer.setSize(w, h);
+  if (cloud){
+    cloud.uniforms.uScale.value = (h * renderer.getPixelRatio()) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
+    cloud.uniforms.uPixelRatio.value = renderer.getPixelRatio();
+  }
+}
+window.addEventListener("resize", onResize);
+
+function tick(){
+  requestAnimationFrame(tick);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  simTime += dt;
+  if (introT < INTRO_DUR){
+    introT += dt;
+    const k = easeInOutCubic(clamp(introT / INTRO_DUR, 0, 1));
+    camera.position.lerpVectors(camFrom, camTo, k);
+  }
+  if (introT >= INTRO_DUR && !introDone){
+    introDone = true;
+    controls.enabled = true;
+    document.getElementById("intro").classList.add("out");
+  }
+  controls.update();
+  updateDying(simTime);
+  updateMoleculeAnims(simTime);
+  cloud.uniforms.uTime.value = simTime;
+  cloud.uniforms.uCloudAlpha.value = SETTINGS.cloudAlpha;
+  cloud.uniforms.uNoiseAmp.value = SETTINGS.noiseAmp;
+  cloud.uniforms.uBreathAmp.value = SETTINGS.breathAmp;
+  cloud.uniforms.uFlowAmp.value = SETTINGS.flowAmp;
+  if (dt > 0) fpsEma = fpsEma * 0.95 + (1 / dt) * 0.05;
+  if (simTime > 8 && simTime - manualQualityAt > 20){
+    if (fpsEma < 29){
+      lowFpsTime += dt;
+      if (lowFpsTime > 2.2){
+        const qi = QUALITY_ORDER.indexOf(SETTINGS.quality);
+        if (qi > 0){
+          setQuality(QUALITY_ORDER[qi - 1], true);
+          toast("性能自适应：已切换到 " + QUALITY_ORDER[qi - 1]);
+        }
+        lowFpsTime = 0;
+      }
+    } else {
+      lowFpsTime = Math.max(0, lowFpsTime - dt);
+    }
+  }
+  if (popoverState.open) updatePopoverPos();
+  if (densityTarget) updateDensityTag();
+  composer.render();
+}
+
+/* ================= 初始化 ================= */
+currentMol = buildMolecule([]);
+currentField = computeField(currentMol, SETTINGS.mode);
+cloud = createCloud(QUALITY[SETTINGS.quality].count);
+(function initCloud(){
+  const grid = buildDensityGrid(currentField);
+  const data = sampleCloud(currentField, cloud.count, null, grid);
+  const g = cloud.geo.attributes;
+  g.position.array.set(data.pos);
+  g.position.needsUpdate = true;
+  {
+    const props = new Float32Array(cloud.count * 4);
+    for (let i = 0; i < cloud.count; i++){ props[i * 4] = data.size[i]; props[i * 4 + 1] = data.bright[i]; props[i * 4 + 2] = data.density[i]; }
+    g.aProps.array.set(props);
+    g.aProps.needsUpdate = true;
+  }
+  g.aSeed.array.set(data.seed);
+  g.aSeed.needsUpdate = true;
+  padCloudPaths(data.pos, cloud.geo);
+})();
+buildMoleculeMeshes(currentMol);
+updateRelDensities();
+rebuildLegend();
+rebuildExplain();
+buildMoleculeBar();
+wireSegments();
+buildDebug();
+setupColormapUI();
+document.getElementById("intro").addEventListener("click", function (){ introT = INTRO_DUR; camera.position.copy(camTo); });
+{
+  const brand = document.getElementById("brand");
+  const span = document.createElement("span");
+  span.className = "sub";
+  span.id = "particleCount";
+  brand.appendChild(span);
+  updateParticleUI();
+}
+onResize();
+requestAnimationFrame(tick);
+
+window.THREE = THREE;
+window.camera = camera;
+window.__APP = {
+  get cloud(){ return cloud; },
+  renderer: renderer,
+  camera: camera,
+  setMode: setMode,
+  setQuality: setQuality,
+  selectMolecule: selectMolecule,
+  substitute: substitute,
+  changeMolecule: changeMolecule,
+  setParticleCount: setParticleCount,
+  setColormap: setColormap,
+  getMol: function (){ return currentMol; },
+  crApply: crApply,
+  toggleCreator: toggleCreator,
+  crState: function (){ return { pts: creatorState.pts.length, bonds: creatorState.bonds.length, groups: creatorState.groups.slice(), tool: creatorState.tool }; },
+  getHover: function (){
+    const r = hoverAnims.length ? hoverAnims[hoverAnims.length - 1] : hoverRec;
+    return r ? { scale: +(r.hoverScale || 0).toFixed(3), on: r.hover } : null;
+  },
+  getState: function (){
+    return {
+      mode: SETTINGS.mode,
+      quality: SETTINGS.quality,
+      particles: cloud ? cloud.count : 0,
+      fragments: currentMol ? currentMol.fragments.slice() : [],
+      fps: Math.round(fpsEma),
+      transActive: cloud ? (simTime - cloud.uniforms.uTransStart.value) < cloud.uniforms.uTransDur.value : false,
+      simTime: +simTime.toFixed(2),
+    };
+  },
+};
+
+</script>
+</body>
+</html>
+
