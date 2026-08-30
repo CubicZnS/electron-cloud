@@ -1,5 +1,22 @@
 本项目采用语义化版本（SemVer）：主版本号 = 功能里程碑，次版本号 = 兼容性新功能，补丁号 = 修复。
 
+## [v2.3.1] — 2026-08-31 · 修复：切换画质档位后电子云消失/相位渲染丢失
+
+### 修复
+- **根因**：setParticleCount 切换粒子数时 createCloud 重建整套 uniform，把轨道模式的 uOrbitalSign（置 0）、正/负相位 LUT（重置为默认色图）与 uScale（回退硬编码 1300）全部重置 —— 轨道模式下画质切换后相位双色丢失、粒子缩放错乱（观感即「云消失/变样」）。
+- **修复**（parts/05_render.js）：
+  - setParticleCount 重建云后，若处于导入模式则重放 setOrbitalRender（轨道模式恢复 uOrbitalSign=1 与固定相位 LUT；密度模式保持用户色图）；
+  - 按当前窗口恢复 uScale/uPixelRatio（与 onResize 一致，不再回退 1300）；
+  - writeCloudSample 补写 aOldPos/aOldProps（新几何一致性，防御性）。
+
+### 验证
+- node tools/validate-cube.mjs：56/56；node tools/validate-sigma.mjs：15/15；node tools/build.mjs：SYNTAX_OK
+
+### 文件
+- 修改：parts/05_render.js、index.html（组装产物）、CHANGELOG.md、README.md
+
+---
+
 ## [v2.3.0] — 2026-08-31 · 体素数据顺序自动检测（修复真实文件弥散）
 
 ### 修复（根因：数据布局）

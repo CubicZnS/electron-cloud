@@ -760,12 +760,16 @@ function resetCamera(){
 function writeCloudSample(data, n){
   cloud.geo.attributes.position.array.set(data.pos);
   cloud.geo.attributes.position.needsUpdate = true;
+  cloud.geo.attributes.aOldPos.array.set(data.pos); // 新几何一致性（uTransDur=0 时 e=1，aOld 不参与，防御性写入）
+  cloud.geo.attributes.aOldPos.needsUpdate = true;
   padCloudPaths(data.pos, cloud.geo);
   {
     const props = new Float32Array(n * 4);
     for (let i = 0; i < n; i++){ props[i * 4] = data.size[i]; props[i * 4 + 1] = data.bright[i]; props[i * 4 + 2] = data.density[i]; props[i * 4 + 3] = data.sign ? data.sign[i] : 0; }
     cloud.geo.attributes.aProps.array.set(props);
     cloud.geo.attributes.aProps.needsUpdate = true;
+    cloud.geo.attributes.aOldProps.array.set(props);
+    cloud.geo.attributes.aOldProps.needsUpdate = true;
   }
   cloud.geo.attributes.aSeed.array.set(data.seed);
   cloud.geo.attributes.aSeed.needsUpdate = true;
@@ -786,6 +790,11 @@ function setParticleCount(n){
   } else if (currentField){
     writeCloudSample(sampleCloud(currentField, n, null, buildDensityGrid(currentField)), n);
   }
+  // 修复：createCloud 重建会把 uniform 重置（uOrbitalSign=0、默认 LUT、uScale=1300）——
+  // 轨道模式必须重放相位渲染状态；粒子缩放按当前窗口恢复（与 onResize 一致）
+  if (cubeMode) setOrbitalRender(cubeUI.mode === "orbital");
+  cloud.uniforms.uScale.value = (window.innerHeight * renderer.getPixelRatio()) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
+  cloud.uniforms.uPixelRatio.value = renderer.getPixelRatio();
   updateParticleUI();
 }
 
