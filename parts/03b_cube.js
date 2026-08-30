@@ -468,6 +468,15 @@ function buildCubeVolume(parsed, opts){
 }
 
 /* ---------- 按真实密度权重采样粒子目标分布（替代 computeField 伪造分布） ---------- */
+/* 大分子（环糊精等几十上百原子）固定粒子预算下，纯密度加权会把粒子集中在重原子核区，
+   低密度原子（尤其 H）几乎无粒子 → 云看起来稀疏/不够用。两阶段采样：
+   · 密度加权部分（1−CUBE_ATOM_BASELINE）×count：严格按体素密度比例（颜色=局部相对密度）
+   · 原子覆盖部分 CUBE_ATOM_BASELINE×count：均匀选原子 + 高斯散布（σ≈0.7Å），
+     保证每个原子上都有基准粒子；颜色/亮度仍按该点局部相对密度（同一色标）
+   仅当原子数 ≥ CUBE_ATOM_MIN_ATOMS 时启用基准（小分子密度云本身已覆盖所有原子） */
+const CUBE_ATOM_MIN_ATOMS = 16;
+const CUBE_ATOM_BASELINE = 0.3;
+const CUBE_ATOM_SIGMA = 0.7;
 function sampleCloudCube(vol, count){
   const cdf = vol.cdf, totalW = vol.totalW;
   const nx = vol.dims[0], ny = vol.dims[1], nz = vol.dims[2], nxy = nx * ny;
@@ -486,7 +495,22 @@ function sampleCloudCube(vol, count){
   const sign = new Float32Array(count); // 轨道相位：+1/−1（密度模式恒 0）
   const seed = new Float32Array(count * 3);
   const delay = new Float32Array(count);
-  for (let i = 0; i < count; i++){
+  const nAtoms = vol.atoms.length;
+  const baseline = nAtoms >= CUBE_ATOM_MIN_ATOMS ? CUBE_ATOM_BASELINE : 0;
+  const nDens = Math.floor(count * (1 - baseline));
+  const setP = function (i, px, py, pz, psi){
+    const mag = psi < 0 ? -psi : psi;
+    const magC = Math.max(mag, vol.rhoCut);
+    const dAttr = cubeClamp(DEN_FLOOR + (1 - DEN_FLOOR) * (Math.log1p(magC) - logCut) / denRange, 0, 1);
+    pos[i * 3] = px; pos[i * 3 + 1] = py; pos[i * 3 + 2] = pz;
+    size[i] = 0.55 + rand() * 0.75 + 0.35 * Math.min(mag / vol.rhoMax, 1);
+    bright[i] = cubeClamp(0.14 + 0.28 * dAttr + rand() * 0.16, 0.05, 0.55);
+    density[i] = dAttr;
+    sign[i] = vol.isSigned ? (psi < 0 ? -1 : 1) : 0;
+    seed[i * 3] = rand(); seed[i * 3 + 1] = rand(); seed[i * 3 + 2] = rand();
+    delay[i] = 0;
+  };
+  for (let i = 0; i < nDens; i++){
     const r = rand() * totalW;
     let lo = 0, hi = cdf.length - 1;
     while (lo < hi){ const mid = (lo + hi) >> 1; if (cdf[mid] < r) lo = mid + 1; else hi = mid; }
@@ -499,17 +523,14 @@ function sampleCloudCube(vol, count){
     const px = org[0] + (ix + u) * ax[0][0] + (iy + v) * ax[1][0] + (iz + w) * ax[2][0];
     const py = org[1] + (ix + u) * ax[0][1] + (iy + v) * ax[1][1] + (iz + w) * ax[2][1];
     const pz = org[2] + (ix + u) * ax[0][2] + (iy + v) * ax[1][2] + (iz + w) * ax[2][2];
-    const psi = vol.sample(px, py, pz);        // 轨道模式 = 带符号 ψ；密度模式 = ρ ≥ 0
-    const mag = psi < 0 ? -psi : psi;
-    const magC = Math.max(mag, vol.rhoCut);
-    const dAttr = cubeClamp(DEN_FLOOR + (1 - DEN_FLOOR) * (Math.log1p(magC) - logCut) / denRange, 0, 1);
-    pos[i * 3] = px; pos[i * 3 + 1] = py; pos[i * 3 + 2] = pz;
-    size[i] = 0.55 + rand() * 0.75 + 0.35 * Math.min(mag / vol.rhoMax, 1);
-    bright[i] = cubeClamp(0.14 + 0.28 * dAttr + rand() * 0.16, 0.05, 0.55);
-    density[i] = dAttr;
-    sign[i] = vol.isSigned ? (psi < 0 ? -1 : 1) : 0;
-    seed[i * 3] = rand(); seed[i * 3 + 1] = rand(); seed[i * 3 + 2] = rand();
-    delay[i] = 0;
+    setP(i, px, py, pz, vol.sample(px, py, pz)); // 轨道模式 = 带符号 ψ；密度模式 = ρ ≥ 0
+  }
+  for (let i = nDens; i < count; i++){
+    const a = vol.atoms[Math.floor(rand() * nAtoms)];
+    const px = a.pos[0] + cubeGauss(rand) * CUBE_ATOM_SIGMA;
+    const py = a.pos[1] + cubeGauss(rand) * CUBE_ATOM_SIGMA;
+    const pz = a.pos[2] + cubeGauss(rand) * CUBE_ATOM_SIGMA;
+    setP(i, px, py, pz, vol.sample(px, py, pz));
   }
   return { pos: pos, size: size, bright: bright, density: density, sign: sign, seed: seed, delay: delay };
 }

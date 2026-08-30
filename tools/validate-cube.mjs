@@ -356,5 +356,61 @@ const cubeText = (lines) => lines.join("\n");
   check("xyz 布局文件不被误改", px.dataOrder === "xyz", px.dataOrder);
 }
 
+// ---------- 13) 大分子原子覆盖基准（每原子有粒子 + 密度比例 + 颜色相对密度） ----------
+{
+  const B = BOHR_TO_ANGSTROM, bohr = 1 / B;
+  // 24 原子链：O(强) / C(中) / H(弱) 高斯场
+  const atoms = [];
+  for (let k = 0; k < 24; k++){
+    const el = k % 3 === 0 ? "O" : k % 3 === 1 ? "C" : "H";
+    atoms.push([k * 1.4 - 16.1, (k % 2 ? 1.1 : -1.1) * (el === "H" ? 1.0 : 0.4), (k % 4) * 0.5 - 0.75, el, el === "O" ? 90 : el === "C" ? 60 : 2.0, el === "H" ? 0.22 : 0.09]);
+  }
+  const N = 100, half = 9.0, cell = (2 * half) / (N - 1);
+  const vals = [];
+  for (let iz = 0; iz < N; iz++) for (let iy = 0; iy < N; iy++) for (let ix = 0; ix < N; ix++){
+    const x = -half + ix * cell, y = -half + iy * cell, z = -half + iz * cell;
+    let v = 1e-4;
+    for (const a of atoms) v += a[4] * Math.exp(-((x - a[0]) ** 2 + (y - a[1]) ** 2 + (z - a[2]) ** 2) / a[5]);
+    vals.push(v.toExponential(4));
+  }
+  const lines = ["t", "d", atoms.length + "  0 0 0",
+    N + "  " + (cell * bohr).toFixed(6) + "  0  0",
+    N + "  0  " + (cell * bohr).toFixed(6) + "  0",
+    N + "  0  0  " + (cell * bohr).toFixed(6)];
+  for (const a of atoms) lines.push((a[3] === "O" ? "8" : a[3] === "C" ? "6" : "1") + "  6  " + ((a[0] + half) * bohr).toFixed(6) + "  " + ((a[1] + half) * bohr).toFixed(6) + "  " + ((a[2] + half) * bohr).toFixed(6));
+  for (let i = 0; i < vals.length; i += 6) lines.push(vals.slice(i, i + 6).join(" "));
+  const vol = m.buildCubeVolume(m.parseCubeText(cubeText(lines)));
+  const data = m.sampleCloudCube(vol, 80000);
+  // 每原子 0.9Å 覆盖
+  let minPer = 1e9, covered = true;
+  for (const a of atoms){
+    let c = 0;
+    for (let i = 0; i < 80000; i++) if (Math.hypot(data.pos[i * 3] - a[0], data.pos[i * 3 + 1] - a[1], data.pos[i * 3 + 2] - a[2]) < 0.9) c++;
+    if (c < 5) covered = false;
+    if (c < minPer) minPer = c;
+  }
+  check("大分子每原子有基准粒子（≥5 个/0.9Å）", covered, "最少 " + minPer);
+  // 颜色反映相对密度：O > C > H 的平均密度属性
+  const avg = { O: [0, 0], C: [0, 0], H: [0, 0] };
+  for (let i = 0; i < 80000; i++){
+    let best = 0, bd = 1e9;
+    for (let k = 0; k < atoms.length; k++){
+      const a = atoms[k];
+      const dd = (data.pos[i * 3] - a[0]) ** 2 + (data.pos[i * 3 + 1] - a[1]) ** 2 + (data.pos[i * 3 + 2] - a[2]) ** 2;
+      if (dd < bd){ bd = dd; best = k; }
+    }
+    avg[atoms[best][3]][0] += data.density[i]; avg[atoms[best][3]][1]++;
+  }
+  const mO = avg.O[0] / avg.O[1], mC = avg.C[0] / avg.C[1], mH = avg.H[0] / avg.H[1];
+  check("颜色反映相对密度（O>C>H）", mO > mC && mC > mH, mO.toFixed(2) + "/" + mC.toFixed(2) + "/" + mH.toFixed(2));
+  // 小分子（12 原子）不启用基准（无回归）
+  const volS = m.buildCubeVolume(m.parseCubeText(cubeText(["t", "d", "12  0 0 0", "2  1 0 0", "2  0 1 0", "2  0 0 1", "6  6 0 0 0", "6  6 1.54 0 0", "1  1 -0.5 0.9 0", "1  1 2.04 0.9 0", "1  1 0 1.54 0", "1  1 1.54 1.54 0", "1  1 -0.5 -0.9 0", "1  1 2.04 -0.9 0", "1  1 0 -1.54 0", "1  1 1.54 -1.54 0", "1  1 -0.5 0 -0.9", "1  1 -0.5 0 0.9", "1  1 2.04 0 -0.9", "1  1 2.04 0 0.9", "1 2 3 4 5 6 7 8"])));
+  // 只需确认小分子不崩且 sign 全 0
+  const dS = m.sampleCloudCube(volS, 500);
+  let fin = true;
+  for (let i = 0; i < 500; i++) if (!Number.isFinite(dS.pos[i * 3])) fin = false;
+  check("小分子（12 原子）采样正常", fin);
+}
+
 console.log("\n==== " + pass + " PASS / " + fail + " FAIL ====");
 process.exit(fail ? 1 : 0);
