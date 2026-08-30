@@ -15,7 +15,7 @@ function onResize(){
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   renderer.setSize(w, h);
-  composer.setSize(w, h);
+  if (composer) composer.setSize(w, h);
   if (cloud){
     cloud.uniforms.uScale.value = (h * renderer.getPixelRatio()) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
     cloud.uniforms.uPixelRatio.value = renderer.getPixelRatio();
@@ -64,7 +64,8 @@ function tick(){
   }
   if (popoverState.open) updatePopoverPos();
   if (densityTarget) updateDensityTag();
-  composer.render();
+  if (composer) composer.render();
+  else renderer.render(scene, camera); // 移动/极简：绕过后期合成，直接渲染（最稳）
 }
 
 /* ================= 初始化 ================= */

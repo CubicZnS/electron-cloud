@@ -8,7 +8,8 @@ try {
 } catch (e){}
 const IS_TOUCH = ("ontouchstart" in window) || (navigator.maxTouchPoints || 0) > 0;
 const IS_MOBILE = IS_TOUCH || window.innerWidth < 768;
-const IS_LITE = !!window.__CRASHED; // 崩溃过一次 → 极简档（12k 粒子、无 bloom、DPR 1）
+const _qLite = new URLSearchParams(location.search).has("lite");
+const IS_LITE = !!window.__CRASHED || _qLite; // 崩溃自愈或 ?lite=1 → 极简档
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x04060a);
 const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -73,7 +74,8 @@ function buildComposer(){
   }
   composer.addPass(new OutputPass());
 }
-buildComposer();
+// 移动端/极简：绕过整个后期合成（UnrealBloomPass/半浮点渲染目标是最常见的移动 GPU 崩溃源）
+if (!IS_MOBILE && !IS_LITE) buildComposer();
 
 /* ================= 分子网格 ================= */
 const moleculeGroup = new THREE.Group();
@@ -394,6 +396,7 @@ function createCloud(n){
     uScale: { value: 1300 },
     uParticleSize: { value: QUALITY[SETTINGS.quality].psize },
     uNoiseAmp: { value: SETTINGS.noiseAmp },
+    uSimple: { value: IS_MOBILE || IS_LITE ? 1 : 0 }, // 移动/极简：单噪声着色器
     uBreathAmp: { value: SETTINGS.breathAmp },
     uFlowAmp: { value: SETTINGS.flowAmp },
     uCloudAlpha: { value: SETTINGS.cloudAlpha },
