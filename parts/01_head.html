@@ -171,6 +171,8 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
 .qd-hint{font-size:9px;color:var(--faint);letter-spacing:.5px;line-height:1.7}
 .qd-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .qd-row .qd-label{font-size:10px;color:var(--dim);letter-spacing:.5px}
+.qd-row .qd-val{color:#cfe4ff;font-size:11px;min-width:46px;text-align:right;font-variant-numeric:tabular-nums}
+#qdParticles{flex:1;accent-color:var(--accent);height:3px;cursor:pointer;min-width:0}
 .seg-btn.disabled{opacity:.35;pointer-events:none;cursor:not-allowed}
 #explainBtn.disabled{opacity:.35;pointer-events:none}
 #debugPanel{position:fixed;right:16px;bottom:64px;z-index:40;width:236px;padding:12px 14px;display:none}
@@ -317,6 +319,12 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
     </select>
   </div>
   <button class="dshell-btn" id="qdApply" style="display:none">Apply electron density</button>
+  <div class="qd-row" id="qdParticleRow">
+    <span class="qd-label">粒子总数</span>
+    <input type="range" id="qdParticles" min="10000" max="600000" step="10000" title="拖动调整电子云粒子总数（覆盖画质档位预设）">
+    <span class="qd-val" id="qdParticlesVal">160k</span>
+  </div>
+  <div class="qd-hint">粒子越多电子云越密、大分子（环糊精等）细节越完整；但会加重 GPU 负担。拖动即时生效，画质档位按钮仍可快捷切换预设。</div>
   <div class="qd-hint" id="qdLimits">限制：文件 ≤ 64 MB · 体素 ≤ 4,000,000（约 159³ 网格）。超出请用 Multiwfn 调大 Grid spacing 后重试。</div>
   <input type="file" id="qdFile" accept=".cube,.cub" style="display:none"/>
 </div>

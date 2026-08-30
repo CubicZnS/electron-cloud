@@ -171,6 +171,8 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
 .qd-hint{font-size:9px;color:var(--faint);letter-spacing:.5px;line-height:1.7}
 .qd-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .qd-row .qd-label{font-size:10px;color:var(--dim);letter-spacing:.5px}
+.qd-row .qd-val{color:#cfe4ff;font-size:11px;min-width:46px;text-align:right;font-variant-numeric:tabular-nums}
+#qdParticles{flex:1;accent-color:var(--accent);height:3px;cursor:pointer;min-width:0}
 .seg-btn.disabled{opacity:.35;pointer-events:none;cursor:not-allowed}
 #explainBtn.disabled{opacity:.35;pointer-events:none}
 #debugPanel{position:fixed;right:16px;bottom:64px;z-index:40;width:236px;padding:12px 14px;display:none}
@@ -317,6 +319,12 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
     </select>
   </div>
   <button class="dshell-btn" id="qdApply" style="display:none">Apply electron density</button>
+  <div class="qd-row" id="qdParticleRow">
+    <span class="qd-label">粒子总数</span>
+    <input type="range" id="qdParticles" min="10000" max="600000" step="10000" title="拖动调整电子云粒子总数（覆盖画质档位预设）">
+    <span class="qd-val" id="qdParticlesVal">160k</span>
+  </div>
+  <div class="qd-hint">粒子越多电子云越密、大分子（环糊精等）细节越完整；但会加重 GPU 负担。拖动即时生效，画质档位按钮仍可快捷切换预设。</div>
   <div class="qd-hint" id="qdLimits">限制：文件 ≤ 64 MB · 体素 ≤ 4,000,000（约 159³ 网格）。超出请用 Multiwfn 调大 Grid spacing 后重试。</div>
   <input type="file" id="qdFile" accept=".cube,.cub" style="display:none"/>
 </div>
@@ -3107,6 +3115,7 @@ function setParticleCount(n){
   cloud.uniforms.uScale.value = (window.innerHeight * renderer.getPixelRatio()) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
   cloud.uniforms.uPixelRatio.value = renderer.getPixelRatio();
   updateParticleUI();
+  if (typeof syncParticleSlider === "function") syncParticleSlider(); // 粒子数变化时同步面板滑块
 }
 
 /* 悬停显示：把场模型的相对因子挂到碳记录上。
@@ -4048,7 +4057,7 @@ function toggleQuantumPanel(show){
   cubeUI.open = open;
   _qdEl("quantumPanel").classList.toggle("show", open);
   _qdEl("quantumBtn").classList.toggle("active", open);
-  if (open) toggleCreator(false); // 两个左侧面板互斥，避免互相遮挡
+  if (open){ toggleCreator(false); syncParticleSlider(); } // 两个左侧面板互斥；打开时同步粒子滑块
 }
 /* ---------- 应用：切换到真实密度数据源（现有粒子过渡与 shader 全部复用） ---------- */
 function applyCubeVolume(vol){
@@ -4080,6 +4089,7 @@ function applyCubeVolume(vol){
   setCubeModeUI(true);
   rebuildCubeLegend();
   updateParticleUI();
+  syncParticleSlider();
 }
 /* ---------- 退出导入：恢复半定量模式（明确的状态变化） ---------- */
 function exitCubeMode(){
@@ -4158,6 +4168,29 @@ function rebuildCubeLegend(){
   const link = _qdEl("exitCubeLink");
   if (link) link.addEventListener("click", function (){ exitCubeMode(); });
 }
+/* ---------- 粒子总数滑块 ---------- */
+/* 控制当前电子云的总粒子数（覆盖画质档位预设，可超出 ULTRA 上限）。
+   大分子（环糊精等）粒子不足时可拖动调高；拖动即用 setParticleCount 重采样，即时生效。 */
+const pSlider = _qdEl("qdParticles");
+const pValEl = _qdEl("qdParticlesVal");
+function syncParticleSlider(){
+  if (!cloud) return;
+  if (pSlider) pSlider.value = String(Math.min(Math.max(cloud.count, 10000), 600000));
+  if (pValEl) pValEl.textContent = fmtCount(cloud.count);
+  // 与某画质预设一致则高亮对应按钮，否则清除（自定义数量）
+  const preset = QUALITY_ORDER.find(function (q){ return QUALITY[q].count === cloud.count; });
+  document.querySelectorAll("#qualitySeg .seg-btn").forEach(function (b){
+    b.classList.toggle("active", preset ? b.dataset.q === preset : false);
+  });
+}
+if (pSlider){
+  pSlider.addEventListener("input", function (){
+    const v = parseInt(pSlider.value, 10);
+    if (v !== cloud.count) setParticleCount(v);
+    if (pValEl) pValEl.textContent = fmtCount(v);
+  });
+}
+
 /* ---------- 事件绑定 ---------- */
 (function (){
   const drop = _qdEl("qdDrop");

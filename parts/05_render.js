@@ -796,6 +796,7 @@ function setParticleCount(n){
   cloud.uniforms.uScale.value = (window.innerHeight * renderer.getPixelRatio()) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
   cloud.uniforms.uPixelRatio.value = renderer.getPixelRatio();
   updateParticleUI();
+  if (typeof syncParticleSlider === "function") syncParticleSlider(); // 粒子数变化时同步面板滑块
 }
 
 /* 悬停显示：把场模型的相对因子挂到碳记录上。

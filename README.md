@@ -5,7 +5,7 @@ GPU 粒子电子云交互可视化：分子 · 电子云 · 诱导效应 / 共�
 
 > by CubicZnS · 单文件 HTML 产物，无构建依赖（three.js 由 CDN 加载）
 >
-> **当前版本：v2.4.0（大分子原子覆盖基准：每原子保证粒子 + 密度比例 + 颜色相对密度）** · 版本历史见 [CHANGELOG.md](CHANGELOG.md)
+> **当前版本：v2.5.0（Quantum Data 面板粒子总数滑块）** · 版本历史见 [CHANGELOG.md](CHANGELOG.md)
 
 ## 功能
 

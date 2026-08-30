@@ -146,7 +146,7 @@ function toggleQuantumPanel(show){
   cubeUI.open = open;
   _qdEl("quantumPanel").classList.toggle("show", open);
   _qdEl("quantumBtn").classList.toggle("active", open);
-  if (open) toggleCreator(false); // 两个左侧面板互斥，避免互相遮挡
+  if (open){ toggleCreator(false); syncParticleSlider(); } // 两个左侧面板互斥；打开时同步粒子滑块
 }
 /* ---------- 应用：切换到真实密度数据源（现有粒子过渡与 shader 全部复用） ---------- */
 function applyCubeVolume(vol){
@@ -178,6 +178,7 @@ function applyCubeVolume(vol){
   setCubeModeUI(true);
   rebuildCubeLegend();
   updateParticleUI();
+  syncParticleSlider();
 }
 /* ---------- 退出导入：恢复半定量模式（明确的状态变化） ---------- */
 function exitCubeMode(){
@@ -256,6 +257,29 @@ function rebuildCubeLegend(){
   const link = _qdEl("exitCubeLink");
   if (link) link.addEventListener("click", function (){ exitCubeMode(); });
 }
+/* ---------- 粒子总数滑块 ---------- */
+/* 控制当前电子云的总粒子数（覆盖画质档位预设，可超出 ULTRA 上限）。
+   大分子（环糊精等）粒子不足时可拖动调高；拖动即用 setParticleCount 重采样，即时生效。 */
+const pSlider = _qdEl("qdParticles");
+const pValEl = _qdEl("qdParticlesVal");
+function syncParticleSlider(){
+  if (!cloud) return;
+  if (pSlider) pSlider.value = String(Math.min(Math.max(cloud.count, 10000), 600000));
+  if (pValEl) pValEl.textContent = fmtCount(cloud.count);
+  // 与某画质预设一致则高亮对应按钮，否则清除（自定义数量）
+  const preset = QUALITY_ORDER.find(function (q){ return QUALITY[q].count === cloud.count; });
+  document.querySelectorAll("#qualitySeg .seg-btn").forEach(function (b){
+    b.classList.toggle("active", preset ? b.dataset.q === preset : false);
+  });
+}
+if (pSlider){
+  pSlider.addEventListener("input", function (){
+    const v = parseInt(pSlider.value, 10);
+    if (v !== cloud.count) setParticleCount(v);
+    if (pValEl) pValEl.textContent = fmtCount(v);
+  });
+}
+
 /* ---------- 事件绑定 ---------- */
 (function (){
   const drop = _qdEl("qdDrop");
