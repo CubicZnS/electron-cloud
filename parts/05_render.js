@@ -4,12 +4,35 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x04060a);
 const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 100);
 camera.position.set(0, 1.6, 10.5);
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+let renderer = null;
+function showFatal(msg){
+  const el = document.getElementById("errOverlay");
+  if (el){ document.getElementById("errMsg").textContent = msg; el.classList.add("show"); }
+}
+(function (){
+  try {
+    const probe = document.createElement("canvas");
+    if (!(probe.getContext("webgl2") || probe.getContext("webgl"))){
+      showFatal("当前浏览器不支持 WebGL，无法渲染电子云。请升级浏览器或更换设备后重试。");
+    }
+  } catch (e){ showFatal("WebGL 初始化失败：" + e.message); }
+  renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+})();
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
 document.getElementById("scene").appendChild(renderer.domElement);
+renderer.domElement.addEventListener("webglcontextlost", function (ev){
+  ev.preventDefault();
+  window.__WEBGL_DEAD = true;
+  showFatal("WebGL 上下文已丢失（可能因设备内存/GPU 压力）。请刷新页面重试，或降低画质档位。");
+});
+renderer.domElement.addEventListener("webglcontextrestored", function (){
+  window.__WEBGL_DEAD = false;
+  const el = document.getElementById("errOverlay");
+  if (el) el.classList.remove("show");
+});
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;

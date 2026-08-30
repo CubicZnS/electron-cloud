@@ -1631,12 +1631,35 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x04060a);
 const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 100);
 camera.position.set(0, 1.6, 10.5);
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+let renderer = null;
+function showFatal(msg){
+  const el = document.getElementById("errOverlay");
+  if (el){ document.getElementById("errMsg").textContent = msg; el.classList.add("show"); }
+}
+(function (){
+  try {
+    const probe = document.createElement("canvas");
+    if (!(probe.getContext("webgl2") || probe.getContext("webgl"))){
+      showFatal("当前浏览器不支持 WebGL，无法渲染电子云。请升级浏览器或更换设备后重试。");
+    }
+  } catch (e){ showFatal("WebGL 初始化失败：" + e.message); }
+  renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+})();
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
 document.getElementById("scene").appendChild(renderer.domElement);
+renderer.domElement.addEventListener("webglcontextlost", function (ev){
+  ev.preventDefault();
+  window.__WEBGL_DEAD = true;
+  showFatal("WebGL 上下文已丢失（可能因设备内存/GPU 压力）。请刷新页面重试，或降低画质档位。");
+});
+renderer.domElement.addEventListener("webglcontextrestored", function (){
+  window.__WEBGL_DEAD = false;
+  const el = document.getElementById("errOverlay");
+  if (el) el.classList.remove("show");
+});
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;
@@ -2559,7 +2582,10 @@ function setMode(m){
 }
 function setQuality(q, auto){
   SETTINGS.quality = q;
-  if (!auto) manualQualityAt = simTime;
+  if (!auto){
+    manualQualityAt = simTime;
+    try { localStorage.setItem("ec_quality", q); } catch (e){}
+  }
   const Q = QUALITY[q];
   bloomPass.strength = Q.bloom;
   bloomPass.radius = Q.radius;
@@ -3115,6 +3141,7 @@ function onResize(){
 window.addEventListener("resize", onResize);
 
 function tick(){
+  if (window.__WEBGL_DEAD) return; // 上下文丢失：停止渲染循环（恢复事件会重启）
   requestAnimationFrame(tick);
   const dt = Math.min(clock.getDelta(), 0.05);
   simTime += dt;
@@ -3158,8 +3185,20 @@ function tick(){
 }
 
 /* ================= 初始化 ================= */
+// 移动端/触摸设备默认低档粒子（40k），避免手机 GPU/内存压力导致页面被系统杀进程重载；
+// 用户手动选择过画质则记住（localStorage）
+(function (){
+  try {
+    const saved = localStorage.getItem("ec_quality");
+    if (saved && QUALITY[saved]){ SETTINGS.quality = saved; return; }
+  } catch (e){}
+  const small = window.innerWidth < 768;
+  const touch = ("ontouchstart" in window) || (navigator.maxTouchPoints || 0) > 0;
+  if (small || touch) SETTINGS.quality = "LOW";
+})();
 currentMol = buildMolecule([]);
 currentField = computeField(currentMol, SETTINGS.mode);
+setQuality(SETTINGS.quality, false); // 应用档位（bloom/粒子数/UI 高亮）
 cloud = createCloud(QUALITY[SETTINGS.quality].count);
 (function initCloud(){
   const grid = buildDensityGrid(currentField);

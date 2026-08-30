@@ -24,6 +24,7 @@ function onResize(){
 window.addEventListener("resize", onResize);
 
 function tick(){
+  if (window.__WEBGL_DEAD) return; // 上下文丢失：停止渲染循环（恢复事件会重启）
   requestAnimationFrame(tick);
   const dt = Math.min(clock.getDelta(), 0.05);
   simTime += dt;
@@ -67,8 +68,20 @@ function tick(){
 }
 
 /* ================= 初始化 ================= */
+// 移动端/触摸设备默认低档粒子（40k），避免手机 GPU/内存压力导致页面被系统杀进程重载；
+// 用户手动选择过画质则记住（localStorage）
+(function (){
+  try {
+    const saved = localStorage.getItem("ec_quality");
+    if (saved && QUALITY[saved]){ SETTINGS.quality = saved; return; }
+  } catch (e){}
+  const small = window.innerWidth < 768;
+  const touch = ("ontouchstart" in window) || (navigator.maxTouchPoints || 0) > 0;
+  if (small || touch) SETTINGS.quality = "LOW";
+})();
 currentMol = buildMolecule([]);
 currentField = computeField(currentMol, SETTINGS.mode);
+setQuality(SETTINGS.quality, false); // 应用档位（bloom/粒子数/UI 高亮）
 cloud = createCloud(QUALITY[SETTINGS.quality].count);
 (function initCloud(){
   const grid = buildDensityGrid(currentField);

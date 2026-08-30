@@ -45,7 +45,10 @@ function setMode(m){
 }
 function setQuality(q, auto){
   SETTINGS.quality = q;
-  if (!auto) manualQualityAt = simTime;
+  if (!auto){
+    manualQualityAt = simTime;
+    try { localStorage.setItem("ec_quality", q); } catch (e){}
+  }
   const Q = QUALITY[q];
   bloomPass.strength = Q.bloom;
   bloomPass.radius = Q.radius;
