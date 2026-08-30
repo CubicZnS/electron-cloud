@@ -1,8 +1,27 @@
 本项目采用语义化版本（SemVer）：主版本号 = 功能里程碑，次版本号 = 兼容性新功能，补丁号 = 修复。
 
-## [v2.2.0] — 2026-08-31 · 前线轨道可视化（双色相位粒子云）
+## [v2.3.0] — 2026-08-31 · 体素数据顺序自动检测（修复真实文件弥散）
 
-### 新增功能
+### 修复（根因：数据布局）
+- **发现真实文件的根因**：用户提供的 ASPIRIN_HOMO47.cub（Multiwfn）与萘电子密度 MDCM 文件均为 **z-fastest（zyx）体素顺序**，而非标准 Gaussian 的 x-fastest。按 x-fastest 读取会把分子密度峰打散成弥漫壳层 → 电子云弥散。
+- **数据顺序自动检测**（parts/03b_cube.js）：用原子 3×3×3 邻域试 6 种体素布局，取「邻域 |值| 均值」最大者为正确布局（真实密度/轨道在原子核处取峰；π 轨道原子处有节面，邻域内仍有信号），非 x-fastest 时自动重排为标准顺序。
+- **实测效果**：萘密度云 r max 11.7→4.4Å（>5Å 粒子 58%→0%），阿司匹林 HOMO 轨道 r max 9.7→5.1Å（hug 分子，π 轨道物理正确，相位 48/52）。
+
+### 修复（视觉/取景，配合弥散观感）
+- **导入后相机自动取景**（parts/05_render.js fitCameraToExtent）：按采样云实测范围拉远相机（半定量世界默认视野仅 ±4Å，导入结构常 10-20Å 会溢出屏幕 = 弥散观感）；退出导入复位。
+- **密度模式分子包络空间上限**：丢弃距分子中心超过（R_mol+3.5Å）的体素（超大松盒的低幅值尾晕质量可占总量 10%+，纯质量阈值挡不住）；轨道模式保留完整瓣。
+- **导入过渡改直线路径**（transitionCloudFromData direct）：不走大分子骨架，避免过渡期粒子沿长路径飞散。
+
+### 验证
+- node tools/validate-cube.mjs：56/56（新增 3 项布局检测测试：zyx 检测/重排质心/xyz 不误改）
+- node tools/validate-sigma.mjs：15/15；node tools/build.mjs：SYNTAX_OK
+
+### 文件
+- 修改：parts/03b_cube.js、parts/05_render.js、parts/06b_cube_ui.js、tools/validate-cube.mjs、index.html（组装产物）、CHANGELOG.md、README.md
+
+---
+
+## [v2.2.0] — 2026-08-31 · 前线轨道可视化（双色相位粒子云）
 - **轨道模式**：导入带符号字段（HOMO/LUMO 等分子轨道）不再拒绝，自动路由到轨道模式——粒子按 |ψ| 分布、颜色按相位 sign(ψ) 分正/负双色（正=暖色紫红→橙→黄，负=冷色深蓝→蓝→青，VMD/Jmol 惯例），节点面 ψ=0 处无粒子 → 天然呈现节面空隙
 - **数据层**（parts/03b_cube.js）：parseCubeText 支持 allowSigned（保留原始带符号值）；buildCubeVolume 支持 mode:orbital（|ψ| 幅值截断 max(95% 质量, 1e-4×峰值) + |ψ| 对数加权采样）；sampleCloudCube 输出 sign 数组
 - **着色器**（parts/04_glsl.js）：vSign varying（存于 aProps.w，随过渡平滑交叉渐变——相位扫过 0 时颜色翻转）+ 双 LUT uniform（uDensityTex/uDensityTexNeg）+ uOrbitalSign 分支；密度/半定量模式不受影响（sign 恒 0、单 LUT）

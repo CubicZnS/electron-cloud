@@ -618,7 +618,9 @@ function padCloudPaths(posArr, geo){
 let transitionGen = 0;
 /* 统一过渡入口：把一份「采样好的目标分布」经过 粒子匹配 + 骨架路径 + 属性插值 送入 GPU。
    半定量模式与真实 Cube 模式共用此函数（数据源不同，只差 sampleCloud / sampleCloudCube 一步）。 */
-function transitionCloudFromData(data, anchorPos){
+function transitionCloudFromData(data, anchorPos, opts){
+  // opts.direct = true：Cube 导入用直线过渡（不走大分子骨架路径，避免过渡期粒子沿长路径飞散 = 弥散观感）
+  const direct = !!(opts && opts.direct);
   if (!cloud) return;
   const geo = cloud.geo;
   const oldArr = geo.attributes.position.array;
@@ -669,29 +671,32 @@ function transitionCloudFromData(data, anchorPos){
     }
     geo.attributes.position.array.set(pos);
     geo.attributes.position.needsUpdate = true;
-    // 沿分子骨架路径流动（分帧）：半定量模式沿 σ 键路径；Cube 模式沿推断单键路径
-    buildFlowPaths(currentMol, fromArr, pos, cloud.count, function (paths){
+    // 沿分子骨架路径流动（分帧）：半定量模式沿 σ 键路径；Cube 模式沿推断单键路径；
+    // direct 模式（导入）：直线过渡（padCloudPaths 直连起止点），不做骨架路径
+    const finishPath = function (paths){
       if (gen !== transitionGen) return;
-      geo.attributes.aPath0.array.set(paths.p0);
-      geo.attributes.aPath0.needsUpdate = true;
-      geo.attributes.aPath1.array.set(paths.p1);
-      geo.attributes.aPath1.needsUpdate = true;
-      geo.attributes.aPath2.array.set(paths.p2);
-      geo.attributes.aPath2.needsUpdate = true;
-      geo.attributes.aPath3.array.set(paths.p3);
-      geo.attributes.aPath3.needsUpdate = true;
-      geo.attributes.aPath4.array.set(paths.p4);
-      geo.attributes.aPath4.needsUpdate = true;
-      geo.attributes.aPath5.array.set(paths.p5);
-      geo.attributes.aPath5.needsUpdate = true;
-      geo.attributes.aPath6.array.set(paths.p6);
-      geo.attributes.aPath6.needsUpdate = true;
-      geo.attributes.aPath7.array.set(paths.p7);
-      geo.attributes.aPath7.needsUpdate = true;
-      geo.attributes.aPath8.array.set(paths.p8);
-      geo.attributes.aPath8.needsUpdate = true;
-      geo.attributes.aPathCount.array.set(paths.pc);
-      geo.attributes.aPathCount.needsUpdate = true;
+      if (paths){
+        geo.attributes.aPath0.array.set(paths.p0);
+        geo.attributes.aPath0.needsUpdate = true;
+        geo.attributes.aPath1.array.set(paths.p1);
+        geo.attributes.aPath1.needsUpdate = true;
+        geo.attributes.aPath2.array.set(paths.p2);
+        geo.attributes.aPath2.needsUpdate = true;
+        geo.attributes.aPath3.array.set(paths.p3);
+        geo.attributes.aPath3.needsUpdate = true;
+        geo.attributes.aPath4.array.set(paths.p4);
+        geo.attributes.aPath4.needsUpdate = true;
+        geo.attributes.aPath5.array.set(paths.p5);
+        geo.attributes.aPath5.needsUpdate = true;
+        geo.attributes.aPath6.array.set(paths.p6);
+        geo.attributes.aPath6.needsUpdate = true;
+        geo.attributes.aPath7.array.set(paths.p7);
+        geo.attributes.aPath7.needsUpdate = true;
+        geo.attributes.aPath8.array.set(paths.p8);
+        geo.attributes.aPath8.needsUpdate = true;
+        geo.attributes.aPathCount.array.set(paths.pc);
+        geo.attributes.aPathCount.needsUpdate = true;
+      } // direct 模式：路径已由 padCloudPaths 直连（只写起止点）
       const props = new Float32Array(cloud.count * 4);
       for (let i = 0; i < cloud.count; i++){
         props[i * 4] = size[i];
@@ -716,7 +721,13 @@ function transitionCloudFromData(data, anchorPos){
       cloud.uniforms.uTransStart.value = simTime;
       cloud.uniforms.uTransDur.value = SETTINGS.transDur;
       cloud.uniforms.uAnchor.value.set(anchorPos[0], anchorPos[1], anchorPos[2]);
-    });
+    };
+    if (direct){
+      padCloudPaths(pos, cloud.geo);
+      finishPath(null);
+    } else {
+      buildFlowPaths(currentMol, fromArr, pos, cloud.count, finishPath);
+    }
   });
 }
 /* 半定量模式：官能团 / σ 参数 → computeField → 密度网格 → 采样 → 过渡 */
@@ -725,6 +736,26 @@ function transitionCloud(field, anchorPos){
   const data = sampleCloud(field, cloud.count, null, grid);
   transitionCloudFromData(data, anchorPos);
 }
+/* 相机取景：按结构实际半径 R（Å）拉远相机以完整框住导入结构。
+   半定量世界默认视野（fov 42°、距离 10.5）仅覆盖原点 ±4Å——导入的分子/轨道
+   常达 10-20Å，不取景会溢出屏幕 → 观感像「弥散」。 */
+function fitCameraToExtent(R){
+  const half = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  const dist = Math.max(R, 2.5) / half * 1.15 + 1.5;
+  camera.position.set(0, Math.min(R * 0.35, 6), dist);
+  controls.target.set(0, 0, 0);
+  controls.minDistance = 3.2;
+  controls.maxDistance = Math.max(18, dist * 2.5);
+  controls.update();
+}
+function resetCamera(){
+  camera.position.set(0, 1.6, 10.5);
+  controls.target.set(0, 0, 0);
+  controls.minDistance = 3.2;
+  controls.maxDistance = 18;
+  controls.update();
+}
+
 /* 把一份采样结果直接写入云几何（粒子数变更时重采样，不触发过渡动画） */
 function writeCloudSample(data, n){
   cloud.geo.attributes.position.array.set(data.pos);

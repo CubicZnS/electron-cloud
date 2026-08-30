@@ -311,5 +311,50 @@ const cubeText = (lines) => lines.join("\n");
   check("密度模式 sign 恒 0（单 LUT）", !anySign);
 }
 
+// ---------- 12) 体素数据顺序自动检测（非 x-fastest 文件不弥散） ----------
+// 真实文件实测：Multiwfn/数据库导出的部分 Cube 用 z-fastest（zyx）等布局，按 x-fastest
+// 读取会把分子密度峰打散成弥漫壳层 → 云弥散。检测法：原子 3×3×3 邻域内 |值| 均值最大者为正确布局。
+{
+  const B = BOHR_TO_ANGSTROM, bohr = 1 / B;
+  // 不对称双原子场（保证 6 种布局可分），以 zyx（z 最快）顺序写
+  const N = 16, half = 3.0, cell = (2 * half) / (N - 1);
+  const a1 = [-1.2, 0.8, 0.5], a2 = [1.4, -0.6, -0.4]; // Å
+  const mk = function (order){
+    const vals = [];
+    const push = function (ix, iy, iz){
+      const x = -half + ix * cell, y = -half + iy * cell, z = -half + iz * cell;
+      const d1 = (x - a1[0]) ** 2 + (y - a1[1]) ** 2 + (z - a1[2]) ** 2;
+      const d2 = (x - a2[0]) ** 2 + (y - a2[1]) ** 2 + (z - a2[2]) ** 2;
+      vals.push((5.0 * Math.exp(-d1 / 0.4) + 3.0 * Math.exp(-d2 / 0.5)).toExponential(4));
+    };
+    if (order === "xyz") for (let iz = 0; iz < N; iz++) for (let iy = 0; iy < N; iy++) for (let ix = 0; ix < N; ix++) push(ix, iy, iz);
+    else if (order === "zyx") for (let ix = 0; ix < N; ix++) for (let iy = 0; iy < N; iy++) for (let iz = 0; iz < N; iz++) push(ix, iy, iz);
+    const lines = ["t", "d", "2  0 0 0",
+      N + "  " + (cell * bohr).toFixed(6) + "  0  0",
+      N + "  0  " + (cell * bohr).toFixed(6) + "  0",
+      N + "  0  0  " + (cell * bohr).toFixed(6),
+      "6  6  " + ((a1[0] + half) * bohr).toFixed(6) + "  " + ((a1[1] + half) * bohr).toFixed(6) + "  " + ((a1[2] + half) * bohr).toFixed(6),
+      "8  8  " + ((a2[0] + half) * bohr).toFixed(6) + "  " + ((a2[1] + half) * bohr).toFixed(6) + "  " + ((a2[2] + half) * bohr).toFixed(6)];
+    for (let i = 0; i < vals.length; i += 6) lines.push(vals.slice(i, i + 6).join(" "));
+    return lines.join("\n");
+  };
+  // zyx 写的文件应被检测并重排
+  const pz = m.parseCubeText(mk("zyx"));
+  check("zyx 布局文件被自动检测", pz.dataOrder === "zyx", pz.dataOrder);
+  const volz = m.buildCubeVolume(pz);
+  const dz = m.sampleCloudCube(volz, 8000);
+  let cx = 0, cy = 0, cz = 0, finite = true;
+  for (let i = 0; i < 8000; i++){
+    cx += dz.pos[i * 3]; cy += dz.pos[i * 3 + 1]; cz += dz.pos[i * 3 + 2];
+    if (!Number.isFinite(dz.pos[i * 3])) finite = false;
+  }
+  // 云质心应落在两原子之间（≈0.1, 0.1, 0.05）
+  const mc = Math.hypot(cx / 8000 - 0.1, cy / 8000 - 0.1, cz / 8000 - 0.05);
+  check("zyx 重排后云质心在两原子间（不弥散）", mc < 0.5 && finite, "质心偏差 " + mc.toFixed(2));
+  // xyz 写的文件保持 xyz
+  const px = m.parseCubeText(mk("xyz"));
+  check("xyz 布局文件不被误改", px.dataOrder === "xyz", px.dataOrder);
+}
+
 console.log("\n==== " + pass + " PASS / " + fail + " FAIL ====");
 process.exit(fail ? 1 : 0);

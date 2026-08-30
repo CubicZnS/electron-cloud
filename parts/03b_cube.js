@@ -251,6 +251,60 @@ function parseCubeText(text, opts){
       : "（可能是分子轨道 HOMO/LUMO 或静电势 ESP）";
     throw cubeError("SIGNED_FIELD", "该 Cube 含大量负值（" + (negVox / nVox * 100).toFixed(1) + "% 体素为负），不是电子密度" + zh + "。请在 Multiwfn 中导出 electron density（Main function 1）后再导入。");
   }
+  // ---- 体素数据顺序自动检测 ----
+  // 标准 Gaussian Cube 为 x-fastest（index = ix + nx·iy + nx·ny·iz），但部分工具/数据
+  // 库（实测：本萘密度文件）用 z-fastest 等其它顺序。布局错了会把分子密度峰打散成
+  // 弥漫壳层 → 云弥散。检测法：真实密度在原子核处取峰，用原子位置试 6 种布局，
+  // 取「原子处密度均值」最大者为正确布局；非 x-fastest 时重排为标准顺序。
+  const nx0 = dims[0], ny0 = dims[1], nz0 = dims[2];
+  const _orders = {
+    xyz: function (a, b, c){ return a + nx0 * b + nx0 * ny0 * c; },
+    xzy: function (a, b, c){ return a + nx0 * c + nx0 * nz0 * b; },
+    yxz: function (a, b, c){ return b + ny0 * a + nx0 * ny0 * c; },
+    yzx: function (a, b, c){ return b + ny0 * c + ny0 * nz0 * a; },
+    zxy: function (a, b, c){ return c + nz0 * a + nz0 * nx0 * b; },
+    zyx: function (a, b, c){ return c + nz0 * b + nz0 * ny0 * a; },
+  };
+  let dataOrder = "xyz", bestMean = -1, xyzMean = 0;
+  const ax0 = Math.abs(axesB[0][0]) || 1e-9, ay0 = Math.abs(axesB[1][1]) || 1e-9, az0 = Math.abs(axesB[2][2]) || 1e-9;
+  for (const name in _orders){
+    const f = _orders[name];
+    let s = 0, cnt = 0;
+    for (const a of atomsB){
+      const ix0 = Math.round((a.pos[0] - originB[0]) / ax0);
+      const iy0 = Math.round((a.pos[1] - originB[1]) / ay0);
+      const iz0 = Math.round((a.pos[2] - originB[2]) / az0);
+      // 取原子 3×3×3 邻域（π 轨道在原子处有节面，邻域内仍有信号；也降低网格对位敏感性）
+      for (let dx = -1; dx <= 1; dx++){
+        for (let dy = -1; dy <= 1; dy++){
+          for (let dz = -1; dz <= 1; dz++){
+            const ix = ix0 + dx, iy = iy0 + dy, iz = iz0 + dz;
+            if (ix < 0 || ix >= nx0 || iy < 0 || iy >= ny0 || iz < 0 || iz >= nz0) continue;
+            const i = f(ix, iy, iz);
+            if (i >= 0 && i < nVox){ const v = dataRaw[i]; s += v < 0 ? -v : v; cnt++; }
+          }
+        }
+      }
+    }
+    if (cnt > 0){
+      const mean = s / cnt;
+      if (name === "xyz") xyzMean = mean;
+      if (mean > bestMean){ bestMean = mean; dataOrder = name; }
+    }
+  }
+  if (dataOrder !== "xyz" && bestMean > Math.max(xyzMean * 1.5, 1e-30)){
+    // 重排为标准 x-fastest
+    const perm = new Float32Array(nVox);
+    const f = _orders[dataOrder];
+    for (let iz = 0; iz < nz0; iz++){
+      for (let iy = 0; iy < ny0; iy++){
+        for (let ix = 0; ix < nx0; ix++){
+          perm[ix + nx0 * iy + nx0 * ny0 * iz] = dataRaw[f(ix, iy, iz)];
+        }
+      }
+    }
+    dataRaw.set(perm);
+  }
   return {
     title: title, comment: comment,
     natoms: natoms, originB: originB, axesB: axesB, dims: dims, nVox: nVox,
@@ -258,6 +312,7 @@ function parseCubeText(text, opts){
     vMin: 0, vMax: vMax, vSum: vSum, vMean: vSum / nVox,
     negVox: negVox, maxAbs: maxAbs, fieldType: fieldType,
     signed: allowSigned,
+    dataOrder: dataOrder, // 检测到的原始数据顺序（xyz=标准 x-fastest）
   };
 }
 
@@ -338,9 +393,11 @@ function buildCubeVolume(parsed, opts){
   const nVox = parsed.nVox;
   const rhoMax = parsed.vMax; // 幅值峰值（轨道模式 = max|ψ|）
   // 截断：cutoff = max(95% 总质量阈值, 峰值下限)
-  //   · 质量阈值（对数直方图）自适应；轨道模式的动态范围远大于密度（实测 HOMO |ψ|max≈5e5），
-  //     峰值下限取更小值 1e-4×峰值，避免过切轨道瓣
+  //   · 质量阈值（对数直方图）自适应；轨道模式叠加等值面惯例下限：
+  //     |ψ| ≥ 3% × max|ψ|（CUBE_ORB_ISO，Gaussian/Multiwfn/VMD 轨道等值面惯例），
+  //     使轨道瓣边缘清晰、低幅值尾晕不铺满全盒
   const CUBE_CUT_FRACTION = signed ? 1e-4 : 1e-3;
+  const CUBE_ORB_ISO = 0.03;
   const magOf = function (i){ const v = dataRaw[i]; return signed && v < 0 ? -v : v; };
   const logMax = Math.log1p(rhoMax);
   const HIST_BINS = 512;
@@ -360,14 +417,37 @@ function buildCubeVolume(parsed, opts){
     }
     acc += binMass;
   }
-  const cutoff = Math.max(massCut, rhoMax * CUBE_CUT_FRACTION);
-  // 采样 CDF（仅保留幅值 ≥ cutoff 的体素；权重 = log1p(幅值/cutoff − 1)，对数加权：
-  // 核心/瓣缘均可见，仍严格随幅值单调、可解释）
+  const cutoff = signed ? Math.max(massCut, rhoMax * CUBE_ORB_ISO) : Math.max(massCut, rhoMax * CUBE_CUT_FRACTION);
+  // 密度模式的「分子包络空间上限」：电子密度超出分子 ~3.5Å 基本可忽略，但超大松盒的
+  // 低幅值尾晕质量可能占总量 10%+，纯质量阈值会把它保留 → 云铺满全盒（弥散）。
+  // 丢弃「距分子中心超过 R_mol + 3.5Å」的体素（紧盒不触发；轨道模式保留完整瓣，靠相机取景）。
+  // 注意：分子以原子包围盒中心为参考——直接用原子半径 Rmol 更稳（网格可能偏离分子）。
+  const SPATIAL_MARGIN = 3.5;
+  let Rmol = 0;
+  for (let ai = 0; ai < atoms.length; ai++){
+    const a = atoms[ai].pos;
+    const rr = a[0] * a[0] + a[1] * a[1] + a[2] * a[2];
+    if (rr > Rmol) Rmol = rr;
+  }
+  Rmol = Math.sqrt(Rmol);
+  const capR2 = (Rmol + SPATIAL_MARGIN) * (Rmol + SPATIAL_MARGIN);
+  // 采样 CDF（仅保留幅值 ≥ cutoff 且（密度模式）在分子包络内的体素；权重 = log1p(幅值/cutoff − 1)）
   const cdf = new Float64Array(nVox);
   let totalW = 0, kept = 0;
   for (let i = 0; i < nVox; i++){
+    let inCap = true;
+    if (!signed){
+      const iz = Math.floor(i / nxy);
+      const rem = i - iz * nxy;
+      const iy = Math.floor(rem / nx);
+      const ix = rem - iy * nx;
+      const px = orgC[0] + (ix + 0.5) * axes[0][0] + (iy + 0.5) * axes[1][0] + (iz + 0.5) * axes[2][0];
+      const py = orgC[1] + (ix + 0.5) * axes[0][1] + (iy + 0.5) * axes[1][1] + (iz + 0.5) * axes[2][1];
+      const pz = orgC[2] + (ix + 0.5) * axes[0][2] + (iy + 0.5) * axes[1][2] + (iz + 0.5) * axes[2][2];
+      inCap = px * px + py * py + pz * pz <= capR2;
+    }
     const v = magOf(i);
-    if (v >= cutoff){ totalW += Math.log1p(v / cutoff - 1); kept++; }
+    if (v >= cutoff && inCap){ totalW += Math.log1p(v / cutoff - 1); kept++; }
     cdf[i] = totalW;
   }
   return {

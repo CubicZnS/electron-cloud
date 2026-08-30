@@ -167,7 +167,14 @@ function applyCubeVolume(vol){
   cubeMode = true;
   setOrbitalRender(cubeUI.mode === "orbital"); // 轨道模式：固定正/负相位双 LUT
   const data = sampleCloudCube(vol, cloud.count); // 真实密度/|ψ| 权重采样，而非 computeField
-  transitionCloudFromData(data, [0, 0, 0]);
+  transitionCloudFromData(data, [0, 0, 0], { direct: true }); // 直线过渡：不走大分子骨架，避免过渡期飞散观感
+  // 相机自动取景：按采样云的实测范围拉远相机（导入结构常大于半定量世界默认视野 ±4Å）
+  let maxR = 0;
+  for (let i = 0; i < cloud.count; i++){
+    const rr = Math.hypot(data.pos[i * 3], data.pos[i * 3 + 1], data.pos[i * 3 + 2]);
+    if (rr > maxR) maxR = rr;
+  }
+  fitCameraToExtent(maxR + 0.8);
   setCubeModeUI(true);
   rebuildCubeLegend();
   updateParticleUI();
@@ -179,6 +186,7 @@ function exitCubeMode(){
   cubeMode = false;
   currentVolume = null;
   setOrbitalRender(false); // 恢复用户所选色图并关闭轨道分支
+  resetCamera(); // 退出导入：恢复半定量世界默认取景
   if (prev.custom && creatorState && creatorState.pts && creatorState.pts.length){
     crApply(); // 重建创造模式分子（内部 applyMol → computeField → 过渡 → 图例）
   } else {
