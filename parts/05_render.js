@@ -104,7 +104,7 @@ function disposeBondMesh(cls){
 function ensureAtomMesh(el, count){
   let m = atomMeshes[el];
   if (m) return m;
-  const e = ELEMENTS[el];
+  const e = elementInfo(el); // 元素表未覆盖的原子：中性回退显示（导入 Cube 可能含未知元素）
   const geo = new THREE.SphereGeometry(e.ball, 26, 18);
   const mat = new THREE.MeshStandardMaterial({ color: e.color, roughness: 0.36, metalness: 0.16, emissive: e.color, emissiveIntensity: e.emissive });
   m = new THREE.InstancedMesh(geo, mat, Math.max(count, 1));
@@ -174,6 +174,8 @@ function composeBond(mesh, rec, f){
 
 let currentMol = null;
 let currentField = null;
+let currentVolume = null; // 导入的真实电子密度 CubeVolume（数据源：cube）
+let cubeMode = false;     // 导入模式：Total/Inductive/Resonance 为不同数据源，已禁用
 
 function buildMoleculeMeshes(mol){
   for (const el in atomMeshes) disposeAtomMesh(el);
@@ -233,7 +235,7 @@ function spawnDying(atoms, molA, bonds, t){
   atoms.forEach(function (a){ (byEl[a.el] = byEl[a.el] || []).push(a); });
   for (const el in byEl){
     const list = byEl[el];
-    const e = ELEMENTS[el];
+    const e = elementInfo(el);
     const geo = new THREE.SphereGeometry(e.ball, 20, 14);
     const mat = new THREE.MeshStandardMaterial({ color: e.color, roughness: 0.36, metalness: 0.16, emissive: e.color, emissiveIntensity: e.emissive });
     const mesh = new THREE.InstancedMesh(geo, mat, list.length);
@@ -591,7 +593,9 @@ function padCloudPaths(posArr, geo){
   geo.attributes.aPathCount.needsUpdate = true;
 }
 let transitionGen = 0;
-function transitionCloud(field, anchorPos){
+/* 统一过渡入口：把一份「采样好的目标分布」经过 粒子匹配 + 骨架路径 + 属性插值 送入 GPU。
+   半定量模式与真实 Cube 模式共用此函数（数据源不同，只差 sampleCloud / sampleCloudCube 一步）。 */
+function transitionCloudFromData(data, anchorPos){
   if (!cloud) return;
   const geo = cloud.geo;
   const oldArr = geo.attributes.position.array;
@@ -619,8 +623,6 @@ function transitionCloud(field, anchorPos){
     geo.attributes.aOldPos.array.set(oldSnapshot);
   }
   geo.attributes.aOldPos.needsUpdate = true;
-  const grid = buildDensityGrid(field);
-  const data = sampleCloud(field, cloud.count, null, grid);
   // 保存旧属性供过渡插值（位置/尺寸/亮度/密度同步丝滑过渡）
   geo.attributes.aOldProps.array.set(geo.attributes.aProps.array);
   geo.attributes.aOldProps.needsUpdate = true;
@@ -644,7 +646,7 @@ function transitionCloud(field, anchorPos){
     }
     geo.attributes.position.array.set(pos);
     geo.attributes.position.needsUpdate = true;
-    // 沿 σ 骨架路径流动（分帧）
+    // 沿分子骨架路径流动（分帧）：半定量模式沿 σ 键路径；Cube 模式沿推断单键路径
     buildFlowPaths(currentMol, fromArr, pos, cloud.count, function (paths){
       if (gen !== transitionGen) return;
       geo.attributes.aPath0.array.set(paths.p0);
@@ -693,6 +695,28 @@ function transitionCloud(field, anchorPos){
     });
   });
 }
+/* 半定量模式：官能团 / σ 参数 → computeField → 密度网格 → 采样 → 过渡 */
+function transitionCloud(field, anchorPos){
+  const grid = buildDensityGrid(field);
+  const data = sampleCloud(field, cloud.count, null, grid);
+  transitionCloudFromData(data, anchorPos);
+}
+/* 把一份采样结果直接写入云几何（粒子数变更时重采样，不触发过渡动画） */
+function writeCloudSample(data, n){
+  cloud.geo.attributes.position.array.set(data.pos);
+  cloud.geo.attributes.position.needsUpdate = true;
+  padCloudPaths(data.pos, cloud.geo);
+  {
+    const props = new Float32Array(n * 4);
+    for (let i = 0; i < n; i++){ props[i * 4] = data.size[i]; props[i * 4 + 1] = data.bright[i]; props[i * 4 + 2] = data.density[i]; }
+    cloud.geo.attributes.aProps.array.set(props);
+    cloud.geo.attributes.aProps.needsUpdate = true;
+  }
+  cloud.geo.attributes.aSeed.array.set(data.seed);
+  cloud.geo.attributes.aSeed.needsUpdate = true;
+  cloud.uniforms.uTransStart.value = -999;
+  cloud.uniforms.uTransDur.value = 0;
+}
 function setParticleCount(n){
   if (cloud){
     scene.remove(cloud.pts);
@@ -701,22 +725,11 @@ function setParticleCount(n){
     cloud = null;
   }
   cloud = createCloud(n);
-  if (currentField){
-    const grid = buildDensityGrid(currentField);
-    const data = sampleCloud(currentField, n, null, grid);
-    cloud.geo.attributes.position.array.set(data.pos);
-    cloud.geo.attributes.position.needsUpdate = true;
-    padCloudPaths(data.pos, cloud.geo);
-    {
-      const props = new Float32Array(n * 4);
-      for (let i = 0; i < n; i++){ props[i * 4] = data.size[i]; props[i * 4 + 1] = data.bright[i]; props[i * 4 + 2] = data.density[i]; }
-      cloud.geo.attributes.aProps.array.set(props);
-      cloud.geo.attributes.aProps.needsUpdate = true;
-    }
-    cloud.geo.attributes.aSeed.array.set(data.seed);
-    cloud.geo.attributes.aSeed.needsUpdate = true;
-    cloud.uniforms.uTransStart.value = -999;
-    cloud.uniforms.uTransDur.value = 0;
+  if (currentVolume){
+    // 导入模式：按真实 Cube 密度重采样（而非 computeField 伪造分布）
+    writeCloudSample(sampleCloudCube(currentVolume, n), n);
+  } else if (currentField){
+    writeCloudSample(sampleCloud(currentField, n, null, buildDensityGrid(currentField)), n);
   }
   updateParticleUI();
 }
@@ -743,6 +756,7 @@ function updateRelDensities(){
 
 /* ================= 分子变更与过渡 ================= */
 function changeMolecule(frags, anchorHint){
+  if (cubeMode) exitCubeMode(); // 任何半定量分子变更都先退出导入模式（数据源一致性）
   applyMol(buildMolecule(frags), anchorHint);
 }
 /* 应用任意分子对象（预设/创造模式共用管线：diff → 网格 → 场 → 云过渡） */
@@ -911,7 +925,7 @@ function pickAtom(event){
     if (_pv.z > 1) continue; // 相机后方
     const dist = Math.hypot(px - camPos.x, py - camPos.y, pz - camPos.z);
     if (dist < 0.1) continue;
-    const ballR = ELEMENTS[rec.el] ? ELEMENTS[rec.el].ball : 0.34;
+    const ballR = elementInfo(rec.el).ball;
     let rPx = (ballR * rect.height) / (2 * fovHalf * dist);
     if (rPx < 8) rPx = 8; // 最小可点半径
     const sx = (_pv.x * 0.5 + 0.5) * rect.width;

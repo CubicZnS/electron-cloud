@@ -8,6 +8,9 @@ const ELEMENTS = {
   F:  { color:0x8fe388, ball:0.32, sigma:0.72, base:2.50, emissive:0.18 },
   Cl: { color:0x63d69a, ball:0.44, sigma:0.92, base:2.40, emissive:0.16 },
 };
+/* 元素表未覆盖的原子（导入 Cube 可能含 S/P/Br/I/金属等）：安全的中性回退显示，绝不因单个未知元素崩溃 */
+const UNKNOWN_ELEMENT = { color:0x9aa5b1, ball:0.38, sigma:0.80, base:1.55, emissive:0.07 };
+function elementInfo(el){ return ELEMENTS[el] || UNKNOWN_ELEMENT; }
 const GROUPS = {
   CH3:  { name:"Methyl",            zh:"甲基",     sigmaM:-0.07, sigmaP:-0.17, sigmaPlus:-0.31, sigmaMinus:-0.17, sigmaI:-0.01, desc:"弱 +I（σI≈0）+ 超共轭 +M（σR≈-0.14）：向邻/对位弱给电子。" },
   OH:   { name:"Hydroxyl",          zh:"羟基",     sigmaM:+0.12, sigmaP:-0.37, sigmaPlus:-0.92, sigmaMinus:-0.37, sigmaI:+0.25, desc:"−I（σI=+0.25）+ 强 +M（σR≈-0.43）：氧孤对电子经 π 共轭向邻/对位强给电子。" },
@@ -254,7 +257,7 @@ function computeField(mol, mode){
   for (let i = 0; i < n; i++){
     const s = fI * ind[i] + fR * res[i];
     factor[i] = clamp(Math.exp(-K * s), 0.05, 4.0);
-    w[i] = clamp(ELEMENTS[atoms[i].el].base * factor[i], 0.05, 4.0);
+    w[i] = clamp(elementInfo(atoms[i].el).base * factor[i], 0.05, 4.0);
   }
   // 创造模式：乘入碳架本征基线（杂化 + C–H 极化）——初始碳架密度即不均匀，
   // 取代基 σ 效应在基线上叠加；预置分子保持「苯环=1.00」规范不变
@@ -262,7 +265,7 @@ function computeField(mol, mode){
     const base = skeletonBaseline(mol);
     for (let i = 0; i < n; i++){
       factor[i] = clamp(factor[i] * base[i], 0.05, 4.0);
-      w[i] = clamp(ELEMENTS[atoms[i].el].base * factor[i], 0.05, 4.0);
+      w[i] = clamp(elementInfo(atoms[i].el).base * factor[i], 0.05, 4.0);
     }
   }
   const src = [];

@@ -134,6 +134,43 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
 #creatorBtn:hover{color:#eaf6ff;border-color:rgba(124,199,255,0.5);box-shadow:0 0 18px rgba(124,199,255,0.18)}
 #creatorBtn.active{color:#eaf6ff;background:rgba(124,199,255,0.16);border-color:rgba(124,199,255,0.55);
   box-shadow:0 0 22px rgba(124,199,255,0.30)}
+/* ================= Quantum Data（电子密度 Cube 导入） ================= */
+#quantumBtn{width:40px;height:40px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;
+  color:var(--violet);cursor:pointer;flex:none;transition:all .18s}
+#quantumBtn:hover{color:#f3e8ff;border-color:rgba(184,147,255,0.55);box-shadow:0 0 18px rgba(184,147,255,0.20)}
+#quantumBtn.active{color:#f3e8ff;background:rgba(184,147,255,0.16);border-color:rgba(184,147,255,0.55);
+  box-shadow:0 0 22px rgba(184,147,255,0.30)}
+#quantumPanel{position:fixed;left:18px;top:50%;transform:translateY(-50%);z-index:35;width:354px;padding:14px 16px;
+  display:none;flex-direction:column;gap:9px;max-height:calc(100dvh - 120px);overflow-y:auto}
+#quantumPanel.show{display:flex}
+.qd-head{display:flex;justify-content:space-between;align-items:center;font-size:12px;letter-spacing:1.5px;color:#eaf6ff}
+.qd-head b{display:flex;align-items:center;gap:7px}
+.qd-head .qd-close{color:var(--faint);cursor:pointer;font-size:12px;padding:0 3px}
+.qd-sub{font-size:10px;color:var(--dim);line-height:1.7;letter-spacing:.3px}
+.qd-sub b{color:#c9b8ff}
+.qd-status{display:flex;align-items:center;gap:7px;font-size:10px;letter-spacing:1px;color:var(--dim)}
+.qd-status .dot{width:7px;height:7px;border-radius:50%;background:#5b6678;transition:all .2s;flex:none}
+.qd-status.ready .dot{background:#9fe0b0;box-shadow:0 0 8px rgba(159,224,176,.6)}
+.qd-status.applied .dot{background:#b893ff;box-shadow:0 0 8px rgba(184,147,255,.7)}
+.qd-status.error .dot{background:#ff8f84;box-shadow:0 0 8px rgba(255,120,110,.6)}
+.qd-status.reading .dot,.qd-status.validating .dot,.qd-status.applying .dot{background:var(--accent);animation:qdPulse 1s infinite}
+@keyframes qdPulse{50%{opacity:.35}}
+#qdDrop{border:1px dashed rgba(163,182,214,0.35);border-radius:10px;padding:18px 10px;text-align:center;font-size:11px;
+  color:var(--dim);cursor:pointer;transition:all .2s;letter-spacing:.5px;line-height:1.8}
+#qdDrop:hover,#qdDrop.over{border-color:rgba(184,147,255,0.65);color:#eaf6ff;background:rgba(184,147,255,0.08)}
+#qdDrop .pick{color:var(--violet);text-decoration:underline;text-underline-offset:3px}
+.qd-meta{display:flex;flex-direction:column;gap:5px;font-size:10px;color:var(--dim);letter-spacing:.3px;border-top:1px solid var(--stroke);padding-top:8px}
+.qd-meta .row{display:flex;justify-content:space-between;gap:10px}
+.qd-meta .row .k{color:var(--faint);flex:none}
+.qd-meta .row .v{color:#d9e8ff;text-align:right;word-break:break-all}
+.qd-meta .row .v.src{color:#b893ff}
+#qdErr{font-size:10px;color:#ff9a8f;line-height:1.7;background:rgba(255,110,100,0.08);border:1px solid rgba(255,110,100,0.28);
+  border-radius:8px;padding:8px 10px;display:none;word-break:break-word}
+#qdErr.show{display:block}
+#qdApply{padding:8px 0;font-size:11px;letter-spacing:1px}
+.qd-hint{font-size:9px;color:var(--faint);letter-spacing:.5px;line-height:1.7}
+.seg-btn.disabled{opacity:.35;pointer-events:none;cursor:not-allowed}
+#explainBtn.disabled{opacity:.35;pointer-events:none}
 #debugPanel{position:fixed;right:16px;bottom:64px;z-index:40;width:236px;padding:12px 14px;display:none}
 #debugPanel.show{display:block}
 #debugPanel h4{font-size:10px;letter-spacing:2px;color:var(--dim);margin-bottom:8px;display:flex;justify-content:space-between}
@@ -175,6 +212,8 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
   .mol-chip{font-size:10px;padding:5px 9px;flex:none}
   .mol-chip .zh{font-size:9px}
   #creatorBtn{width:36px;height:36px}
+  #quantumBtn{width:36px;height:36px}
+  #quantumPanel{left:10px;top:50%;width:calc(100vw - 20px);max-height:calc(100dvh - 100px);overflow-y:auto;padding:12px 14px}
   #creator{left:10px;top:50%;width:calc(100vw - 20px);max-height:calc(100dvh - 100px);overflow-y:auto;padding:10px 12px}
   #crCanvas{height:240px}
   .cr-tool{font-size:10px;padding:8px 0}
@@ -230,6 +269,9 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
   <button class="panel" id="creatorBtn" title="创造模式 · 自由碳架" aria-label="创造模式">
     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
   </button>
+  <button class="panel" id="quantumBtn" title="Quantum Data · 导入电子密度 Cube" aria-label="Quantum Data 导入电子密度 Cube">
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><path d="M20.2 20.2c2.04-2.03.02-7.36-4.5-11.9-4.54-4.52-9.87-6.54-11.9-4.5-2.04 2.03-.02 7.36 4.5 11.9 4.54 4.52 9.87 6.54 11.9 4.5Z"/><path d="M15.7 15.7c4.52-4.54 6.54-9.87 4.5-11.9-2.03-2.04-7.36-.02-11.9 4.5-4.52 4.54-6.54 9.87-4.5 11.9 2.03 2.04 7.36.02 11.9-4.5Z"/></svg>
+  </button>
 </div>
 <div class="panel" id="legend"></div>
 <div id="disclaimer">by CubicZnS · 半定量模型 仅供参考</div>
@@ -256,6 +298,17 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
   </div>
   <div class="cr-hint">画布只画碳架：加碳 · 连键（先选键级 单/双/三）· 擦除 · 环烷自动 sp³ · 交替单双六元环自动芳香化 · 应用后点 3D 分子中的碳取代 H 挂官能团</div>
 <div class="cr-hint" id="crIdentify" style="color:#9fe0b0"></div>
+</div>
+<div class="panel" id="quantumPanel">
+  <div class="qd-head"><b>Quantum Data</b><span class="qd-close" id="qdClose">✕</span></div>
+  <div class="qd-sub">Import <b>electron-density Cube</b> (.cube / .cub) from Gaussian cubegen or Multiwfn.<br/>导入真实电子密度驱动粒子云；文件全部在本地浏览器解析，不上传。</div>
+  <div class="qd-status" id="qdStatus"><span class="dot"></span><span id="qdStatusText">idle — 等待文件</span></div>
+  <div id="qdDrop">拖放 <b>.cube / .cub</b> 文件到此处<br/><span class="pick">Choose Cube file</span></div>
+  <div class="qd-meta" id="qdMeta" style="display:none"></div>
+  <div id="qdErr"></div>
+  <button class="dshell-btn" id="qdApply" style="display:none">Apply electron density</button>
+  <div class="qd-hint" id="qdLimits">限制：文件 ≤ 64 MB · 体素 ≤ 4,000,000（约 159³ 网格）。超出请用 Multiwfn 调大 Grid spacing 后重试。</div>
+  <input type="file" id="qdFile" accept=".cube,.cub" style="display:none"/>
 </div>
 <div class="panel" id="popover"></div>
 <div class="panel" id="infoCard"></div>

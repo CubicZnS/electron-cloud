@@ -173,3 +173,38 @@
 - License: CC BY-SA（百科条目，观点为经典有机化学共识）
 - Used for: 创造模式芳香化检测——交替单双键环仅当环长为 4n+2（6/10/14…）时升为芳香键 1.5；4n 环（环丁二烯等反芳香）保持 Kekulé 不转化
 - Modified parts: 采用判据，未修改规则
+
+## Resource 26
+- Name: Lucide Icons — Atom（原子图标）
+- URL: https://lucide.dev/icon/atom
+- License: ISC
+- Used for: Quantum Data 导入入口按钮的内联 SVG（圆圈 + 两条椭圆轨道），stroke 继承当前颜色
+- Modified parts: 原样内嵌三个 path（circle + 2 条 ellipse 路径），未引入完整图标库
+
+## Resource 27
+- Name: Gaussian Cube file format 规范（cubegen 输出格式）
+- URL: https://gaussian.com/cubegen/ （官方 cubegen 手册）；格式概述：https://en.wikipedia.org/wiki/Cube_(file_format)
+- License: 公开格式规范（事实标准）
+- Used for: Cube 解析器（parts/03b_cube.js）——两行注释、原子数/原点、三轴、原子列表、体素标量值；体素按 x 最快顺序 index = ix + nx·iy + nx·ny·iz；负原子数 = 多数据集（拒绝）
+- Modified parts: 规范实现
+
+## Resource 28
+- Name: Multiwfn — cube 文件导出（"Export result to cube file"）
+- URL: http://sobereva.com/multiwfn （Multiwfn 主页与手册）
+- License: 开源软件（文档公开）
+- Used for: 识别 Multiwfn 导出 Cube 的「数据集计数」行（单数据集 = 1）并兼容；对多数据集/多轨道合并给出明确拒绝提示
+- Modified parts: 兼容逻辑（仅当剩余 token 数 = 1 + nVox 或 1 + k·nVox 时视为数据集计数，不误伤标准 cubegen 输出）
+
+## Resource 29
+- Name: 共价半径（Cordero et al., "Covalent radii revisited", Dalton Trans., 2008）
+- URL: https://pubs.rsc.org/en/content/articlelanding/2008/dt/b801115j
+- License: 文献数据（公开科学数据）
+- Used for: 导入 Cube 后「视觉单键推断」（元素 + 距离 + 共价半径和 + 0.45Å 容差），仅供骨架流动路径，不声称是量子计算输出的键级
+- Modified parts: 采用数值子集；未知元素回退默认 0.90Å
+
+## Resource 30
+- Name: 玻尔半径（bohr→Å 换算，CODATA 2018：1 bohr = 0.529177210903 Å）
+- URL: https://physics.nist.gov/cuu/Constants/
+- License: 公开标准数据（NIST）
+- Used for: Cube 原子单位坐标/原点/轴 → 项目 Å 坐标系；元素符号表（原子序数→符号）为公开标准数据
+- Modified parts: 数值采用；统一按网格中心居中

@@ -35,6 +35,7 @@ function wireSegments(){
   });
 }
 function setMode(m){
+  if (cubeMode){ toast("导入模式（Imported electron density）是独立数据源，请先退出 Quantum Data 再切换 Total/Inductive/Resonance"); return; }
   SETTINGS.mode = m;
   document.querySelectorAll("#modeSeg .seg-btn").forEach(function (b){ b.classList.toggle("active", b.dataset.mode === m); });
   if (currentMol){
@@ -63,6 +64,7 @@ function setQuality(q, auto){
 
 /* 分子切换与官能团取代 */
 function selectMolecule(key){
+  if (cubeMode) exitCubeMode(); // 点分子芯片即退出导入模式（明确状态变化）
   const m = MOLECULE_LIST.find(function (x){ return x.key === key; });
   if (!m) return;
   setActiveMoleculeChip(key);
@@ -282,6 +284,7 @@ renderer.domElement.addEventListener("pointermove", function (e){
   updateDensityHover();
 });
 renderer.domElement.addEventListener("click", function (e){
+  if (cubeMode){ return; } // 导入模式：官能团替换仅在半定量模式可用（避免误切数据源）
   const rec = pickAtom(e);
   if (rec) openPopover(rec);
   else closePopover();
@@ -294,6 +297,7 @@ document.getElementById("explainBtn").addEventListener("click", function (){
 
 /* 调试面板（?debug=1） */
 function recomputeAfterFx(){
+  if (cubeMode) return; // 调试项（诱导/共振强度）仅作用于半定量场
   if (currentMol){
     currentField = computeField(currentMol, SETTINGS.mode);
     updateRelDensities();
@@ -482,6 +486,7 @@ function crRedraw(){
   }
 }
 function crApply(){
+  if (cubeMode) exitCubeMode(); // 应用创造模式即退出导入模式（明确状态变化）
   if (!creatorState.pts.length) return;
   const mol = buildCustomMolecule(creatorState);
   applyMol(mol, [0, 0, 0]);
@@ -506,6 +511,7 @@ function toggleCreator(show){
   document.getElementById("creator").classList.toggle("show", creatorState.open);
   document.getElementById("creatorBtn").classList.toggle("active", creatorState.open);
   if (creatorState.open) crRedraw();
+  if (creatorState.open) toggleQuantumPanel(false); // 与 Quantum Data 面板互斥
 }
 if (crCanvas){
   crCanvas.addEventListener("click", function (e){

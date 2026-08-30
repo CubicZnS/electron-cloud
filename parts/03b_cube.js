@@ -1,0 +1,388 @@
+/* ================= 量子数据：Gaussian Cube 电子密度导入（纯解析/采样模块，Node 可校验） =================
+   第一版只支持「单标量场」电子密度 Cube（.cube/.cub，Gaussian cubegen / Multiwfn 导出）：
+   · 读取两行注释、原子数与原点、三个网格轴、原子列表、体素标量值
+   · 原子单位（bohr）→ Å（1 bohr = 0.529177210903 Å，CODATA 2018），统一按网格包围盒中心居中
+   · 明确拒绝：负原子数 / 多数据集（DSET_ID）、多轨道合并、非法头部、NaN/Infinity、整体非正密度
+   · 本模块不依赖 THREE / DOM —— 可在 Node 中直接校验（tools/validate-cube.mjs） */
+
+/* ---------- 集中配置：文件与体素上限（保守、展示在导入面板） ---------- */
+const CUBE_LIMITS = {
+  maxFileBytes: 64 * 1024 * 1024, // 64 MB：典型电子密度 cube 为 1–20 MB
+  maxVoxels: 4 * 1000 * 1000,     // 400 万体素（≈159³ 网格）：超大网格请先在 Multiwfn 降低精度
+};
+const BOHR_TO_ANGSTROM = 0.529177210903; // CODATA 2018
+
+/* ---------- 元素符号表（原子序数 → 符号；公开标准数据） ---------- */
+const ELEMENT_SYMBOLS = ("H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni Cu Zn Ga Ge As Se Br Kr Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe Cs Ba La Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu Hf Ta W Re Os Ir Pt Au Hg Tl Pb Bi Po At Rn Fr Ra Ac Th Pa U Np Pu Am Cm Bk Cf Es Fm Md No Lr Rf Db Sg Bh Hs Mt Ds Rg Cn Nh Fl Mc Lv Ts Og").split(" ");
+function symbolOfZ(z){
+  const i = Math.round(z) - 1;
+  return (i >= 0 && i < ELEMENT_SYMBOLS.length) ? ELEMENT_SYMBOLS[i] : ("X" + Math.round(z));
+}
+
+/* ---------- 共价半径（Å，仅用于「视觉单键推断」，不可当作量子计算输出的键级） ---------- */
+const COVALENT_RADIUS = {
+  H:0.31, He:0.28, Li:1.28, Be:0.96, B:0.84, C:0.76, N:0.71, O:0.66, F:0.57,
+  Ne:0.58, Na:1.66, Mg:1.41, Al:1.21, Si:1.11, P:1.07, S:1.05, Cl:1.02, Ar:1.06,
+  K:2.03, Ca:1.76, Sc:1.70, Ti:1.60, V:1.53, Cr:1.39, Mn:1.39, Fe:1.32, Co:1.26,
+  Ni:1.24, Cu:1.32, Zn:1.22, Ga:1.22, Ge:1.20, As:1.19, Se:1.20, Br:1.20, Kr:1.16,
+  Rb:2.20, Sr:1.95, Y:1.90, Zr:1.75, Nb:1.64, Mo:1.54, Tc:1.47, Ru:1.46, Rh:1.42,
+  Pd:1.39, Ag:1.45, Cd:1.44, In:1.42, Sn:1.39, Sb:1.39, Te:1.38, I:1.39, Xe:1.40,
+};
+function covalentRadius(el){
+  return COVALENT_RADIUS[el] !== undefined ? COVALENT_RADIUS[el] : 0.90;
+}
+
+/* ---------- 小工具（自包含，避免依赖 03_core，便于 Node 校验） ---------- */
+function cubeClamp(v, a, b){ return v < a ? a : (v > b ? b : v); }
+function cubeMulberry32(seed){
+  let a = seed >>> 0;
+  return function (){
+    a += 0x6D2B79F5;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function cubeGauss(rand){
+  const u = Math.max(rand(), 1e-9);
+  const v = rand();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+function cubeError(code, message){
+  const e = new Error(message);
+  e.cubeCode = code;
+  return e;
+}
+
+/* ---------- 惰性文本 token 流（避免一次性 split 出超大数组） ---------- */
+const _WS = " \t\n\r\f\v";
+function cubeTokenize(text, from){
+  let i = from;
+  return function (){
+    while (i < text.length && _WS.indexOf(text[i]) >= 0) i++;
+    if (i >= text.length) return null;
+    let j = i;
+    while (j < text.length && _WS.indexOf(text[j]) < 0) j++;
+    const tok = text.slice(i, j);
+    i = j;
+    return tok;
+  };
+}
+/* 轻量统计：从 from 起剩余 token 个数（只扫字符、不分配字符串，用于消歧“数据集计数前缀”） */
+function cubeCountTokens(text, from){
+  let i = from, count = 0;
+  while (true){
+    while (i < text.length && _WS.indexOf(text[i]) >= 0) i++;
+    if (i >= text.length) break;
+    count++;
+    while (i < text.length && _WS.indexOf(text[i]) < 0) i++;
+  }
+  return count;
+}
+function cubeNextLine(text, from){
+  let i = from;
+  while (i < text.length && text[i] !== "\n") i++;
+  return { line: text.slice(from, i), next: i < text.length ? i + 1 : i };
+}
+
+/* ---------- Cube 解析（纯函数；抛 cubeError，携带用户可理解的 message/code） ---------- */
+function parseCubeText(text){
+  if (typeof text !== "string" || !text.length){
+    throw cubeError("EMPTY", "文件为空或无法读取。请确认导出的是有效的 Gaussian Cube 文件。");
+  }
+  let off = 0;
+  const l1 = cubeNextLine(text, off); off = l1.next;
+  const l2 = cubeNextLine(text, off); off = l2.next;
+  const title = l1.line.trim();
+  const comment = l2.line.trim();
+  const l3 = cubeNextLine(text, off); off = l3.next;
+  const h3 = l3.line.trim().split(/\s+/);
+  if (h3.length < 4){
+    throw cubeError("BAD_HEADER", "文件头错误：第 3 行应为「原子数 原点x 原点y 原点z」（当前：\"" + l3.line.trim() + "\"）。");
+  }
+  const natomsRaw = Number(h3[0]);
+  if (!Number.isFinite(natomsRaw) || natomsRaw === 0){
+    throw cubeError("BAD_HEADER", "文件头错误：原子数无效（" + h3[0] + "）。");
+  }
+  if (natomsRaw < 0){
+    throw cubeError("MULTI_DATASET", "该 Cube 为多数据集文件（负原子数 " + natomsRaw + " / DSET_ID）。请在 Multiwfn 中仅导出单独的电子密度 Cube（single data set）后重试。");
+  }
+  const natoms = Math.round(natomsRaw);
+  const originB = [Number(h3[1]), Number(h3[2]), Number(h3[3])];
+  if (!originB.every(Number.isFinite)){
+    throw cubeError("BAD_HEADER", "文件头错误：原点坐标无效。");
+  }
+  const dims = [0, 0, 0], axesB = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  for (let k = 0; k < 3; k++){
+    const lk = cubeNextLine(text, off); off = lk.next;
+    const hk = lk.line.trim().split(/\s+/);
+    if (hk.length < 4) throw cubeError("BAD_DIMS", "文件头错误：网格轴 " + (k + 1) + " 行无效（应为「点数 vx vy vz」）。");
+    const n = Number(hk[0]);
+    if (!Number.isInteger(n) || n <= 0) throw cubeError("BAD_DIMS", "网格尺寸无效：" + hk[0] + "（应为正整数）。");
+    dims[k] = n;
+    axesB[k] = [Number(hk[1]), Number(hk[2]), Number(hk[3])];
+    if (!axesB[k].every(Number.isFinite)) throw cubeError("BAD_DIMS", "文件头错误：网格轴 " + (k + 1) + " 向量无效。");
+  }
+  const nVox = dims[0] * dims[1] * dims[2];
+  if (nVox > CUBE_LIMITS.maxVoxels){
+    throw cubeError("TOO_MANY_VOXELS", "体素数量 " + nVox.toLocaleString() + " 超过上限 " + CUBE_LIMITS.maxVoxels.toLocaleString() + "（约 159³ 网格）。请在 Multiwfn 中降低网格精度（Grid spacing 调大）后重试。");
+  }
+  // 原子列表（原子单位）
+  const atomsB = [];
+  for (let a = 0; a < natoms; a++){
+    const la = cubeNextLine(text, off); off = la.next;
+    const ha = la.line.trim().split(/\s+/);
+    if (ha.length < 5) throw cubeError("BAD_ATOMS", "原子行 " + (a + 1) + " 格式错误（应为「原子序数 电荷 x y z」）。");
+    const z = Math.round(Number(ha[0]));
+    const q = Number(ha[1]);
+    const p = [Number(ha[2]), Number(ha[3]), Number(ha[4])];
+    if (!Number.isFinite(z) || !Number.isFinite(q) || !p.every(Number.isFinite)){
+      throw cubeError("BAD_ATOMS", "原子行 " + (a + 1) + " 数值无效。");
+    }
+    atomsB.push({ z: z, q: q, pos: p });
+  }
+  // 数据区（体素标量值，x 变化最快：index = ix + nx·iy + nx·ny·iz）
+  const dataRaw = new Float32Array(nVox);
+  let idx = 0, nonFinite = false;
+  // Multiwfn 等工具可能以「数据集计数」整数开头。消歧规则（可解释、不误伤普通数据）：
+  //   先轻量统计剩余 token 数 nRem（不分配字符串）：
+  //   · nRem = 1 + nVox 且首 token 为裸整数 → 数据集计数前缀（=1 单数据集通过；≠1 即多数据集）
+  //   · nRem = 1 + k·nVox（k≥2）且首 token 为裸整数 → 明确多数据集（Multiwfn 多轨道合并）
+  //   · 其余情况 → 首 token 就是普通数据值（标准 cubegen/Gaussian 密度值总是 E 格式，非裸整数）
+  const nRem = cubeCountTokens(text, off);
+  const nextTok = cubeTokenize(text, off);
+  let tok = nextTok();
+  if (tok !== null && /^-?\d+$/.test(tok)){
+    const k = (nRem - 1) / nVox;
+    if (Number.isInteger(k) && k >= 2){
+      throw cubeError("MULTI_DATASET", "该 Cube 含 " + parseInt(tok, 10) + " 个数据集（多数据集 / 多轨道合并）。请在 Multiwfn 中仅导出单独的电子密度 Cube（single data set）后重试。");
+    }
+    if (k === 1){
+      const firstInt = parseInt(tok, 10);
+      if (firstInt !== 1){
+        throw cubeError("MULTI_DATASET", "该 Cube 含 " + firstInt + " 个数据集（多数据集 / 多轨道合并）。请在 Multiwfn 中仅导出单独的电子密度 Cube（single data set）后重试。");
+      }
+      tok = nextTok(); // 跳过数据集计数 "1"
+    }
+  }
+  let count = 0;
+  while (tok !== null){
+    if (idx < nVox){
+      const v = Number(tok);
+      if (!Number.isFinite(v)) nonFinite = true;
+      else dataRaw[idx] = v < 0 ? 0 : v; // 负值（数值噪声）截断为 0；整体非正则拒绝
+      idx++;
+    }
+    count++;
+    tok = nextTok();
+  }
+  if (nonFinite){
+    throw cubeError("NON_FINITE", "体素数据包含 NaN 或 Infinity，无法作为密度场。请重新导出 Cube 文件。");
+  }
+  if (count !== nVox){
+    throw cubeError("DATA_COUNT", "体素数据数量不匹配：应有 " + nVox.toLocaleString() + " 个值，实际读取 " + count.toLocaleString() + " 个。");
+  }
+  // 整体非正密度检查（截断负值后）
+  let vMax = 0, vSum = 0, negCount = 0;
+  for (let i = 0; i < nVox; i++){
+    const v = dataRaw[i];
+    if (v > vMax) vMax = v;
+    vSum += v;
+  }
+  for (const a of atomsB) if (a.q < 0) negCount++;
+  if (vMax <= 0){
+    throw cubeError("NON_POSITIVE", "电子密度整体为非正值（最大值 ≤ 0），无法作为密度场。请确认导出的是电子密度（electron density）而非带正负号的轨道（orbital）Cube。");
+  }
+  return {
+    title: title, comment: comment,
+    natoms: natoms, originB: originB, axesB: axesB, dims: dims, nVox: nVox,
+    atomsB: atomsB, dataRaw: dataRaw,
+    vMin: 0, vMax: vMax, vSum: vSum, vMean: vSum / nVox,
+  };
+}
+
+/* ---------- CubeVolume：体数据（单位换算 + 居中 + 采样 + 统计） ---------- */
+/* 支持非零原点与完整三轴仿射变换（不假设正方体、不以原点为中心）：
+   世界坐标 p 与分数坐标 f 满足  p = origin + f·A  （A 的列 = 三个轴向量）
+   采样时用逆矩阵 f = A⁻¹·(p − origin) 做三线性插值，边界外钳制 */
+function buildCubeVolume(parsed){
+  const dims = parsed.dims, axesB = parsed.axesB, originB = parsed.originB;
+  const axes = axesB.map(function (v){ return [v[0] * BOHR_TO_ANGSTROM, v[1] * BOHR_TO_ANGSTROM, v[2] * BOHR_TO_ANGSTROM]; });
+  const origin = [originB[0] * BOHR_TO_ANGSTROM, originB[1] * BOHR_TO_ANGSTROM, originB[2] * BOHR_TO_ANGSTROM];
+  // 网格中心（世界 Å）→ 统一居中（分子居中，网格与原子一起平移）
+  const center = [
+    origin[0] + ((dims[0] - 1) / 2) * axes[0][0] + ((dims[1] - 1) / 2) * axes[1][0] + ((dims[2] - 1) / 2) * axes[2][0],
+    origin[1] + ((dims[0] - 1) / 2) * axes[0][1] + ((dims[1] - 1) / 2) * axes[1][1] + ((dims[2] - 1) / 2) * axes[2][1],
+    origin[2] + ((dims[0] - 1) / 2) * axes[0][2] + ((dims[1] - 1) / 2) * axes[1][2] + ((dims[2] - 1) / 2) * axes[2][2],
+  ];
+  const orgC = [origin[0] - center[0], origin[1] - center[1], origin[2] - center[2]];
+  const atoms = parsed.atomsB.map(function (a, i){
+    return {
+      idx: i, z: a.z, el: symbolOfZ(a.z), q: a.q,
+      pos: [
+        a.pos[0] * BOHR_TO_ANGSTROM - center[0],
+        a.pos[1] * BOHR_TO_ANGSTROM - center[1],
+        a.pos[2] * BOHR_TO_ANGSTROM - center[2],
+      ],
+    };
+  });
+  // 逆变换矩阵（3×3，Cramer 法则）
+  const m = axes;
+  const det = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+            - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+            + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+  if (!Number.isFinite(det) || Math.abs(det) < 1e-12){
+    throw cubeError("DEGENERATE_AXES", "网格轴线性相关（行列式 ≈ 0），无法构成有效体数据。请重新导出 Cube。");
+  }
+  const inv = [
+    [ (m[1][1] * m[2][2] - m[1][2] * m[2][1]) / det, -(m[0][1] * m[2][2] - m[0][2] * m[2][1]) / det,  (m[0][1] * m[1][2] - m[0][2] * m[1][1]) / det ],
+    [-(m[1][0] * m[2][2] - m[1][2] * m[2][0]) / det,  (m[0][0] * m[2][2] - m[0][2] * m[2][0]) / det, -(m[0][0] * m[1][2] - m[0][2] * m[1][0]) / det ],
+    [ (m[1][0] * m[2][1] - m[1][1] * m[2][0]) / det, -(m[0][0] * m[2][1] - m[0][1] * m[2][0]) / det,  (m[0][0] * m[1][1] - m[0][1] * m[1][0]) / det ],
+  ];
+  const nx = dims[0], ny = dims[1], nz = dims[2], nxy = nx * ny;
+  const dataRaw = parsed.dataRaw;
+  function sample(x, y, z){
+    const dx = x - orgC[0], dy = y - orgC[1], dz = z - orgC[2];
+    let fx = inv[0][0] * dx + inv[0][1] * dy + inv[0][2] * dz;
+    let fy = inv[1][0] * dx + inv[1][1] * dy + inv[1][2] * dz;
+    let fz = inv[2][0] * dx + inv[2][1] * dy + inv[2][2] * dz;
+    fx = cubeClamp(fx, 0, nx - 1.0001);
+    fy = cubeClamp(fy, 0, ny - 1.0001);
+    fz = cubeClamp(fz, 0, nz - 1.0001);
+    const ix = Math.floor(fx), iy = Math.floor(fy), iz = Math.floor(fz);
+    const tx = fx - ix, ty = fy - iy, tz = fz - iz;
+    // 文件体素顺序：x 最快 → index = ix + nx·iy + nx·ny·iz
+    const i000 = ix + nx * iy + nxy * iz;
+    const c000 = dataRaw[i000], c100 = dataRaw[i000 + 1], c010 = dataRaw[i000 + nx], c110 = dataRaw[i000 + nx + 1];
+    const c001 = dataRaw[i000 + nxy], c101 = dataRaw[i000 + nxy + 1], c011 = dataRaw[i000 + nxy + nx], c111 = dataRaw[i000 + nxy + nx + 1];
+    const c00 = c000 * (1 - tx) + c100 * tx, c10 = c010 * (1 - tx) + c110 * tx;
+    const c01 = c001 * (1 - tx) + c101 * tx, c11 = c011 * (1 - tx) + c111 * tx;
+    const c0 = c00 * (1 - ty) + c10 * ty, c1 = c01 * (1 - ty) + c11 * ty;
+    return c0 * (1 - tz) + c1 * tz;
+  }
+  // 边界（世界 Å，居中后）
+  const lo = [orgC[0], orgC[1], orgC[2]];
+  const hi = [
+    orgC[0] + (nx - 1) * axes[0][0] + (ny - 1) * axes[1][0] + (nz - 1) * axes[2][0],
+    orgC[1] + (nx - 1) * axes[0][1] + (ny - 1) * axes[1][1] + (nz - 1) * axes[2][1],
+    orgC[2] + (nx - 1) * axes[0][2] + (ny - 1) * axes[1][2] + (nz - 1) * axes[2][2],
+  ];
+  // 低密度截断（可解释、稳定）：
+  //   cutoff = max(95% 总质量阈值, 0.1% × 峰值)
+  //   · 95% 质量阈值（对数直方图）自适应紧包围盒，保留分子包络；
+  //   · 0.1% × 峰值下限（CUBE_CUT_FRACTION）兜底：松包围盒/非零背景（Multiwfn
+  //     粗网格常见 ~1e-3 a.u.）时，纯质量阈值会跌破背景、把整盒噪声都保留 → 云弥散。
+  //     该下限保证背景（典型 ≤ 1e-3×峰值）被排除，云始终贴分子形状。
+  const nVox = parsed.nVox;
+  const rhoMax = parsed.vMax;
+  const CUBE_CUT_FRACTION = 1e-3;
+  const logMax = Math.log1p(rhoMax);
+  const HIST_BINS = 512;
+  const hist = new Float64Array(HIST_BINS);
+  const binOf = function (v){ return v <= 0 ? 0 : Math.min(HIST_BINS - 1, Math.floor(Math.log1p(v) / logMax * HIST_BINS)); };
+  for (let i = 0; i < nVox; i++) hist[binOf(dataRaw[i])] += dataRaw[i];
+  const totalMass = parsed.vSum;
+  let massCut = 0, acc = 0;
+  for (let b = HIST_BINS - 1; b >= 0; b--){
+    const binMass = hist[b];
+    if (acc + binMass >= totalMass * 0.95){
+      const need = totalMass * 0.95 - acc;
+      const frac = binMass > 0 ? cubeClamp(need / binMass, 0, 1) : 0;
+      const binLo = (b / HIST_BINS) * logMax, binHi = ((b + 1) / HIST_BINS) * logMax;
+      massCut = Math.expm1(binLo + (binHi - binLo) * (1 - frac));
+      break;
+    }
+    acc += binMass;
+  }
+  const cutoff = Math.max(massCut, rhoMax * CUBE_CUT_FRACTION);
+  // 采样 CDF（仅保留 ≥ cutoff 的体素；权重 = log1p(ρ/cutoff − 1)，对数密度加权：
+  // 核心与价层均可见（每体素仅差 ~3×），仍严格随密度单调、可解释）
+  const cdf = new Float64Array(nVox);
+  let totalW = 0, kept = 0;
+  for (let i = 0; i < nVox; i++){
+    const v = dataRaw[i];
+    if (v >= cutoff){ totalW += Math.log1p(v / cutoff - 1); kept++; }
+    cdf[i] = totalW;
+  }
+  return {
+    title: parsed.title, comment: parsed.comment,
+    fileName: parsed.fileName || null,
+    atoms: atoms, natoms: atoms.length,
+    origin: orgC, axes: axes, dims: dims, nVox: nVox,
+    data: dataRaw,
+    inv: inv,
+    sample: sample,
+    bounds: { min: lo, max: hi },
+    rhoMax: rhoMax, rhoCut: cutoff, keptVoxels: kept, keptFraction: kept / nVox,
+    cdf: cdf, totalW: totalW,
+    vMean: parsed.vMean, vSum: parsed.vSum,
+  };
+}
+
+/* ---------- 按真实密度权重采样粒子目标分布（替代 computeField 伪造分布） ---------- */
+function sampleCloudCube(vol, count){
+  const cdf = vol.cdf, totalW = vol.totalW;
+  const nx = vol.dims[0], ny = vol.dims[1], nz = vol.dims[2], nxy = nx * ny;
+  const org = vol.origin, ax = vol.axes;
+  // 颜色密度：以截断阈值为 0、峰值为 1 的对数重映射（真实密度跨 5 个数量级，
+  // 直接 log1p(ρ)/log1p(ρmax) 会让分子包络整片贴向 LUT 暗端 → 云看起来弥散/不可见）
+  const logCut = Math.log1p(Math.max(vol.rhoCut, 1e-12));
+  const logMax = Math.log1p(vol.rhoMax);
+  const denRange = Math.max(logMax - logCut, 1e-6);
+  const DEN_FLOOR = 0.12; // 包络最低可见度（LUT 暗端之上）
+  const rand = cubeMulberry32(20260828);
+  const pos = new Float32Array(count * 3);
+  const size = new Float32Array(count);
+  const bright = new Float32Array(count);
+  const density = new Float32Array(count);
+  const seed = new Float32Array(count * 3);
+  const delay = new Float32Array(count);
+  for (let i = 0; i < count; i++){
+    const r = rand() * totalW;
+    let lo = 0, hi = cdf.length - 1;
+    while (lo < hi){ const mid = (lo + hi) >> 1; if (cdf[mid] < r) lo = mid + 1; else hi = mid; }
+    const li = lo;
+    const iz = Math.floor(li / nxy);
+    const rem = li - iz * nxy;
+    const iy = Math.floor(rem / nx);
+    const ix = rem - iy * nx;
+    const u = rand(), v = rand(), w = rand();
+    const px = org[0] + (ix + u) * ax[0][0] + (iy + v) * ax[1][0] + (iz + w) * ax[2][0];
+    const py = org[1] + (ix + u) * ax[0][1] + (iy + v) * ax[1][1] + (iz + w) * ax[2][1];
+    const pz = org[2] + (ix + u) * ax[0][2] + (iy + v) * ax[1][2] + (iz + w) * ax[2][2];
+    const rho = vol.sample(px, py, pz);
+    const rhoC = Math.max(rho, vol.rhoCut);
+    const dAttr = cubeClamp(DEN_FLOOR + (1 - DEN_FLOOR) * (Math.log1p(rhoC) - logCut) / denRange, 0, 1);
+    pos[i * 3] = px; pos[i * 3 + 1] = py; pos[i * 3 + 2] = pz;
+    size[i] = 0.55 + rand() * 0.75 + 0.35 * Math.min(rho / vol.rhoMax, 1);
+    bright[i] = cubeClamp(0.14 + 0.28 * dAttr + rand() * 0.16, 0.05, 0.55);
+    density[i] = dAttr;
+    seed[i * 3] = rand(); seed[i * 3 + 1] = rand(); seed[i * 3 + 2] = rand();
+    delay[i] = 0;
+  }
+  return { pos: pos, size: size, bright: bright, density: density, seed: seed, delay: delay };
+}
+
+/* ---------- 视觉单键推断（元素 + 距离 + 共价半径；仅供骨架流动路径，不是 QM 键级） ---------- */
+function inferSingleBonds(atoms){
+  const bonds = [];
+  for (let i = 0; i < atoms.length; i++){
+    for (let j = i + 1; j < atoms.length; j++){
+      const a = atoms[i].pos, b = atoms[j].pos;
+      const d = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+      const rc = covalentRadius(atoms[i].el) + covalentRadius(atoms[j].el);
+      if (d < rc + 0.45) bonds.push({ i: i, j: j, order: 1 });
+    }
+  }
+  return bonds;
+}
+
+/* ---------- 由 CubeVolume 构建渲染用分子对象（原子 + 推断单键） ---------- */
+function buildCubeMolecule(vol){
+  const atoms = vol.atoms.map(function (a, i){
+    return { el: a.el, pos: a.pos.slice(), key: "cube#" + i, atomIdx: i, fragId: -1, localIdx: -1 };
+  });
+  const bonds = inferSingleBonds(atoms);
+  return { atoms: atoms, bonds: bonds, fragments: [], isCube: true };
+}

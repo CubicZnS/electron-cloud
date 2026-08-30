@@ -135,6 +135,9 @@ window.__APP = {
   getMol: function (){ return currentMol; },
   crApply: crApply,
   toggleCreator: toggleCreator,
+  toggleQuantumPanel: toggleQuantumPanel,
+  exitCubeMode: exitCubeMode,
+  importCubeFile: handleCubeFile,
   crState: function (){ return { pts: creatorState.pts.length, bonds: creatorState.bonds.length, groups: creatorState.groups.slice(), tool: creatorState.tool }; },
   getHover: function (){
     const r = hoverAnims.length ? hoverAnims[hoverAnims.length - 1] : hoverRec;
@@ -149,6 +152,15 @@ window.__APP = {
       fps: Math.round(fpsEma),
       transActive: cloud ? (simTime - cloud.uniforms.uTransStart.value) < cloud.uniforms.uTransDur.value : false,
       simTime: +simTime.toFixed(2),
+      cube: {
+        active: cubeMode,
+        state: cubeUI.state,
+        file: cubeUI.file ? cubeUI.file.name : null,
+        voxels: cubeUI.volume ? cubeUI.volume.nVox : 0,
+        atoms: cubeUI.volume ? cubeUI.volume.natoms : 0,
+        rhoMax: cubeUI.volume ? cubeUI.volume.rhoMax : 0,
+        keptFraction: cubeUI.volume ? +cubeUI.volume.keptFraction.toFixed(4) : 0,
+      },
     };
   },
 };

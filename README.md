@@ -1,9 +1,11 @@
 # Electron Cloud · 有机化合物电子效应可视化
 
-GPU 粒子电子云交互可视化：分子 · 电子云 · 诱导效应 / 共轭效应 · 自由碳架创造模式。
-半定量教学演示（非量子化学计算），密度着色、官能团取代、σ 骨架电子流全部实时。
+GPU 粒子电子云交互可视化：分子 · 电子云 · 诱导效应 / 共轭效应 · 自由碳架创造模式 · Quantum Data 电子密度 Cube 导入。
+半定量教学演示（非量子化学计算），密度着色、官能团取代、σ 骨架电子流全部实时；也可导入 Gaussian cubegen / Multiwfn 导出的真实电子密度 Cube（.cube/.cub）驱动粒子云（本地解析，不上传）。
 
 > by CubicZnS · 单文件 HTML 产物，无构建依赖（three.js 由 CDN 加载）
+>
+> **当前版本：v2.0.0（Quantum Data 电子密度 Cube 导入）** · 版本历史见 [CHANGELOG.md](CHANGELOG.md)
 
 ## 功能
 
@@ -14,6 +16,7 @@ GPU 粒子电子云交互可视化：分子 · 电子云 · 诱导效应 / 共�
 - **官能团取代**：11 种常见基团（CH₃/OH/OMe/NH₂/F/Cl/CF₃/CN/NO₂/CHO/COOH），点击原子/取代 H 挂载，多取代按剩余价键限制，价键超 4 自动拦截
 - **创造模式（自由碳架）**：六方网格绘制碳架，支持单/双/三键；交替单双 4n+2 环按 Hückel 规则自动芳香化（环烷保持 sp³）；力松弛嵌入给出标准键长/键角（sp³ 109.47° 正四面体、sp² 120°、sp 180°）；canonical SMILES 唯一拓扑识别（苯/硝基苯/烷烃/烯/炔…）
 - **碳架本征密度基线**：杂化轨道电负性（Hinze–Jaffé）+ C–H 极化（Pauling），初始碳架密度即不均匀（CH₃ 富 > CH₂ > CH > 季碳；芳香 > 烷基）
+- **Quantum Data（电子密度 Cube 导入）**：底部 Quantum Data 入口导入 Gaussian cubegen / Multiwfn 导出的单标量场电子密度 `.cube/.cub`（64 MB / 400 万体素上限，本地解析不上传）；bohr→Å 换算并按网格中心居中；粒子按真实密度权重采样（对数密度加权；低密度截断 = max(95% 总质量阈值, 0.1%×峰值) 双保险，松包围盒/非零背景也不会弥散）；复用现有粒子过渡 / 色图 LUT / Bloom / 画质切换；图例标注 `Imported electron density`；导入模式下 Total/Inductive/Resonance 与官能团替换禁用并说明原因，可一键退出回半定量模式
 - Explain 模式 / 诱导-共轭分解模式 / 性能自适应降级 / 悬停密度标签
 
 ## 快速开始
@@ -33,8 +36,8 @@ python3 -m http.server 8080
 | 路径 | 说明 |
 |---|---|
 | `index.html` | **单文件产物**（自包含：样式/着色器/数据/逻辑全部内嵌） |
-| `parts/` | 源码分片（01_head → 08_tail），`tools/build.mjs` 组装 |
-| `tools/` | 构建（build.mjs）、数据生成（gen-molecules.mjs）、σ 校验（validate-sigma.mjs，15/15 通过） |
+| `parts/` | 源码分片（01_head → 08_tail；新增 03b_cube.js 纯 Cube 解析/采样模块、06b_cube_ui.js 导入面板），`tools/build.mjs` 组装 |
+| `tools/` | 构建（build.mjs）、数据生成（gen-molecules.mjs）、σ 校验（validate-sigma.mjs，15/15 通过）、Cube 校验（validate-cube.mjs，35/35 通过） |
 | `docs/RESEARCH.md` | 技术方案与模型推导（化学引擎/密度/构型/性能） |
 | `docs/REFERENCES.md` | 全部复用资源与许可证清单（务必随项目分发） |
 
