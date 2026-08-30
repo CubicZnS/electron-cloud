@@ -166,12 +166,15 @@ function parseCubeText(text){
       tok = nextTok(); // 跳过数据集计数 "1"
     }
   }
-  let count = 0;
+  let count = 0, negVox = 0;
   while (tok !== null){
     if (idx < nVox){
       const v = Number(tok);
       if (!Number.isFinite(v)) nonFinite = true;
-      else dataRaw[idx] = v < 0 ? 0 : v; // 负值（数值噪声）截断为 0；整体非正则拒绝
+      else {
+        if (v < 0) negVox++;
+        dataRaw[idx] = v < 0 ? 0 : v; // 负值（数值噪声）截断为 0；带符号字段整体拒绝（见下）
+      }
       idx++;
     }
     count++;
@@ -184,15 +187,19 @@ function parseCubeText(text){
     throw cubeError("DATA_COUNT", "体素数据数量不匹配：应有 " + nVox.toLocaleString() + " 个值，实际读取 " + count.toLocaleString() + " 个。");
   }
   // 整体非正密度检查（截断负值后）
-  let vMax = 0, vSum = 0, negCount = 0;
+  let vMax = 0, vSum = 0;
   for (let i = 0; i < nVox; i++){
     const v = dataRaw[i];
     if (v > vMax) vMax = v;
     vSum += v;
   }
-  for (const a of atomsB) if (a.q < 0) negCount++;
   if (vMax <= 0){
     throw cubeError("NON_POSITIVE", "电子密度整体为非正值（最大值 ≤ 0），无法作为密度场。请确认导出的是电子密度（electron density）而非带正负号的轨道（orbital）Cube。");
+  }
+  // 带符号字段拒绝：电子密度处处非负，若负值体素占比显著（>20%），必是轨道/静电势等
+  // 带符号标量场——正负各半、全盒有值，截断负值后必然铺满全盒 → 云弥散。直接拒绝并引导重导出。
+  if (negVox / nVox > 0.20){
+    throw cubeError("SIGNED_FIELD", "该 Cube 含大量负值（" + (negVox / nVox * 100).toFixed(1) + "% 体素为负），不是电子密度（可能是 HOMO/LUMO 轨道、静电势 ESP 等带符号字段）。请在 Multiwfn 中导出 electron density 后再导入。");
   }
   return {
     title: title, comment: comment,

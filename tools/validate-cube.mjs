@@ -143,6 +143,13 @@ const cubeText = (lines) => lines.join("\n");
   const base = ["t", "d", "1  0 0 0", "2  1 0 0", "2  0 1 0", "2  0 0 1", "6  6 0 0 0"];
   expectError("NaN/Infinity 拒绝", () => m.parseCubeText(cubeText(base.concat(["1 2 NaN 4 5 6 7 Infinity"]))), "NON_FINITE");
   expectError("整体非正密度拒绝", () => m.parseCubeText(cubeText(base.concat(["-1 -2 -3 -4 -5 -6 -7 -8"]))), "NON_POSITIVE");
+  // 带符号字段（轨道/ESP）：负值体素 >20% → 拒绝（正负各半的字段截断负值后必然铺满全盒 → 云弥散）
+  expectError("带符号字段拒绝（轨道/ESP 形态）", () => m.parseCubeText(cubeText(base.concat(["-0.1 0.2 -0.3 0.4 -0.5 0.6 -0.7 0.8"]))), "SIGNED_FIELD");
+  // 数值噪声级负值（<20%）应放行
+  {
+    const ok = m.parseCubeText(cubeText(base.concat(["1.0 2.0 -1e-9 4.0 5.0 6.0 7.0 8.0"])));
+    check("数值噪声级负值放行（非带符号字段）", ok.nVox === 8, "nVox=" + ok.nVox);
+  }
   const mol = m.buildCubeMolecule({ atoms: [
     { el: "C", pos: [0, 0, 0] }, { el: "C", pos: [1.54, 0, 0] }, { el: "H", pos: [-0.5, 0.9, 0] },
   ] });

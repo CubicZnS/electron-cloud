@@ -2,6 +2,22 @@
 
 本项目采用语义化版本（SemVer）：主版本号 = 功能里程碑，次版本号 = 兼容性新功能，补丁号 = 修复。
 
+## [v2.0.1] — 2026-08-31 · 修复：导入带符号字段（HOMO/LUMO 轨道、ESP）导致云弥散
+
+### 修复
+- **带符号字段拒绝**（parts/03b_cube.js）：电子密度处处非负；若负值体素占比 > 20%，判定为 HOMO/LUMO 轨道、静电势 ESP 等带符号标量场并拒绝（SIGNED_FIELD），提示在 Multiwfn 中导出 electron density 后再导入。
+  - 背景：真实案例 ASPIRIN_HOMO47.cub（Multiwfn 导出的阿司匹林 HOMO 轨道，42.1% 体素为负）——旧实现把负值截断为 0 后，正值布满全盒 → 云弥散；现已改为友好错误且不改变当前场景。
+- 数值噪声级负值（<20%，如 -1e-9）正常放行。
+
+### 验证
+- node tools/validate-cube.mjs：41/41（新增带符号字段拒绝、数值噪声负值放行两项测试）
+- node tools/validate-sigma.mjs：15/15；node tools/build.mjs：SYNTAX_OK
+
+### 文件
+- 修改：parts/03b_cube.js、tools/validate-cube.mjs、index.html（组装产物）
+
+---
+
 ## [v2.0.0] — 2026-08-31 · Quantum Data：真实电子密度 Cube 导入
 
 ### 新增功能
