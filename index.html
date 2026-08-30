@@ -305,6 +305,7 @@ const MODE_COLORS = {
 const MODE_LABEL = { total:"Total", inductive:"Inductive", resonance:"Resonance" };
 const FX_MODE = { total:{i:1,r:1}, inductive:{i:1,r:0}, resonance:{i:0,r:1} };
 const QUALITY = {
+  LITE:   { count: 12000,  bloom: 0.00, radius: 0.50, threshold: 0.60, psize: 0.050 },
   LOW:    { count: 40000,  bloom: 0.35, radius: 0.50, threshold: 0.50, psize: 0.042 },
   MEDIUM: { count: 80000,  bloom: 0.42, radius: 0.55, threshold: 0.47, psize: 0.038 },
   HIGH:   { count: 160000, bloom: 0.50, radius: 0.55, threshold: 0.45, psize: 0.034 },
@@ -1627,6 +1628,15 @@ const CLOUD_FRAGMENT = [
 
 /* ================= three.js 场景 ================= */
 const DEBUG = new URLSearchParams(location.search).has("debug");
+// 崩溃自愈检测：上次加载异常终止（无 beforeunload）→ 判定崩溃 → 进入极简档
+try {
+  if (sessionStorage.getItem("ec_crash") === "1") window.__CRASHED = true;
+  sessionStorage.setItem("ec_crash", "1");
+  window.addEventListener("beforeunload", function (){ try { sessionStorage.removeItem("ec_crash"); } catch (e){} });
+} catch (e){}
+const IS_TOUCH = ("ontouchstart" in window) || (navigator.maxTouchPoints || 0) > 0;
+const IS_MOBILE = IS_TOUCH || window.innerWidth < 768;
+const IS_LITE = !!window.__CRASHED; // 崩溃过一次 → 极简档（12k 粒子、无 bloom、DPR 1）
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x04060a);
 const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -1645,7 +1655,7 @@ function showFatal(msg){
   } catch (e){ showFatal("WebGL 初始化失败：" + e.message); }
   renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
 })();
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, IS_LITE || IS_MOBILE ? 1 : 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
@@ -1685,8 +1695,10 @@ function buildComposer(){
   const rt = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, { type: THREE.HalfFloatType });
   composer = new EffectComposer(renderer, rt);
   composer.addPass(new RenderPass(scene, camera));
-  bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.5, 0.55, 0.45);
-  composer.addPass(bloomPass);
+  if (!IS_LITE){
+    bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.5, 0.55, 0.45);
+    composer.addPass(bloomPass);
+  }
   composer.addPass(new OutputPass());
 }
 buildComposer();
@@ -2587,9 +2599,11 @@ function setQuality(q, auto){
     try { localStorage.setItem("ec_quality", q); } catch (e){}
   }
   const Q = QUALITY[q];
-  bloomPass.strength = Q.bloom;
-  bloomPass.radius = Q.radius;
-  bloomPass.threshold = Q.threshold;
+  if (bloomPass){
+    bloomPass.strength = Q.bloom;
+    bloomPass.radius = Q.radius;
+    bloomPass.threshold = Q.threshold;
+  }
   if (cloud) cloud.uniforms.uParticleSize.value = Q.psize;
   if (cloud && cloud.count !== Q.count) setParticleCount(Q.count);
   document.querySelectorAll("#qualitySeg .seg-btn").forEach(function (b){ b.classList.toggle("active", b.dataset.q === q); });
@@ -3188,13 +3202,12 @@ function tick(){
 // 移动端/触摸设备默认低档粒子（40k），避免手机 GPU/内存压力导致页面被系统杀进程重载；
 // 用户手动选择过画质则记住（localStorage）
 (function (){
+  if (IS_LITE){ SETTINGS.quality = "LITE"; return; } // 崩溃自愈：极简档优先
   try {
     const saved = localStorage.getItem("ec_quality");
     if (saved && QUALITY[saved]){ SETTINGS.quality = saved; return; }
   } catch (e){}
-  const small = window.innerWidth < 768;
-  const touch = ("ontouchstart" in window) || (navigator.maxTouchPoints || 0) > 0;
-  if (small || touch) SETTINGS.quality = "LOW";
+  if (IS_MOBILE) SETTINGS.quality = "LOW";
 })();
 currentMol = buildMolecule([]);
 currentField = computeField(currentMol, SETTINGS.mode);

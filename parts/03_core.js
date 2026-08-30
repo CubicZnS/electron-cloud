@@ -30,6 +30,7 @@ const MODE_COLORS = {
 const MODE_LABEL = { total:"Total", inductive:"Inductive", resonance:"Resonance" };
 const FX_MODE = { total:{i:1,r:1}, inductive:{i:1,r:0}, resonance:{i:0,r:1} };
 const QUALITY = {
+  LITE:   { count: 12000,  bloom: 0.00, radius: 0.50, threshold: 0.60, psize: 0.050 },
   LOW:    { count: 40000,  bloom: 0.35, radius: 0.50, threshold: 0.50, psize: 0.042 },
   MEDIUM: { count: 80000,  bloom: 0.42, radius: 0.55, threshold: 0.47, psize: 0.038 },
   HIGH:   { count: 160000, bloom: 0.50, radius: 0.55, threshold: 0.45, psize: 0.034 },

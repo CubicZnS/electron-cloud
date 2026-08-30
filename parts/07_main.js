@@ -71,13 +71,12 @@ function tick(){
 // 移动端/触摸设备默认低档粒子（40k），避免手机 GPU/内存压力导致页面被系统杀进程重载；
 // 用户手动选择过画质则记住（localStorage）
 (function (){
+  if (IS_LITE){ SETTINGS.quality = "LITE"; return; } // 崩溃自愈：极简档优先
   try {
     const saved = localStorage.getItem("ec_quality");
     if (saved && QUALITY[saved]){ SETTINGS.quality = saved; return; }
   } catch (e){}
-  const small = window.innerWidth < 768;
-  const touch = ("ontouchstart" in window) || (navigator.maxTouchPoints || 0) > 0;
-  if (small || touch) SETTINGS.quality = "LOW";
+  if (IS_MOBILE) SETTINGS.quality = "LOW";
 })();
 currentMol = buildMolecule([]);
 currentField = computeField(currentMol, SETTINGS.mode);

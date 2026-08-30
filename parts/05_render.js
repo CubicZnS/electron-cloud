@@ -1,5 +1,14 @@
 /* ================= three.js 场景 ================= */
 const DEBUG = new URLSearchParams(location.search).has("debug");
+// 崩溃自愈检测：上次加载异常终止（无 beforeunload）→ 判定崩溃 → 进入极简档
+try {
+  if (sessionStorage.getItem("ec_crash") === "1") window.__CRASHED = true;
+  sessionStorage.setItem("ec_crash", "1");
+  window.addEventListener("beforeunload", function (){ try { sessionStorage.removeItem("ec_crash"); } catch (e){} });
+} catch (e){}
+const IS_TOUCH = ("ontouchstart" in window) || (navigator.maxTouchPoints || 0) > 0;
+const IS_MOBILE = IS_TOUCH || window.innerWidth < 768;
+const IS_LITE = !!window.__CRASHED; // 崩溃过一次 → 极简档（12k 粒子、无 bloom、DPR 1）
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x04060a);
 const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -18,7 +27,7 @@ function showFatal(msg){
   } catch (e){ showFatal("WebGL 初始化失败：" + e.message); }
   renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
 })();
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, IS_LITE || IS_MOBILE ? 1 : 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
@@ -58,8 +67,10 @@ function buildComposer(){
   const rt = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, { type: THREE.HalfFloatType });
   composer = new EffectComposer(renderer, rt);
   composer.addPass(new RenderPass(scene, camera));
-  bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.5, 0.55, 0.45);
-  composer.addPass(bloomPass);
+  if (!IS_LITE){
+    bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.5, 0.55, 0.45);
+    composer.addPass(bloomPass);
+  }
   composer.addPass(new OutputPass());
 }
 buildComposer();

@@ -50,9 +50,11 @@ function setQuality(q, auto){
     try { localStorage.setItem("ec_quality", q); } catch (e){}
   }
   const Q = QUALITY[q];
-  bloomPass.strength = Q.bloom;
-  bloomPass.radius = Q.radius;
-  bloomPass.threshold = Q.threshold;
+  if (bloomPass){
+    bloomPass.strength = Q.bloom;
+    bloomPass.radius = Q.radius;
+    bloomPass.threshold = Q.threshold;
+  }
   if (cloud) cloud.uniforms.uParticleSize.value = Q.psize;
   if (cloud && cloud.count !== Q.count) setParticleCount(Q.count);
   document.querySelectorAll("#qualitySeg .seg-btn").forEach(function (b){ b.classList.toggle("active", b.dataset.q === q); });
