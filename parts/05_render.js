@@ -409,7 +409,7 @@ function createCloud(n){
     vertexShader: CLOUD_VERTEX,
     fragmentShader: CLOUD_FRAGMENT,
     uniforms: uniforms,
-    defines: (IS_LITE ? { SIMPLE: 1 } : {}), // 极简档：#ifdef SIMPLE 不编译噪声函数（移动 GPU 崩溃防护）
+    defines: ((IS_MOBILE || IS_LITE) ? { SIMPLE: 1 } : {}), // 移动/极简：#ifdef SIMPLE 编译期移除噪声函数（Safari 驱动崩溃防护；桌面保留完整噪声）
     transparent: true,
     depthWrite: false,
     depthTest: true,
