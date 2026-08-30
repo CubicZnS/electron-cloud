@@ -169,6 +169,8 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
 #qdErr.show{display:block}
 #qdApply{padding:8px 0;font-size:11px;letter-spacing:1px}
 .qd-hint{font-size:9px;color:var(--faint);letter-spacing:.5px;line-height:1.7}
+.qd-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.qd-row .qd-label{font-size:10px;color:var(--dim);letter-spacing:.5px}
 .seg-btn.disabled{opacity:.35;pointer-events:none;cursor:not-allowed}
 #explainBtn.disabled{opacity:.35;pointer-events:none}
 #debugPanel{position:fixed;right:16px;bottom:64px;z-index:40;width:236px;padding:12px 14px;display:none}
@@ -306,6 +308,14 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
   <div id="qdDrop">拖放 <b>.cube / .cub</b> 文件到此处<br/><span class="pick">Choose Cube file</span></div>
   <div class="qd-meta" id="qdMeta" style="display:none"></div>
   <div id="qdErr"></div>
+  <div class="qd-row" id="qdOrbitalRow" style="display:none">
+    <span class="qd-label">轨道标注（仅图例文字）</span>
+    <select id="qdOrbitalLabel" class="cmap-sel">
+      <option value="HOMO" selected>HOMO（最高占据轨道）</option>
+      <option value="LUMO">LUMO（最低未占据轨道）</option>
+      <option value="other">其他轨道（未标注）</option>
+    </select>
+  </div>
   <button class="dshell-btn" id="qdApply" style="display:none">Apply electron density</button>
   <div class="qd-hint" id="qdLimits">限制：文件 ≤ 64 MB · 体素 ≤ 4,000,000（约 159³ 网格）。超出请用 Multiwfn 调大 Grid spacing 后重试。</div>
   <input type="file" id="qdFile" accept=".cube,.cub" style="display:none"/>

@@ -1,9 +1,29 @@
 本项目采用语义化版本（SemVer）：主版本号 = 功能里程碑，次版本号 = 兼容性新功能，补丁号 = 修复。
 
-## [v2.1.0] — 2026-08-31 · 字段类型自动检测（诚实启发式）
+## [v2.2.0] — 2026-08-31 · 前线轨道可视化（双色相位粒子云）
 
 ### 新增功能
-- **字段类型估计**（parts/03b_cube.js 的 estimateCubeFieldType）：Cube 格式无标准属性标签（Multiwfn 头部不写属性名），通过「注释行关键词（若有）+ 数据统计（负值占比/峰值量级/有界性）」给出类型估计与置信度：
+- **轨道模式**：导入带符号字段（HOMO/LUMO 等分子轨道）不再拒绝，自动路由到轨道模式——粒子按 |ψ| 分布、颜色按相位 sign(ψ) 分正/负双色（正=暖色紫红→橙→黄，负=冷色深蓝→蓝→青，VMD/Jmol 惯例），节点面 ψ=0 处无粒子 → 天然呈现节面空隙
+- **数据层**（parts/03b_cube.js）：parseCubeText 支持 allowSigned（保留原始带符号值）；buildCubeVolume 支持 mode:orbital（|ψ| 幅值截断 max(95% 质量, 1e-4×峰值) + |ψ| 对数加权采样）；sampleCloudCube 输出 sign 数组
+- **着色器**（parts/04_glsl.js）：vSign varying（存于 aProps.w，随过渡平滑交叉渐变——相位扫过 0 时颜色翻转）+ 双 LUT uniform（uDensityTex/uDensityTexNeg）+ uOrbitalSign 分支；密度/半定量模式不受影响（sign 恒 0、单 LUT）
+- **渲染**（parts/05_render.js）：setOrbitalRender(on) 切换固定正/负相位 LUT；props.w 写入 sign（过渡 + 粒子数变更均携带）
+- **UI**（parts/06b_cube_ui.js）：字段统计路由（>20% 负值或注释行轨道 → 轨道模式）；面板「轨道标注」选择器（HOMO/LUMO/其他，仅图例文字——不假装自动推断）；轨道图例含正/负相位双色条与节点说明；轨道模式色图选择器停用
+
+### 诚实边界
+- 不自动推断 HOMO vs LUMO：Multiwfn 文件无标签，由用户手动标注（仅影响图例文字）；Gaussian 注释行若含轨道序号会显示
+- 轨道/ESP 等带符号字段统一按「双色相位」渲染（|ψ| 分布 + sign 配色）；|ψ|² 型（非负轨道密度）自动按密度模式渲染
+
+### 验证
+- node tools/validate-cube.mjs：53/53（新增 7 项轨道测试：默认拒绝→allowSigned 保留、|ψ| 截断、相位双色采样、密度模式 sign 恒 0）
+- node tools/validate-sigma.mjs：15/15；node tools/build.mjs：SYNTAX_OK
+- 真实文件 ASPIRIN_HOMO47.cub（Multiwfn HOMO 轨道）：解析 129ms，|ψ|max≈0.315，相位 52%/48% 平衡，粒子全有限
+
+### 文件
+- 修改：parts/03b_cube.js、parts/04_glsl.js、parts/05_render.js、parts/06b_cube_ui.js、parts/01_head.html、parts/03_core.js、tools/validate-cube.mjs、index.html（组装产物）、CHANGELOG.md、README.md
+
+---
+
+## [v2.1.0] — 2026-08-31 · 字段类型自动检测（诚实启发式）
   - 注释行明确（Gaussian 写 Density / Orbital N / ESP / ELF / Laplacian）→ 高置信标注
   - 数据统计：负值体素 >20% → 带符号标量场（分子轨道或 ESP，高置信，不假装区分二者）；非负 + 高峰值 → 可能为电子密度（中置信）；非负 + 0–1 有界 → 非负标量场（低置信，可能 ELF）；少量负值 → 密度差/噪声（低置信）
 - **面板元数据显示「字段类型」行**：如「带符号标量场（分子轨道或 ESP，非电子密度）（置信：高）」

@@ -124,7 +124,9 @@ function cubeNextLine(text, from){
 }
 
 /* ---------- Cube 解析（纯函数；抛 cubeError，携带用户可理解的 message/code） ---------- */
-function parseCubeText(text){
+function parseCubeText(text, opts){
+  // opts.allowSigned = true → 保留原始带符号体素值（轨道模式）；false（默认）→ 截断负值（密度模式）
+  const allowSigned = !!(opts && opts.allowSigned);
   if (typeof text !== "string" || !text.length){
     throw cubeError("EMPTY", "文件为空或无法读取。请确认导出的是有效的 Gaussian Cube 文件。");
   }
@@ -212,7 +214,8 @@ function parseCubeText(text){
         const a = Math.abs(v);
         if (a > maxAbs) maxAbs = a;
         if (v < 0) negVox++;
-        dataRaw[idx] = v < 0 ? 0 : v; // 负值（数值噪声）截断为 0；带符号字段整体拒绝（见下）
+        // 密度模式：负值截断为 0；轨道模式：保留原始带符号值（相位信息）
+        dataRaw[idx] = allowSigned ? v : (v < 0 ? 0 : v);
       }
       idx++;
     }
@@ -225,21 +228,22 @@ function parseCubeText(text){
   if (count !== nVox){
     throw cubeError("DATA_COUNT", "体素数据数量不匹配：应有 " + nVox.toLocaleString() + " 个值，实际读取 " + count.toLocaleString() + " 个。");
   }
-  // 整体非正密度检查（截断负值后）
+  // 统计：vMax/vSum 一律按「幅值 |v|」（密度模式负值已截断，等价于原逻辑）
   let vMax = 0, vSum = 0;
   for (let i = 0; i < nVox; i++){
     const v = dataRaw[i];
-    if (v > vMax) vMax = v;
-    vSum += v;
+    const m = v < 0 ? -v : v;
+    if (m > vMax) vMax = m;
+    vSum += m;
   }
   // 字段类型估计（注释行关键词 + 数据统计；诚实标注置信度，不假装识别 HOMO/LUMO）
   const fieldType = estimateCubeFieldType({ title: title, comment: comment, negVox: negVox, nVox: nVox, vMax: vMax, maxAbs: maxAbs });
   if (vMax <= 0){
     throw cubeError("NON_POSITIVE", "电子密度整体为非正值（最大值 ≤ 0），无法作为密度场。请确认导出的是电子密度（electron density）而非带正负号的轨道（orbital）Cube。");
   }
-  // 带符号字段拒绝：电子密度处处非负，若负值体素占比显著（>20%），必是轨道/静电势等
-  // 带符号标量场——正负各半、全盒有值，截断负值后必然铺满全盒 → 云弥散。直接拒绝并引导重导出。
-  if (negVox / nVox > 0.20){
+  // 带符号字段：电子密度处处非负。默认（密度模式）拒绝 >20% 负值的带符号字段并引导；
+  // allowSigned（轨道模式）保留原始相位，交给上层按轨道模式渲染。
+  if (!allowSigned && negVox / nVox > 0.20){
     const zh = fieldType.type === "orbital" ? "（注释行标注为分子轨道）"
       : fieldType.type === "esp" ? "（注释行标注为静电势 ESP）"
       : fieldType.type === "laplacian" ? "（注释行标注为 Laplacian）"
@@ -253,6 +257,7 @@ function parseCubeText(text){
     atomsB: atomsB, dataRaw: dataRaw,
     vMin: 0, vMax: vMax, vSum: vSum, vMean: vSum / nVox,
     negVox: negVox, maxAbs: maxAbs, fieldType: fieldType,
+    signed: allowSigned,
   };
 }
 
@@ -260,7 +265,9 @@ function parseCubeText(text){
 /* 支持非零原点与完整三轴仿射变换（不假设正方体、不以原点为中心）：
    世界坐标 p 与分数坐标 f 满足  p = origin + f·A  （A 的列 = 三个轴向量）
    采样时用逆矩阵 f = A⁻¹·(p − origin) 做三线性插值，边界外钳制 */
-function buildCubeVolume(parsed){
+function buildCubeVolume(parsed, opts){
+  // opts.mode: "density"（默认）| "orbital"——轨道模式按 |ψ| 做截断/采样，保留相位（符号）用于双色渲染
+  const signed = !!(opts && opts.mode === "orbital");
   const dims = parsed.dims, axesB = parsed.axesB, originB = parsed.originB;
   const axes = axesB.map(function (v){ return [v[0] * BOHR_TO_ANGSTROM, v[1] * BOHR_TO_ANGSTROM, v[2] * BOHR_TO_ANGSTROM]; });
   const origin = [originB[0] * BOHR_TO_ANGSTROM, originB[1] * BOHR_TO_ANGSTROM, originB[2] * BOHR_TO_ANGSTROM];
@@ -329,14 +336,18 @@ function buildCubeVolume(parsed){
   //     粗网格常见 ~1e-3 a.u.）时，纯质量阈值会跌破背景、把整盒噪声都保留 → 云弥散。
   //     该下限保证背景（典型 ≤ 1e-3×峰值）被排除，云始终贴分子形状。
   const nVox = parsed.nVox;
-  const rhoMax = parsed.vMax;
-  const CUBE_CUT_FRACTION = 1e-3;
+  const rhoMax = parsed.vMax; // 幅值峰值（轨道模式 = max|ψ|）
+  // 截断：cutoff = max(95% 总质量阈值, 峰值下限)
+  //   · 质量阈值（对数直方图）自适应；轨道模式的动态范围远大于密度（实测 HOMO |ψ|max≈5e5），
+  //     峰值下限取更小值 1e-4×峰值，避免过切轨道瓣
+  const CUBE_CUT_FRACTION = signed ? 1e-4 : 1e-3;
+  const magOf = function (i){ const v = dataRaw[i]; return signed && v < 0 ? -v : v; };
   const logMax = Math.log1p(rhoMax);
   const HIST_BINS = 512;
   const hist = new Float64Array(HIST_BINS);
   const binOf = function (v){ return v <= 0 ? 0 : Math.min(HIST_BINS - 1, Math.floor(Math.log1p(v) / logMax * HIST_BINS)); };
-  for (let i = 0; i < nVox; i++) hist[binOf(dataRaw[i])] += dataRaw[i];
-  const totalMass = parsed.vSum;
+  for (let i = 0; i < nVox; i++) hist[binOf(magOf(i))] += magOf(i);
+  const totalMass = parsed.vSum; // 幅值总和（Σ|v|）
   let massCut = 0, acc = 0;
   for (let b = HIST_BINS - 1; b >= 0; b--){
     const binMass = hist[b];
@@ -350,12 +361,12 @@ function buildCubeVolume(parsed){
     acc += binMass;
   }
   const cutoff = Math.max(massCut, rhoMax * CUBE_CUT_FRACTION);
-  // 采样 CDF（仅保留 ≥ cutoff 的体素；权重 = log1p(ρ/cutoff − 1)，对数密度加权：
-  // 核心与价层均可见（每体素仅差 ~3×），仍严格随密度单调、可解释）
+  // 采样 CDF（仅保留幅值 ≥ cutoff 的体素；权重 = log1p(幅值/cutoff − 1)，对数加权：
+  // 核心/瓣缘均可见，仍严格随幅值单调、可解释）
   const cdf = new Float64Array(nVox);
   let totalW = 0, kept = 0;
   for (let i = 0; i < nVox; i++){
-    const v = dataRaw[i];
+    const v = magOf(i);
     if (v >= cutoff){ totalW += Math.log1p(v / cutoff - 1); kept++; }
     cdf[i] = totalW;
   }
@@ -372,6 +383,7 @@ function buildCubeVolume(parsed){
     cdf: cdf, totalW: totalW,
     vMean: parsed.vMean, vSum: parsed.vSum,
     negVox: parsed.negVox, maxAbs: parsed.maxAbs, fieldType: parsed.fieldType,
+    mode: signed ? "orbital" : "density", isSigned: signed,
   };
 }
 
@@ -391,6 +403,7 @@ function sampleCloudCube(vol, count){
   const size = new Float32Array(count);
   const bright = new Float32Array(count);
   const density = new Float32Array(count);
+  const sign = new Float32Array(count); // 轨道相位：+1/−1（密度模式恒 0）
   const seed = new Float32Array(count * 3);
   const delay = new Float32Array(count);
   for (let i = 0; i < count; i++){
@@ -406,17 +419,19 @@ function sampleCloudCube(vol, count){
     const px = org[0] + (ix + u) * ax[0][0] + (iy + v) * ax[1][0] + (iz + w) * ax[2][0];
     const py = org[1] + (ix + u) * ax[0][1] + (iy + v) * ax[1][1] + (iz + w) * ax[2][1];
     const pz = org[2] + (ix + u) * ax[0][2] + (iy + v) * ax[1][2] + (iz + w) * ax[2][2];
-    const rho = vol.sample(px, py, pz);
-    const rhoC = Math.max(rho, vol.rhoCut);
-    const dAttr = cubeClamp(DEN_FLOOR + (1 - DEN_FLOOR) * (Math.log1p(rhoC) - logCut) / denRange, 0, 1);
+    const psi = vol.sample(px, py, pz);        // 轨道模式 = 带符号 ψ；密度模式 = ρ ≥ 0
+    const mag = psi < 0 ? -psi : psi;
+    const magC = Math.max(mag, vol.rhoCut);
+    const dAttr = cubeClamp(DEN_FLOOR + (1 - DEN_FLOOR) * (Math.log1p(magC) - logCut) / denRange, 0, 1);
     pos[i * 3] = px; pos[i * 3 + 1] = py; pos[i * 3 + 2] = pz;
-    size[i] = 0.55 + rand() * 0.75 + 0.35 * Math.min(rho / vol.rhoMax, 1);
+    size[i] = 0.55 + rand() * 0.75 + 0.35 * Math.min(mag / vol.rhoMax, 1);
     bright[i] = cubeClamp(0.14 + 0.28 * dAttr + rand() * 0.16, 0.05, 0.55);
     density[i] = dAttr;
+    sign[i] = vol.isSigned ? (psi < 0 ? -1 : 1) : 0;
     seed[i * 3] = rand(); seed[i * 3 + 1] = rand(); seed[i * 3 + 2] = rand();
     delay[i] = 0;
   }
-  return { pos: pos, size: size, bright: bright, density: density, seed: seed, delay: delay };
+  return { pos: pos, size: size, bright: bright, density: density, sign: sign, seed: seed, delay: delay };
 }
 
 /* ---------- 视觉单键推断（元素 + 距离 + 共价半径；仅供骨架流动路径，不是 QM 键级） ---------- */

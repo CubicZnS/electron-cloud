@@ -71,6 +71,7 @@ const CLOUD_VERTEX = [
 "attribute float aPathCount;",
 "varying float vBright;",
 "varying float vDensity;",
+"varying float vSign;",
 "",
 "#ifndef SIMPLE",
 "vec3 mod289(vec3 x){ return x - floor(x * (1.0/289.0)) * 289.0; }",
@@ -192,14 +193,19 @@ const CLOUD_VERTEX = [
 "  float fadeIn = smoothstep(0.0, 1.4, uTime);",
 "  vBright = mix(aOldProps.y, aProps.y, e) * uCloudAlpha * fadeIn;",
 "  vDensity = mix(aOldProps.z, aProps.z, e);",
+"  // 轨道相位符号（aProps.w；密度模式恒 0）：随过渡平滑交叉渐变（相位扫过 0 时颜色翻转）",
+"  vSign = mix(aOldProps.w, aProps.w, e);",
 "}",
 ].join("\n");
 
 const CLOUD_FRAGMENT = [
 "uniform sampler2D uDensityTex;",
+"uniform sampler2D uDensityTexNeg;",
 "uniform float uDensGamma;",
+"uniform float uOrbitalSign;", // 0 = 密度/半定量单 LUT；1 = 轨道双 LUT（按相位取色）
 "varying float vBright;",
 "varying float vDensity;",
+"varying float vSign;",
 "void main(){",
 "  vec2 uv = gl_PointCoord*2.0 - 1.0;",
 "  float d2 = dot(uv, uv);",
@@ -207,7 +213,9 @@ const CLOUD_FRAGMENT = [
 "  float d = sqrt(d2);",
 "  float a = pow(1.0 - d, 2.4);",
 "  a *= smoothstep(1.0, 0.3, d);",
-"  vec3 col = texture2D(uDensityTex, vec2(pow(clamp(vDensity, 0.0, 1.0), uDensGamma), 0.5)).rgb;",
+"  float t = pow(clamp(vDensity, 0.0, 1.0), uDensGamma);",
+"  vec3 col = texture2D(uDensityTex, vec2(t, 0.5)).rgb;",
+"  if (uOrbitalSign > 0.5 && vSign < 0.0) col = texture2D(uDensityTexNeg, vec2(t, 0.5)).rgb;",
 "  gl_FragColor = vec4(col, a * vBright);",
 "}",
 ].join("\n");

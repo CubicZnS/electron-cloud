@@ -169,6 +169,8 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
 #qdErr.show{display:block}
 #qdApply{padding:8px 0;font-size:11px;letter-spacing:1px}
 .qd-hint{font-size:9px;color:var(--faint);letter-spacing:.5px;line-height:1.7}
+.qd-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.qd-row .qd-label{font-size:10px;color:var(--dim);letter-spacing:.5px}
 .seg-btn.disabled{opacity:.35;pointer-events:none;cursor:not-allowed}
 #explainBtn.disabled{opacity:.35;pointer-events:none}
 #debugPanel{position:fixed;right:16px;bottom:64px;z-index:40;width:236px;padding:12px 14px;display:none}
@@ -306,6 +308,14 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
   <div id="qdDrop">拖放 <b>.cube / .cub</b> 文件到此处<br/><span class="pick">Choose Cube file</span></div>
   <div class="qd-meta" id="qdMeta" style="display:none"></div>
   <div id="qdErr"></div>
+  <div class="qd-row" id="qdOrbitalRow" style="display:none">
+    <span class="qd-label">轨道标注（仅图例文字）</span>
+    <select id="qdOrbitalLabel" class="cmap-sel">
+      <option value="HOMO" selected>HOMO（最高占据轨道）</option>
+      <option value="LUMO">LUMO（最低未占据轨道）</option>
+      <option value="other">其他轨道（未标注）</option>
+    </select>
+  </div>
   <button class="dshell-btn" id="qdApply" style="display:none">Apply electron density</button>
   <div class="qd-hint" id="qdLimits">限制：文件 ≤ 64 MB · 体素 ≤ 4,000,000（约 159³ 网格）。超出请用 Multiwfn 调大 Grid spacing 后重试。</div>
   <input type="file" id="qdFile" accept=".cube,.cub" style="display:none"/>
@@ -625,6 +635,12 @@ const COLORMAPS = {
   viridis:  { name:"Viridis (matplotlib)", stops:[[0.0,[68,1,84]],[0.2,[65,68,135]],[0.4,[42,120,142]],[0.6,[34,168,132]],[0.8,[122,209,81]],[1.0,[253,231,37]]] },
   coolwarm: { name:"Cool-Warm (静电势规范)", stops:[[0.0,[59,76,192]],[0.5,[230,232,238]],[1.0,[180,4,38]]] },
   ice:      { name:"Cyan Glow (深蓝→青→白)", stops:[[0.0,[6,26,66]],[0.35,[16,92,168]],[0.62,[50,155,214]],[0.82,[140,225,255]],[1.0,[255,255,255]]] },
+};
+/* 轨道相位配色（固定，正/负双 LUT）：正相位 = 紫红→橙→黄，负相位 = 深蓝→蓝→青
+   （VMD / Jmol / molden 分子轨道 lobe 配色惯例；轨道模式下色图选择器停用） */
+const ORBITAL_LUTS = {
+  pos: { name:"Orbital 正相位 (warm)", stops:[[0.0,[60,0,90]],[0.35,[200,60,30]],[0.7,[255,140,40]],[1.0,[255,230,120]]] },
+  neg: { name:"Orbital 负相位 (cool)", stops:[[0.0,[0,40,100]],[0.35,[30,120,220]],[0.7,[90,200,255]],[1.0,[200,245,255]]] },
 };
 function sampleStops(stops, t){
   if (t <= stops[0][0]) return stops[0][1];
@@ -1637,7 +1653,9 @@ function cubeNextLine(text, from){
 }
 
 /* ---------- Cube 解析（纯函数；抛 cubeError，携带用户可理解的 message/code） ---------- */
-function parseCubeText(text){
+function parseCubeText(text, opts){
+  // opts.allowSigned = true → 保留原始带符号体素值（轨道模式）；false（默认）→ 截断负值（密度模式）
+  const allowSigned = !!(opts && opts.allowSigned);
   if (typeof text !== "string" || !text.length){
     throw cubeError("EMPTY", "文件为空或无法读取。请确认导出的是有效的 Gaussian Cube 文件。");
   }
@@ -1725,7 +1743,8 @@ function parseCubeText(text){
         const a = Math.abs(v);
         if (a > maxAbs) maxAbs = a;
         if (v < 0) negVox++;
-        dataRaw[idx] = v < 0 ? 0 : v; // 负值（数值噪声）截断为 0；带符号字段整体拒绝（见下）
+        // 密度模式：负值截断为 0；轨道模式：保留原始带符号值（相位信息）
+        dataRaw[idx] = allowSigned ? v : (v < 0 ? 0 : v);
       }
       idx++;
     }
@@ -1738,21 +1757,22 @@ function parseCubeText(text){
   if (count !== nVox){
     throw cubeError("DATA_COUNT", "体素数据数量不匹配：应有 " + nVox.toLocaleString() + " 个值，实际读取 " + count.toLocaleString() + " 个。");
   }
-  // 整体非正密度检查（截断负值后）
+  // 统计：vMax/vSum 一律按「幅值 |v|」（密度模式负值已截断，等价于原逻辑）
   let vMax = 0, vSum = 0;
   for (let i = 0; i < nVox; i++){
     const v = dataRaw[i];
-    if (v > vMax) vMax = v;
-    vSum += v;
+    const m = v < 0 ? -v : v;
+    if (m > vMax) vMax = m;
+    vSum += m;
   }
   // 字段类型估计（注释行关键词 + 数据统计；诚实标注置信度，不假装识别 HOMO/LUMO）
   const fieldType = estimateCubeFieldType({ title: title, comment: comment, negVox: negVox, nVox: nVox, vMax: vMax, maxAbs: maxAbs });
   if (vMax <= 0){
     throw cubeError("NON_POSITIVE", "电子密度整体为非正值（最大值 ≤ 0），无法作为密度场。请确认导出的是电子密度（electron density）而非带正负号的轨道（orbital）Cube。");
   }
-  // 带符号字段拒绝：电子密度处处非负，若负值体素占比显著（>20%），必是轨道/静电势等
-  // 带符号标量场——正负各半、全盒有值，截断负值后必然铺满全盒 → 云弥散。直接拒绝并引导重导出。
-  if (negVox / nVox > 0.20){
+  // 带符号字段：电子密度处处非负。默认（密度模式）拒绝 >20% 负值的带符号字段并引导；
+  // allowSigned（轨道模式）保留原始相位，交给上层按轨道模式渲染。
+  if (!allowSigned && negVox / nVox > 0.20){
     const zh = fieldType.type === "orbital" ? "（注释行标注为分子轨道）"
       : fieldType.type === "esp" ? "（注释行标注为静电势 ESP）"
       : fieldType.type === "laplacian" ? "（注释行标注为 Laplacian）"
@@ -1766,6 +1786,7 @@ function parseCubeText(text){
     atomsB: atomsB, dataRaw: dataRaw,
     vMin: 0, vMax: vMax, vSum: vSum, vMean: vSum / nVox,
     negVox: negVox, maxAbs: maxAbs, fieldType: fieldType,
+    signed: allowSigned,
   };
 }
 
@@ -1773,7 +1794,9 @@ function parseCubeText(text){
 /* 支持非零原点与完整三轴仿射变换（不假设正方体、不以原点为中心）：
    世界坐标 p 与分数坐标 f 满足  p = origin + f·A  （A 的列 = 三个轴向量）
    采样时用逆矩阵 f = A⁻¹·(p − origin) 做三线性插值，边界外钳制 */
-function buildCubeVolume(parsed){
+function buildCubeVolume(parsed, opts){
+  // opts.mode: "density"（默认）| "orbital"——轨道模式按 |ψ| 做截断/采样，保留相位（符号）用于双色渲染
+  const signed = !!(opts && opts.mode === "orbital");
   const dims = parsed.dims, axesB = parsed.axesB, originB = parsed.originB;
   const axes = axesB.map(function (v){ return [v[0] * BOHR_TO_ANGSTROM, v[1] * BOHR_TO_ANGSTROM, v[2] * BOHR_TO_ANGSTROM]; });
   const origin = [originB[0] * BOHR_TO_ANGSTROM, originB[1] * BOHR_TO_ANGSTROM, originB[2] * BOHR_TO_ANGSTROM];
@@ -1842,14 +1865,18 @@ function buildCubeVolume(parsed){
   //     粗网格常见 ~1e-3 a.u.）时，纯质量阈值会跌破背景、把整盒噪声都保留 → 云弥散。
   //     该下限保证背景（典型 ≤ 1e-3×峰值）被排除，云始终贴分子形状。
   const nVox = parsed.nVox;
-  const rhoMax = parsed.vMax;
-  const CUBE_CUT_FRACTION = 1e-3;
+  const rhoMax = parsed.vMax; // 幅值峰值（轨道模式 = max|ψ|）
+  // 截断：cutoff = max(95% 总质量阈值, 峰值下限)
+  //   · 质量阈值（对数直方图）自适应；轨道模式的动态范围远大于密度（实测 HOMO |ψ|max≈5e5），
+  //     峰值下限取更小值 1e-4×峰值，避免过切轨道瓣
+  const CUBE_CUT_FRACTION = signed ? 1e-4 : 1e-3;
+  const magOf = function (i){ const v = dataRaw[i]; return signed && v < 0 ? -v : v; };
   const logMax = Math.log1p(rhoMax);
   const HIST_BINS = 512;
   const hist = new Float64Array(HIST_BINS);
   const binOf = function (v){ return v <= 0 ? 0 : Math.min(HIST_BINS - 1, Math.floor(Math.log1p(v) / logMax * HIST_BINS)); };
-  for (let i = 0; i < nVox; i++) hist[binOf(dataRaw[i])] += dataRaw[i];
-  const totalMass = parsed.vSum;
+  for (let i = 0; i < nVox; i++) hist[binOf(magOf(i))] += magOf(i);
+  const totalMass = parsed.vSum; // 幅值总和（Σ|v|）
   let massCut = 0, acc = 0;
   for (let b = HIST_BINS - 1; b >= 0; b--){
     const binMass = hist[b];
@@ -1863,12 +1890,12 @@ function buildCubeVolume(parsed){
     acc += binMass;
   }
   const cutoff = Math.max(massCut, rhoMax * CUBE_CUT_FRACTION);
-  // 采样 CDF（仅保留 ≥ cutoff 的体素；权重 = log1p(ρ/cutoff − 1)，对数密度加权：
-  // 核心与价层均可见（每体素仅差 ~3×），仍严格随密度单调、可解释）
+  // 采样 CDF（仅保留幅值 ≥ cutoff 的体素；权重 = log1p(幅值/cutoff − 1)，对数加权：
+  // 核心/瓣缘均可见，仍严格随幅值单调、可解释）
   const cdf = new Float64Array(nVox);
   let totalW = 0, kept = 0;
   for (let i = 0; i < nVox; i++){
-    const v = dataRaw[i];
+    const v = magOf(i);
     if (v >= cutoff){ totalW += Math.log1p(v / cutoff - 1); kept++; }
     cdf[i] = totalW;
   }
@@ -1885,6 +1912,7 @@ function buildCubeVolume(parsed){
     cdf: cdf, totalW: totalW,
     vMean: parsed.vMean, vSum: parsed.vSum,
     negVox: parsed.negVox, maxAbs: parsed.maxAbs, fieldType: parsed.fieldType,
+    mode: signed ? "orbital" : "density", isSigned: signed,
   };
 }
 
@@ -1904,6 +1932,7 @@ function sampleCloudCube(vol, count){
   const size = new Float32Array(count);
   const bright = new Float32Array(count);
   const density = new Float32Array(count);
+  const sign = new Float32Array(count); // 轨道相位：+1/−1（密度模式恒 0）
   const seed = new Float32Array(count * 3);
   const delay = new Float32Array(count);
   for (let i = 0; i < count; i++){
@@ -1919,17 +1948,19 @@ function sampleCloudCube(vol, count){
     const px = org[0] + (ix + u) * ax[0][0] + (iy + v) * ax[1][0] + (iz + w) * ax[2][0];
     const py = org[1] + (ix + u) * ax[0][1] + (iy + v) * ax[1][1] + (iz + w) * ax[2][1];
     const pz = org[2] + (ix + u) * ax[0][2] + (iy + v) * ax[1][2] + (iz + w) * ax[2][2];
-    const rho = vol.sample(px, py, pz);
-    const rhoC = Math.max(rho, vol.rhoCut);
-    const dAttr = cubeClamp(DEN_FLOOR + (1 - DEN_FLOOR) * (Math.log1p(rhoC) - logCut) / denRange, 0, 1);
+    const psi = vol.sample(px, py, pz);        // 轨道模式 = 带符号 ψ；密度模式 = ρ ≥ 0
+    const mag = psi < 0 ? -psi : psi;
+    const magC = Math.max(mag, vol.rhoCut);
+    const dAttr = cubeClamp(DEN_FLOOR + (1 - DEN_FLOOR) * (Math.log1p(magC) - logCut) / denRange, 0, 1);
     pos[i * 3] = px; pos[i * 3 + 1] = py; pos[i * 3 + 2] = pz;
-    size[i] = 0.55 + rand() * 0.75 + 0.35 * Math.min(rho / vol.rhoMax, 1);
+    size[i] = 0.55 + rand() * 0.75 + 0.35 * Math.min(mag / vol.rhoMax, 1);
     bright[i] = cubeClamp(0.14 + 0.28 * dAttr + rand() * 0.16, 0.05, 0.55);
     density[i] = dAttr;
+    sign[i] = vol.isSigned ? (psi < 0 ? -1 : 1) : 0;
     seed[i * 3] = rand(); seed[i * 3 + 1] = rand(); seed[i * 3 + 2] = rand();
     delay[i] = 0;
   }
-  return { pos: pos, size: size, bright: bright, density: density, seed: seed, delay: delay };
+  return { pos: pos, size: size, bright: bright, density: density, sign: sign, seed: seed, delay: delay };
 }
 
 /* ---------- 视觉单键推断（元素 + 距离 + 共价半径；仅供骨架流动路径，不是 QM 键级） ---------- */
@@ -2028,6 +2059,7 @@ const CLOUD_VERTEX = [
 "attribute float aPathCount;",
 "varying float vBright;",
 "varying float vDensity;",
+"varying float vSign;",
 "",
 "#ifndef SIMPLE",
 "vec3 mod289(vec3 x){ return x - floor(x * (1.0/289.0)) * 289.0; }",
@@ -2149,14 +2181,19 @@ const CLOUD_VERTEX = [
 "  float fadeIn = smoothstep(0.0, 1.4, uTime);",
 "  vBright = mix(aOldProps.y, aProps.y, e) * uCloudAlpha * fadeIn;",
 "  vDensity = mix(aOldProps.z, aProps.z, e);",
+"  // 轨道相位符号（aProps.w；密度模式恒 0）：随过渡平滑交叉渐变（相位扫过 0 时颜色翻转）",
+"  vSign = mix(aOldProps.w, aProps.w, e);",
 "}",
 ].join("\n");
 
 const CLOUD_FRAGMENT = [
 "uniform sampler2D uDensityTex;",
+"uniform sampler2D uDensityTexNeg;",
 "uniform float uDensGamma;",
+"uniform float uOrbitalSign;", // 0 = 密度/半定量单 LUT；1 = 轨道双 LUT（按相位取色）
 "varying float vBright;",
 "varying float vDensity;",
+"varying float vSign;",
 "void main(){",
 "  vec2 uv = gl_PointCoord*2.0 - 1.0;",
 "  float d2 = dot(uv, uv);",
@@ -2164,7 +2201,9 @@ const CLOUD_FRAGMENT = [
 "  float d = sqrt(d2);",
 "  float a = pow(1.0 - d, 2.4);",
 "  a *= smoothstep(1.0, 0.3, d);",
-"  vec3 col = texture2D(uDensityTex, vec2(pow(clamp(vDensity, 0.0, 1.0), uDensGamma), 0.5)).rgb;",
+"  float t = pow(clamp(vDensity, 0.0, 1.0), uDensGamma);",
+"  vec3 col = texture2D(uDensityTex, vec2(t, 0.5)).rgb;",
+"  if (uOrbitalSign > 0.5 && vSign < 0.0) col = texture2D(uDensityTexNeg, vec2(t, 0.5)).rgb;",
 "  gl_FragColor = vec4(col, a * vBright);",
 "}",
 ].join("\n");
@@ -2576,7 +2615,9 @@ function createCloud(n){
     uCenter: { value: new THREE.Vector3(0, 0, 0) },
     uAnchor: { value: new THREE.Vector3(0, 0, 0) },
     uDensityTex: { value: buildLUTTexture(COLORMAPS[SETTINGS.colormap].stops) },
+    uDensityTexNeg: { value: buildLUTTexture(COLORMAPS[SETTINGS.colormap].stops) }, // 轨道负相位 LUT（默认同色，uOrbitalSign=0 时不生效）
     uDensGamma: { value: SETTINGS.densGamma },
+    uOrbitalSign: { value: 0 }, // 1 = 轨道双色相位模式
   };
   const mat = new THREE.ShaderMaterial({
     vertexShader: CLOUD_VERTEX,
@@ -2623,6 +2664,27 @@ function setColormap(name){
   if (sel) sel.value = name;
   const bar = document.getElementById("cmapBar");
   if (bar) bar.style.background = colormapCSS(COLORMAPS[name].stops);
+}
+
+/* 轨道双色相位渲染：on = 切换 uDensityTex/uDensityTexNeg 为固定正/负相位 LUT 并开启 uOrbitalSign；
+   off = 恢复用户所选色图并关闭轨道分支。 */
+let orbitalLUTs = null;
+function setOrbitalRender(on){
+  if (!cloud) return;
+  if (on){
+    if (orbitalLUTs){ orbitalLUTs.pos.dispose(); orbitalLUTs.neg.dispose(); }
+    orbitalLUTs = {
+      pos: buildLUTTexture(ORBITAL_LUTS.pos.stops),
+      neg: buildLUTTexture(ORBITAL_LUTS.neg.stops),
+    };
+    cloud.uniforms.uDensityTex.value = orbitalLUTs.pos;
+    cloud.uniforms.uDensityTexNeg.value = orbitalLUTs.neg;
+    cloud.uniforms.uOrbitalSign.value = 1;
+  } else {
+    cloud.uniforms.uOrbitalSign.value = 0;
+    if (orbitalLUTs){ orbitalLUTs.pos.dispose(); orbitalLUTs.neg.dispose(); orbitalLUTs = null; }
+    setColormap(SETTINGS.colormap);
+  }
 }
 
 function nearestAtomIdx(mol, x, y, z){
@@ -2845,6 +2907,7 @@ function transitionCloudFromData(data, anchorPos){
         props[i * 4] = size[i];
         props[i * 4 + 1] = bright[i];
         props[i * 4 + 2] = density[i];
+        props[i * 4 + 3] = data.sign ? data.sign[ti] : 0; // 轨道相位符号（密度模式 0）
       }
       geo.attributes.aProps.array.set(props);
       geo.attributes.aProps.needsUpdate = true;
@@ -2879,7 +2942,7 @@ function writeCloudSample(data, n){
   padCloudPaths(data.pos, cloud.geo);
   {
     const props = new Float32Array(n * 4);
-    for (let i = 0; i < n; i++){ props[i * 4] = data.size[i]; props[i * 4 + 1] = data.bright[i]; props[i * 4 + 2] = data.density[i]; }
+    for (let i = 0; i < n; i++){ props[i * 4] = data.size[i]; props[i * 4 + 1] = data.bright[i]; props[i * 4 + 2] = data.density[i]; props[i * 4 + 3] = data.sign ? data.sign[i] : 0; }
     cloud.geo.attributes.aProps.array.set(props);
     cloud.geo.attributes.aProps.needsUpdate = true;
   }
@@ -3707,6 +3770,8 @@ const cubeUI = {
   file: null,
   parsed: null,
   volume: null,
+  mode: "density", // "density" | "orbital"
+  label: "HOMO",   // 轨道标注（仅图例文字；HOMO/LUMO/其他）
   prev: null, // 退出导入时恢复的半定量状态 { custom, frags, mode }
 };
 const _qdEl = function (id){ return document.getElementById(id); };
@@ -3733,7 +3798,7 @@ function cubeUI_setState(state, label){
   const btn = _qdEl("qdApply");
   if (btn){
     if (state === "ready"){
-      btn.textContent = "Apply electron density";
+      btn.textContent = cubeUI.mode === "orbital" ? "Apply orbital（双色相位）" : "Apply electron density";
       btn.style.display = "";
       btn.disabled = false;
     } else if (state === "applied"){
@@ -3771,9 +3836,14 @@ async function handleCubeFile(file){
   await new Promise(function (r){ setTimeout(r, 40); }); // 让“validating”状态先绘制
   let parsed = null, volume = null;
   try {
-    parsed = parseCubeText(text);
+    // allowSigned：保留原始带符号值，供轨道模式使用（密度/轨道由统计特征路由）
+    parsed = parseCubeText(text, { allowSigned: true });
     parsed.fileName = name;
-    volume = buildCubeVolume(parsed);
+    // 路由：负值体素 >20%（带符号字段）或注释行标注轨道 → 轨道模式（|ψ| 采样 + 相位）；
+    // 否则 → 电子密度模式（负值截断 + 单色 LUT）
+    const isOrbital = parsed.negVox / parsed.nVox > 0.20 || parsed.fieldType.type === "orbital";
+    cubeUI.mode = isOrbital ? "orbital" : "density";
+    volume = buildCubeVolume(parsed, { mode: cubeUI.mode });
   } catch (e){
     cubeUI_setState("error", (e && e.message ? e.message : "解析失败：" + e));
     return;
@@ -3783,7 +3853,18 @@ async function handleCubeFile(file){
   cubeUI.parsed = parsed;
   cubeUI.volume = volume;
   renderCubeMeta(volume, name);
-  cubeUI_setState("ready", "ready — 校验通过（单数据集电子密度 Cube），可应用");
+  if (cubeUI.mode === "orbital"){
+    cubeUI_setState("ready", "ready — 检测为带符号字段（可能为分子轨道），将按轨道模式显示相位（正/负双色）");
+    // 轨道标注选择器（仅图例文字，不假装自动推断 HOMO/LUMO）
+    const row = _qdEl("qdOrbitalRow");
+    if (row) row.style.display = "";
+    const sel = _qdEl("qdOrbitalLabel");
+    if (sel) sel.value = cubeUI.label === "未标注" ? "other" : cubeUI.label;
+  } else {
+    const row = _qdEl("qdOrbitalRow");
+    if (row) row.style.display = "none";
+    cubeUI_setState("ready", "ready — 校验通过（非负标量场，按电子密度模式），可应用");
+  }
 }
 function renderCubeMeta(vol, name){
   const el = _qdEl("qdMeta");
@@ -3817,7 +3898,7 @@ function renderCubeMeta(vol, name){
     + "<div class='row'><span class='k'>网格</span><span class='v'>" + vol.dims[0] + " × " + vol.dims[1] + " × " + vol.dims[2] + "</span></div>"
     + "<div class='row'><span class='k'>Voxel 数</span><span class='v'>" + vol.nVox.toLocaleString() + "</span></div>"
     + "<div class='row'><span class='k'>空间范围 (Å)</span><span class='v'>x " + rng(vol.bounds.min[0], vol.bounds.max[0]) + "<br/>y " + rng(vol.bounds.min[1], vol.bounds.max[1]) + "<br/>z " + rng(vol.bounds.min[2], vol.bounds.max[2]) + "</span></div>"
-    + "<div class='row'><span class='k'>密度</span><span class='v'>0 … " + vol.rhoMax.toExponential(2) + " a.u. · 截断 ρ ≥ " + vol.rhoCut.toExponential(2) + "（保留 " + (vol.keptFraction * 100).toFixed(1) + "% 体素）</span></div>"
+    + "<div class='row'><span class='k'>" + (cubeUI.mode === "orbital" ? "|ψ| 幅值" : "密度") + "</span><span class='v'>0 … " + vol.rhoMax.toExponential(2) + " a.u. · 截断 ≥ " + vol.rhoCut.toExponential(2) + "（保留 " + (vol.keptFraction * 100).toFixed(1) + "% 体素）</span></div>"
     + "<div class='row'><span class='k'>单位/居中</span><span class='v' class='src'>bohr → Å（×0.5292）· 已按网格中心居中</span></div>";
 }
 /* ---------- 面板开关（与创造模式互斥） ---------- */
@@ -3845,7 +3926,8 @@ function applyCubeVolume(vol){
   currentField = null;
   currentVolume = vol;
   cubeMode = true;
-  const data = sampleCloudCube(vol, cloud.count); // 真实密度权重采样，而非 computeField
+  setOrbitalRender(cubeUI.mode === "orbital"); // 轨道模式：固定正/负相位双 LUT
+  const data = sampleCloudCube(vol, cloud.count); // 真实密度/|ψ| 权重采样，而非 computeField
   transitionCloudFromData(data, [0, 0, 0]);
   setCubeModeUI(true);
   rebuildCubeLegend();
@@ -3857,6 +3939,7 @@ function exitCubeMode(){
   const prev = cubeUI.prev || { custom: false, frags: [], mode: "total" };
   cubeMode = false;
   currentVolume = null;
+  setOrbitalRender(false); // 恢复用户所选色图并关闭轨道分支
   if (prev.custom && creatorState && creatorState.pts && creatorState.pts.length){
     crApply(); // 重建创造模式分子（内部 applyMol → computeField → 过渡 → 图例）
   } else {
@@ -3882,15 +3965,23 @@ function chipKeyForFrags(frags){
 function setCubeModeUI(on){
   document.querySelectorAll("#modeSeg .seg-btn").forEach(function (b){
     b.classList.toggle("disabled", on);
-    b.title = on ? "导入模式（Imported electron density）是独立数据源：Total/Inductive/Resonance 仅适用于半定量 σ 模型，已禁用" : "";
+    b.title = on ? "导入模式是独立数据源：Total/Inductive/Resonance 仅适用于半定量 σ 模型，已禁用" : "";
   });
   const ex = _qdEl("explainBtn");
   if (ex){
     ex.classList.toggle("disabled", on);
     if (on){ explainGroup.visible = false; ex.classList.remove("on"); }
   }
+  // 轨道模式：色图选择器停用（相位配色固定为正暖/负冷双 LUT）
+  const cmap = _qdEl("cmapSel");
+  if (cmap){
+    const orb = on && cubeUI.mode === "orbital";
+    cmap.disabled = orb;
+    cmap.title = orb ? "轨道模式使用固定相位配色（正=暖色，负=冷色）" : "";
+    cmap.style.opacity = orb ? "0.4" : "";
+  }
 }
-/* ---------- 图例：Imported electron density 专用（与半定量模式明确区分） ---------- */
+/* ---------- 图例：Imported electron density / orbital 专用（与半定量模式明确区分） ---------- */
 function rebuildCubeLegend(){
   const el = _qdEl("legend");
   if (!el || !currentVolume) return;
@@ -3898,10 +3989,20 @@ function rebuildCubeLegend(){
   const cnt = {};
   vol.atoms.forEach(function (a){ cnt[a.el] = (cnt[a.el] || 0) + 1; });
   const elStr = Object.keys(cnt).sort().map(function (e){ return e + cnt[e]; }).join(" ");
-  let html = "<div class='mol' style='color:#c9b8ff'>Imported electron density <span class='formula'>" + (vol.fileName || "Cube") + "</span></div>";
+  const isOrb = cubeUI.mode === "orbital";
+  const title = isOrb ? "Imported orbital（" + (cubeUI.label || "未标注") + "）" : "Imported electron density";
+  let html = "<div class='mol' style='color:#c9b8ff'>" + title + " <span class='formula'>" + (vol.fileName || "Cube") + "</span></div>";
   html += "<div class='fxrow'><span class='fx-badge' style='border-color:rgba(184,147,255,0.5);color:#c9b8ff'>" + elStr + " · " + vol.nVox.toLocaleString() + " voxels</span></div>";
-  html += "<div class='densityhint'>数据源：Gaussian / Multiwfn Cube · 真实电子密度（非 σ 半定量）· Total / Inductive / Resonance 已禁用 · <span id='exitCubeLink' style='color:#b893ff;cursor:pointer;text-decoration:underline;text-underline-offset:2px'>退出导入模式</span></div>";
-  html += "<div class='cmaprow'><span class='cmaplabel'>低密度</span><div class='cmapbar' id='cmapBar'></div><span class='cmaplabel'>高密度</span></div>";
+  if (isOrb){
+    html += "<div class='cmaprow'><span class='cmaplabel' style='color:#7cc7ff'>负相位 ψ<0</span>"
+      + "<div class='cmapbar' id='cmapBarNeg' style='background:" + colormapCSS(ORBITAL_LUTS.neg.stops) + "'></div>"
+      + "<div class='cmapbar' id='cmapBarPos' style='background:" + colormapCSS(ORBITAL_LUTS.pos.stops) + "'></div>"
+      + "<span class='cmaplabel' style='color:#ff9a6b'>正相位 ψ>0</span></div>";
+    html += "<div class='densityhint'>数据源：Gaussian / Multiwfn Cube · 轨道波函数 ψ（粒子按 |ψ| 分布、颜色按相位）· 节点面 ψ=0 处呈空隙 · 标注由用户指定（不自动推断 HOMO/LUMO）· <span id='exitCubeLink' style='color:#b893ff;cursor:pointer;text-decoration:underline;text-underline-offset:2px'>退出导入模式</span></div>";
+  } else {
+    html += "<div class='densityhint'>数据源：Gaussian / Multiwfn Cube · 真实电子密度（非 σ 半定量）· Total / Inductive / Resonance 已禁用 · <span id='exitCubeLink' style='color:#b893ff;cursor:pointer;text-decoration:underline;text-underline-offset:2px'>退出导入模式</span></div>";
+    html += "<div class='cmaprow'><span class='cmaplabel'>低密度</span><div class='cmapbar' id='cmapBar'></div><span class='cmaplabel'>高密度</span></div>";
+  }
   el.innerHTML = html;
   const bar = _qdEl("cmapBar");
   if (bar) bar.style.background = colormapCSS(COLORMAPS[SETTINGS.colormap].stops);
@@ -3930,6 +4031,11 @@ function rebuildCubeLegend(){
   });
   _qdEl("quantumBtn").addEventListener("click", function (){ toggleQuantumPanel(); });
   _qdEl("qdClose").addEventListener("click", function (){ toggleQuantumPanel(false); });
+  const orbSel = _qdEl("qdOrbitalLabel");
+  if (orbSel) orbSel.addEventListener("change", function (){
+    cubeUI.label = orbSel.value === "other" ? "未标注" : orbSel.value;
+    if (cubeMode && cubeUI.mode === "orbital") rebuildCubeLegend();
+  });
   _qdEl("qdApply").addEventListener("click", function (){
     if (!cubeUI.volume) return;
     if (cubeUI.state === "applied"){

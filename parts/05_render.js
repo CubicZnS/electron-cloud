@@ -405,7 +405,9 @@ function createCloud(n){
     uCenter: { value: new THREE.Vector3(0, 0, 0) },
     uAnchor: { value: new THREE.Vector3(0, 0, 0) },
     uDensityTex: { value: buildLUTTexture(COLORMAPS[SETTINGS.colormap].stops) },
+    uDensityTexNeg: { value: buildLUTTexture(COLORMAPS[SETTINGS.colormap].stops) }, // 轨道负相位 LUT（默认同色，uOrbitalSign=0 时不生效）
     uDensGamma: { value: SETTINGS.densGamma },
+    uOrbitalSign: { value: 0 }, // 1 = 轨道双色相位模式
   };
   const mat = new THREE.ShaderMaterial({
     vertexShader: CLOUD_VERTEX,
@@ -452,6 +454,27 @@ function setColormap(name){
   if (sel) sel.value = name;
   const bar = document.getElementById("cmapBar");
   if (bar) bar.style.background = colormapCSS(COLORMAPS[name].stops);
+}
+
+/* 轨道双色相位渲染：on = 切换 uDensityTex/uDensityTexNeg 为固定正/负相位 LUT 并开启 uOrbitalSign；
+   off = 恢复用户所选色图并关闭轨道分支。 */
+let orbitalLUTs = null;
+function setOrbitalRender(on){
+  if (!cloud) return;
+  if (on){
+    if (orbitalLUTs){ orbitalLUTs.pos.dispose(); orbitalLUTs.neg.dispose(); }
+    orbitalLUTs = {
+      pos: buildLUTTexture(ORBITAL_LUTS.pos.stops),
+      neg: buildLUTTexture(ORBITAL_LUTS.neg.stops),
+    };
+    cloud.uniforms.uDensityTex.value = orbitalLUTs.pos;
+    cloud.uniforms.uDensityTexNeg.value = orbitalLUTs.neg;
+    cloud.uniforms.uOrbitalSign.value = 1;
+  } else {
+    cloud.uniforms.uOrbitalSign.value = 0;
+    if (orbitalLUTs){ orbitalLUTs.pos.dispose(); orbitalLUTs.neg.dispose(); orbitalLUTs = null; }
+    setColormap(SETTINGS.colormap);
+  }
 }
 
 function nearestAtomIdx(mol, x, y, z){
@@ -674,6 +697,7 @@ function transitionCloudFromData(data, anchorPos){
         props[i * 4] = size[i];
         props[i * 4 + 1] = bright[i];
         props[i * 4 + 2] = density[i];
+        props[i * 4 + 3] = data.sign ? data.sign[ti] : 0; // 轨道相位符号（密度模式 0）
       }
       geo.attributes.aProps.array.set(props);
       geo.attributes.aProps.needsUpdate = true;
@@ -708,7 +732,7 @@ function writeCloudSample(data, n){
   padCloudPaths(data.pos, cloud.geo);
   {
     const props = new Float32Array(n * 4);
-    for (let i = 0; i < n; i++){ props[i * 4] = data.size[i]; props[i * 4 + 1] = data.bright[i]; props[i * 4 + 2] = data.density[i]; }
+    for (let i = 0; i < n; i++){ props[i * 4] = data.size[i]; props[i * 4 + 1] = data.bright[i]; props[i * 4 + 2] = data.density[i]; props[i * 4 + 3] = data.sign ? data.sign[i] : 0; }
     cloud.geo.attributes.aProps.array.set(props);
     cloud.geo.attributes.aProps.needsUpdate = true;
   }

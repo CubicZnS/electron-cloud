@@ -282,5 +282,34 @@ const cubeText = (lines) => lines.join("\n");
   check("无标签 + 40% 负值大振幅 → 带符号字段（不假装区分 ESP/轨道）", ft6.type === "signed_field", ft6.type);
 }
 
+// ---------- 11) 轨道模式（双色相位粒子云）：保留符号、|ψ| 截断与采样 ----------
+{
+  const base = ["t", "d", "1  0 0 0", "2  1 0 0", "2  0 1 0", "2  0 0 1", "6  6 0 0 0"];
+  // 带符号数据（模拟轨道 lobe：一半负值）
+  const signedData = "0.30 0.20 -0.25 0.10 -0.15 0.05 -0.05 0.40";
+  // 默认（密度）解析：拒绝 >20% 负值
+  expectError("轨道数据默认解析拒绝（密度模式）", () => m.parseCubeText(cubeText(base.concat([signedData]))), "SIGNED_FIELD");
+  // allowSigned：保留原始符号
+  const parsed = m.parseCubeText(cubeText(base.concat([signedData])), { allowSigned: true });
+  check("allowSigned 保留符号与统计", parsed.signed === true && parsed.negVox > 0 && parsed.maxAbs > 0, "negVox=" + parsed.negVox + " maxAbs=" + parsed.maxAbs);
+  const vol = m.buildCubeVolume(parsed, { mode: "orbital" });
+  check("轨道体数据 isSigned + 截断", vol.isSigned === true && vol.rhoCut > 0 && vol.totalW > 0, "rhoCut=" + vol.rhoCut.toExponential(2));
+  const data = m.sampleCloudCube(vol, 4000);
+  let nPos = 0, nNeg = 0, finite = true;
+  for (let i = 0; i < 4000; i++){
+    if (data.sign[i] > 0) nPos++;
+    else if (data.sign[i] < 0) nNeg++;
+    if (!Number.isFinite(data.pos[i * 3]) || !Number.isFinite(data.density[i]) || !Number.isFinite(data.sign[i])) finite = false;
+  }
+  check("轨道采样相位双色（正/负均存在）", nPos > 200 && nNeg > 200, "pos=" + nPos + " neg=" + nNeg);
+  check("轨道采样全部有限", finite);
+  // 密度模式（同数据按 density 构建则符号全 0）
+  const volD = m.buildCubeVolume(m.parseCubeText(cubeText(base.concat(["0.30 0.20 0 0.10 0 0.05 0 0.40"])), { allowSigned: true }), { mode: "density" });
+  const dataD = m.sampleCloudCube(volD, 500);
+  let anySign = false;
+  for (let i = 0; i < 500; i++) if (dataD.sign[i] !== 0) anySign = true;
+  check("密度模式 sign 恒 0（单 LUT）", !anySign);
+}
+
 console.log("\n==== " + pass + " PASS / " + fail + " FAIL ====");
 process.exit(fail ? 1 : 0);

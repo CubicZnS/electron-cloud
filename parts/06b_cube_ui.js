@@ -9,6 +9,8 @@ const cubeUI = {
   file: null,
   parsed: null,
   volume: null,
+  mode: "density", // "density" | "orbital"
+  label: "HOMO",   // 轨道标注（仅图例文字；HOMO/LUMO/其他）
   prev: null, // 退出导入时恢复的半定量状态 { custom, frags, mode }
 };
 const _qdEl = function (id){ return document.getElementById(id); };
@@ -35,7 +37,7 @@ function cubeUI_setState(state, label){
   const btn = _qdEl("qdApply");
   if (btn){
     if (state === "ready"){
-      btn.textContent = "Apply electron density";
+      btn.textContent = cubeUI.mode === "orbital" ? "Apply orbital（双色相位）" : "Apply electron density";
       btn.style.display = "";
       btn.disabled = false;
     } else if (state === "applied"){
@@ -73,9 +75,14 @@ async function handleCubeFile(file){
   await new Promise(function (r){ setTimeout(r, 40); }); // 让“validating”状态先绘制
   let parsed = null, volume = null;
   try {
-    parsed = parseCubeText(text);
+    // allowSigned：保留原始带符号值，供轨道模式使用（密度/轨道由统计特征路由）
+    parsed = parseCubeText(text, { allowSigned: true });
     parsed.fileName = name;
-    volume = buildCubeVolume(parsed);
+    // 路由：负值体素 >20%（带符号字段）或注释行标注轨道 → 轨道模式（|ψ| 采样 + 相位）；
+    // 否则 → 电子密度模式（负值截断 + 单色 LUT）
+    const isOrbital = parsed.negVox / parsed.nVox > 0.20 || parsed.fieldType.type === "orbital";
+    cubeUI.mode = isOrbital ? "orbital" : "density";
+    volume = buildCubeVolume(parsed, { mode: cubeUI.mode });
   } catch (e){
     cubeUI_setState("error", (e && e.message ? e.message : "解析失败：" + e));
     return;
@@ -85,7 +92,18 @@ async function handleCubeFile(file){
   cubeUI.parsed = parsed;
   cubeUI.volume = volume;
   renderCubeMeta(volume, name);
-  cubeUI_setState("ready", "ready — 校验通过（单数据集电子密度 Cube），可应用");
+  if (cubeUI.mode === "orbital"){
+    cubeUI_setState("ready", "ready — 检测为带符号字段（可能为分子轨道），将按轨道模式显示相位（正/负双色）");
+    // 轨道标注选择器（仅图例文字，不假装自动推断 HOMO/LUMO）
+    const row = _qdEl("qdOrbitalRow");
+    if (row) row.style.display = "";
+    const sel = _qdEl("qdOrbitalLabel");
+    if (sel) sel.value = cubeUI.label === "未标注" ? "other" : cubeUI.label;
+  } else {
+    const row = _qdEl("qdOrbitalRow");
+    if (row) row.style.display = "none";
+    cubeUI_setState("ready", "ready — 校验通过（非负标量场，按电子密度模式），可应用");
+  }
 }
 function renderCubeMeta(vol, name){
   const el = _qdEl("qdMeta");
@@ -119,7 +137,7 @@ function renderCubeMeta(vol, name){
     + "<div class='row'><span class='k'>网格</span><span class='v'>" + vol.dims[0] + " × " + vol.dims[1] + " × " + vol.dims[2] + "</span></div>"
     + "<div class='row'><span class='k'>Voxel 数</span><span class='v'>" + vol.nVox.toLocaleString() + "</span></div>"
     + "<div class='row'><span class='k'>空间范围 (Å)</span><span class='v'>x " + rng(vol.bounds.min[0], vol.bounds.max[0]) + "<br/>y " + rng(vol.bounds.min[1], vol.bounds.max[1]) + "<br/>z " + rng(vol.bounds.min[2], vol.bounds.max[2]) + "</span></div>"
-    + "<div class='row'><span class='k'>密度</span><span class='v'>0 … " + vol.rhoMax.toExponential(2) + " a.u. · 截断 ρ ≥ " + vol.rhoCut.toExponential(2) + "（保留 " + (vol.keptFraction * 100).toFixed(1) + "% 体素）</span></div>"
+    + "<div class='row'><span class='k'>" + (cubeUI.mode === "orbital" ? "|ψ| 幅值" : "密度") + "</span><span class='v'>0 … " + vol.rhoMax.toExponential(2) + " a.u. · 截断 ≥ " + vol.rhoCut.toExponential(2) + "（保留 " + (vol.keptFraction * 100).toFixed(1) + "% 体素）</span></div>"
     + "<div class='row'><span class='k'>单位/居中</span><span class='v' class='src'>bohr → Å（×0.5292）· 已按网格中心居中</span></div>";
 }
 /* ---------- 面板开关（与创造模式互斥） ---------- */
@@ -147,7 +165,8 @@ function applyCubeVolume(vol){
   currentField = null;
   currentVolume = vol;
   cubeMode = true;
-  const data = sampleCloudCube(vol, cloud.count); // 真实密度权重采样，而非 computeField
+  setOrbitalRender(cubeUI.mode === "orbital"); // 轨道模式：固定正/负相位双 LUT
+  const data = sampleCloudCube(vol, cloud.count); // 真实密度/|ψ| 权重采样，而非 computeField
   transitionCloudFromData(data, [0, 0, 0]);
   setCubeModeUI(true);
   rebuildCubeLegend();
@@ -159,6 +178,7 @@ function exitCubeMode(){
   const prev = cubeUI.prev || { custom: false, frags: [], mode: "total" };
   cubeMode = false;
   currentVolume = null;
+  setOrbitalRender(false); // 恢复用户所选色图并关闭轨道分支
   if (prev.custom && creatorState && creatorState.pts && creatorState.pts.length){
     crApply(); // 重建创造模式分子（内部 applyMol → computeField → 过渡 → 图例）
   } else {
@@ -184,15 +204,23 @@ function chipKeyForFrags(frags){
 function setCubeModeUI(on){
   document.querySelectorAll("#modeSeg .seg-btn").forEach(function (b){
     b.classList.toggle("disabled", on);
-    b.title = on ? "导入模式（Imported electron density）是独立数据源：Total/Inductive/Resonance 仅适用于半定量 σ 模型，已禁用" : "";
+    b.title = on ? "导入模式是独立数据源：Total/Inductive/Resonance 仅适用于半定量 σ 模型，已禁用" : "";
   });
   const ex = _qdEl("explainBtn");
   if (ex){
     ex.classList.toggle("disabled", on);
     if (on){ explainGroup.visible = false; ex.classList.remove("on"); }
   }
+  // 轨道模式：色图选择器停用（相位配色固定为正暖/负冷双 LUT）
+  const cmap = _qdEl("cmapSel");
+  if (cmap){
+    const orb = on && cubeUI.mode === "orbital";
+    cmap.disabled = orb;
+    cmap.title = orb ? "轨道模式使用固定相位配色（正=暖色，负=冷色）" : "";
+    cmap.style.opacity = orb ? "0.4" : "";
+  }
 }
-/* ---------- 图例：Imported electron density 专用（与半定量模式明确区分） ---------- */
+/* ---------- 图例：Imported electron density / orbital 专用（与半定量模式明确区分） ---------- */
 function rebuildCubeLegend(){
   const el = _qdEl("legend");
   if (!el || !currentVolume) return;
@@ -200,10 +228,20 @@ function rebuildCubeLegend(){
   const cnt = {};
   vol.atoms.forEach(function (a){ cnt[a.el] = (cnt[a.el] || 0) + 1; });
   const elStr = Object.keys(cnt).sort().map(function (e){ return e + cnt[e]; }).join(" ");
-  let html = "<div class='mol' style='color:#c9b8ff'>Imported electron density <span class='formula'>" + (vol.fileName || "Cube") + "</span></div>";
+  const isOrb = cubeUI.mode === "orbital";
+  const title = isOrb ? "Imported orbital（" + (cubeUI.label || "未标注") + "）" : "Imported electron density";
+  let html = "<div class='mol' style='color:#c9b8ff'>" + title + " <span class='formula'>" + (vol.fileName || "Cube") + "</span></div>";
   html += "<div class='fxrow'><span class='fx-badge' style='border-color:rgba(184,147,255,0.5);color:#c9b8ff'>" + elStr + " · " + vol.nVox.toLocaleString() + " voxels</span></div>";
-  html += "<div class='densityhint'>数据源：Gaussian / Multiwfn Cube · 真实电子密度（非 σ 半定量）· Total / Inductive / Resonance 已禁用 · <span id='exitCubeLink' style='color:#b893ff;cursor:pointer;text-decoration:underline;text-underline-offset:2px'>退出导入模式</span></div>";
-  html += "<div class='cmaprow'><span class='cmaplabel'>低密度</span><div class='cmapbar' id='cmapBar'></div><span class='cmaplabel'>高密度</span></div>";
+  if (isOrb){
+    html += "<div class='cmaprow'><span class='cmaplabel' style='color:#7cc7ff'>负相位 ψ<0</span>"
+      + "<div class='cmapbar' id='cmapBarNeg' style='background:" + colormapCSS(ORBITAL_LUTS.neg.stops) + "'></div>"
+      + "<div class='cmapbar' id='cmapBarPos' style='background:" + colormapCSS(ORBITAL_LUTS.pos.stops) + "'></div>"
+      + "<span class='cmaplabel' style='color:#ff9a6b'>正相位 ψ>0</span></div>";
+    html += "<div class='densityhint'>数据源：Gaussian / Multiwfn Cube · 轨道波函数 ψ（粒子按 |ψ| 分布、颜色按相位）· 节点面 ψ=0 处呈空隙 · 标注由用户指定（不自动推断 HOMO/LUMO）· <span id='exitCubeLink' style='color:#b893ff;cursor:pointer;text-decoration:underline;text-underline-offset:2px'>退出导入模式</span></div>";
+  } else {
+    html += "<div class='densityhint'>数据源：Gaussian / Multiwfn Cube · 真实电子密度（非 σ 半定量）· Total / Inductive / Resonance 已禁用 · <span id='exitCubeLink' style='color:#b893ff;cursor:pointer;text-decoration:underline;text-underline-offset:2px'>退出导入模式</span></div>";
+    html += "<div class='cmaprow'><span class='cmaplabel'>低密度</span><div class='cmapbar' id='cmapBar'></div><span class='cmaplabel'>高密度</span></div>";
+  }
   el.innerHTML = html;
   const bar = _qdEl("cmapBar");
   if (bar) bar.style.background = colormapCSS(COLORMAPS[SETTINGS.colormap].stops);
@@ -232,6 +270,11 @@ function rebuildCubeLegend(){
   });
   _qdEl("quantumBtn").addEventListener("click", function (){ toggleQuantumPanel(); });
   _qdEl("qdClose").addEventListener("click", function (){ toggleQuantumPanel(false); });
+  const orbSel = _qdEl("qdOrbitalLabel");
+  if (orbSel) orbSel.addEventListener("change", function (){
+    cubeUI.label = orbSel.value === "other" ? "未标注" : orbSel.value;
+    if (cubeMode && cubeUI.mode === "orbital") rebuildCubeLegend();
+  });
   _qdEl("qdApply").addEventListener("click", function (){
     if (!cubeUI.volume) return;
     if (cubeUI.state === "applied"){
