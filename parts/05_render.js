@@ -26,7 +26,7 @@ function showFatal(msg){
       showFatal("当前浏览器不支持 WebGL，无法渲染电子云。请升级浏览器或更换设备后重试。");
     }
   } catch (e){ showFatal("WebGL 初始化失败：" + e.message); }
-  renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+  renderer = new THREE.WebGLRenderer({ antialias: true });
 })();
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, IS_LITE || IS_MOBILE ? 1 : 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -409,6 +409,7 @@ function createCloud(n){
     vertexShader: CLOUD_VERTEX,
     fragmentShader: CLOUD_FRAGMENT,
     uniforms: uniforms,
+    defines: (IS_LITE ? { SIMPLE: 1 } : {}), // 极简档：#ifdef SIMPLE 不编译噪声函数（移动 GPU 崩溃防护）
     transparent: true,
     depthWrite: false,
     depthTest: true,
