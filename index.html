@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <title>Electron Cloud · 有机电子效应可视化</title>
 <link rel="stylesheet" href="/api/worktable/template/dshell.css" onerror="(function(){var s=document.createElement('style');s.textContent='.dshell-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid rgba(124,199,255,0.35);background:rgba(124,199,255,0.10);color:#eaf6ff;border-radius:8px;padding:6px 14px;font-size:12px;font-family:inherit;cursor:pointer;letter-spacing:1px;transition:all .15s}.dshell-btn:hover{background:rgba(124,199,255,0.20);border-color:rgba(124,199,255,0.55)}.dshell-btnGhost{background:transparent;border-color:rgba(163,182,214,0.22);color:#8b96a8}.dshell-btnGhost:hover{color:#d9e8ff;border-color:rgba(124,199,255,0.4)}';document.head.appendChild(s);})()" />
 <style>
@@ -14,7 +14,8 @@
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
   font-family:"SF Pro Display","SF Pro Text",-apple-system,"PingFang SC","Segoe UI",system-ui,sans-serif;
-  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;user-select:none;}
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;user-select:none;
+  touch-action:manipulation;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;}
 #scene{position:fixed;inset:0;z-index:0}
 #scene canvas{display:block;outline:none}
 #vignette{position:fixed;inset:0;z-index:1;pointer-events:none;
@@ -157,6 +158,36 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
   #topbar{flex-wrap:wrap;justify-content:center}
   #legend{display:none}
   #brand .sub{display:none}
+}
+/* ================= 手机端适配（≤640px） ================= */
+@media (max-width:640px){
+  #topbar{top:8px;gap:6px;max-width:calc(100vw - 12px)}
+  #topbar .panel{padding:4px 9px;gap:5px}
+  #brand{font-size:10px;letter-spacing:1.5px}
+  .seg-btn{font-size:10px;padding:4px 8px}
+  #qualitySeg .seg-btn[data-q="LOW"], #qualitySeg .seg-btn[data-q="ULTRA"]{display:none}
+  #explainBtn{font-size:10px;padding:4px 6px}
+  .cmap-sel{font-size:10px;padding:2px 4px;max-width:76px}
+  #bottomBar{bottom:10px;gap:8px;max-width:calc(100vw - 16px)}
+  #moleculeBar{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;max-width:calc(100vw - 66px);
+    -webkit-overflow-scrolling:touch;scrollbar-width:none;padding:7px 8px}
+  #moleculeBar::-webkit-scrollbar{display:none}
+  .mol-chip{font-size:10px;padding:5px 9px;flex:none}
+  .mol-chip .zh{font-size:9px}
+  #creatorBtn{width:36px;height:36px}
+  #creator{left:10px;top:50%;width:calc(100vw - 20px);max-height:calc(100dvh - 100px);overflow-y:auto;padding:10px 12px}
+  #crCanvas{height:240px}
+  .cr-tool{font-size:10px;padding:8px 0}
+  .cr-bord{padding:5px 10px}
+  #popover{max-width:min(280px, calc(100vw - 16px))}
+  #infoCard{right:10px;width:min(252px, calc(100vw - 20px));padding:12px 14px}
+  #legend{display:none}
+  #toast{top:auto;bottom:70px;width:max-content;max-width:92vw;font-size:10px;text-align:center;white-space:normal;line-height:1.6}
+  #intro .big{font-size:20px;letter-spacing:6px}
+  #intro .sub{font-size:11px;letter-spacing:2px}
+  #intro .hint{font-size:9px;letter-spacing:1px;text-align:center;padding:0 24px}
+  #densityTag{max-width:calc(100vw - 16px)}
+  #debugPanel{right:8px;bottom:8px;width:calc(100vw - 16px)}
 }
 </style>
 </head>
@@ -2592,7 +2623,8 @@ function openPopover(rec){
       popoverState.ringPos = -1;
       const existing = crGroupsAt(creatorState, cIdx);
       // 规格同苯：取代 H → 挂官能团；已有基团 → 替换/移除
-      const title = "C" + (cIdx + 1) + (existing.length ? " · " + existing.map(function (x){ return GROUP_LABEL[x.group]; }).join("+") + " — 替换基团" : "–H · 替换 H");
+      const rho = rec.rel !== undefined ? " · ρ " + rec.rel.toFixed(2) : "";
+      const title = "C" + (cIdx + 1) + rho + (existing.length ? " · " + existing.map(function (x){ return GROUP_LABEL[x.group]; }).join("+") + " — 替换基团" : "–H · 替换 H");
       let html = "<div class='pv-title'><b>" + title + "</b><span class='pv-close' id='pvClose'>✕</span></div><div class='pv-grid'>" + crChipsHTML(cIdx) + "</div>";
       popoverEl.innerHTML = html;
       popoverEl.classList.add("show");
@@ -2609,7 +2641,8 @@ function openPopover(rec){
   popoverState.customAtom = -1;
   popoverState.ringPos = rec.ringPos;
   const frag = currentMol.fragments.find(function (f){ return f.pos === rec.ringPos; });
-  const title = frag ? "C" + (rec.ringPos + 1) + " · " + GROUPS[frag.group].zh + " — 替换基团" : "C" + (rec.ringPos + 1) + "–H · 替换 H";
+  const rho2 = rec.rel !== undefined ? " · ρ " + rec.rel.toFixed(2) : "";
+  const title = frag ? "C" + (rec.ringPos + 1) + " · " + GROUPS[frag.group].zh + " — 替换基团" : "C" + (rec.ringPos + 1) + "–H · 替换 H" + rho2;
   let html = "<div class='pv-title'><b>" + title + "</b><span class='pv-close' id='pvClose'>✕</span></div><div class='pv-grid'>";
   for (const k of GROUP_KEYS){
     html += "<button class='pv-chip' data-g='" + k + "'>" + k + "</button>";

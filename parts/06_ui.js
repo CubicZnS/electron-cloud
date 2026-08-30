@@ -109,7 +109,8 @@ function openPopover(rec){
       popoverState.ringPos = -1;
       const existing = crGroupsAt(creatorState, cIdx);
       // 规格同苯：取代 H → 挂官能团；已有基团 → 替换/移除
-      const title = "C" + (cIdx + 1) + (existing.length ? " · " + existing.map(function (x){ return GROUP_LABEL[x.group]; }).join("+") + " — 替换基团" : "–H · 替换 H");
+      const rho = rec.rel !== undefined ? " · ρ " + rec.rel.toFixed(2) : "";
+      const title = "C" + (cIdx + 1) + rho + (existing.length ? " · " + existing.map(function (x){ return GROUP_LABEL[x.group]; }).join("+") + " — 替换基团" : "–H · 替换 H");
       let html = "<div class='pv-title'><b>" + title + "</b><span class='pv-close' id='pvClose'>✕</span></div><div class='pv-grid'>" + crChipsHTML(cIdx) + "</div>";
       popoverEl.innerHTML = html;
       popoverEl.classList.add("show");
@@ -126,7 +127,8 @@ function openPopover(rec){
   popoverState.customAtom = -1;
   popoverState.ringPos = rec.ringPos;
   const frag = currentMol.fragments.find(function (f){ return f.pos === rec.ringPos; });
-  const title = frag ? "C" + (rec.ringPos + 1) + " · " + GROUPS[frag.group].zh + " — 替换基团" : "C" + (rec.ringPos + 1) + "–H · 替换 H";
+  const rho2 = rec.rel !== undefined ? " · ρ " + rec.rel.toFixed(2) : "";
+  const title = frag ? "C" + (rec.ringPos + 1) + " · " + GROUPS[frag.group].zh + " — 替换基团" : "C" + (rec.ringPos + 1) + "–H · 替换 H" + rho2;
   let html = "<div class='pv-title'><b>" + title + "</b><span class='pv-close' id='pvClose'>✕</span></div><div class='pv-grid'>";
   for (const k of GROUP_KEYS){
     html += "<button class='pv-chip' data-g='" + k + "'>" + k + "</button>";
