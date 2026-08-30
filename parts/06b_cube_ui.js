@@ -137,7 +137,7 @@ function renderCubeMeta(vol, name){
     + "<div class='row'><span class='k'>网格</span><span class='v'>" + vol.dims[0] + " × " + vol.dims[1] + " × " + vol.dims[2] + "</span></div>"
     + "<div class='row'><span class='k'>Voxel 数</span><span class='v'>" + vol.nVox.toLocaleString() + "</span></div>"
     + "<div class='row'><span class='k'>空间范围 (Å)</span><span class='v'>x " + rng(vol.bounds.min[0], vol.bounds.max[0]) + "<br/>y " + rng(vol.bounds.min[1], vol.bounds.max[1]) + "<br/>z " + rng(vol.bounds.min[2], vol.bounds.max[2]) + "</span></div>"
-    + "<div class='row'><span class='k'>" + (cubeUI.mode === "orbital" ? "|ψ| 幅值" : "密度") + "</span><span class='v'>0 … " + vol.rhoMax.toExponential(2) + " a.u. · 截断 ≥ " + vol.rhoCut.toExponential(2) + "（保留 " + (vol.keptFraction * 100).toFixed(1) + "% 体素）</span></div>"
+    + "<div class='row'><span class='k'>" + (cubeUI.mode === "orbital" ? "|ψ| 幅值" : "密度") + "</span><span class='v'>平均 " + vol.rhoMean.toExponential(2) + " · 峰 " + vol.rhoMax.toExponential(2) + " a.u. · 截断 ≥ " + vol.rhoCut.toExponential(2) + "（保留 " + (vol.keptFraction * 100).toFixed(1) + "% 体素）</span></div>"
     + "<div class='row'><span class='k'>单位/居中</span><span class='v' class='src'>bohr → Å（×0.5292）· 已按网格中心居中</span></div>";
 }
 /* ---------- 面板开关（与创造模式互斥） ---------- */
@@ -246,9 +246,9 @@ function rebuildCubeLegend(){
       + "<div class='cmapbar' id='cmapBarNeg' style='background:" + colormapCSS(ORBITAL_LUTS.neg.stops) + "'></div>"
       + "<div class='cmapbar' id='cmapBarPos' style='background:" + colormapCSS(ORBITAL_LUTS.pos.stops) + "'></div>"
       + "<span class='cmaplabel' style='color:#ff9a6b'>正相位 ψ>0</span></div>";
-    html += "<div class='densityhint'>数据源：Gaussian / Multiwfn Cube · 轨道波函数 ψ（粒子按 |ψ| 分布、颜色按相位）· 节点面 ψ=0 处呈空隙 · 标注由用户指定（不自动推断 HOMO/LUMO）· <span id='exitCubeLink' style='color:#b893ff;cursor:pointer;text-decoration:underline;text-underline-offset:2px'>退出导入模式</span></div>";
+    html += "<div class='densityhint'>数据源：Gaussian / Multiwfn Cube · 轨道波函数 ψ（粒子按 |ψ| 分布、颜色按相位，平均 |ψ| = 1）· 节点面 ψ=0 处呈空隙 · 标注由用户指定（不自动推断 HOMO/LUMO）· <span id='exitCubeLink' style='color:#b893ff;cursor:pointer;text-decoration:underline;text-underline-offset:2px'>退出导入模式</span></div>";
   } else {
-    html += "<div class='densityhint'>数据源：Gaussian / Multiwfn Cube · 真实电子密度（非 σ 半定量）· Total / Inductive / Resonance 已禁用 · <span id='exitCubeLink' style='color:#b893ff;cursor:pointer;text-decoration:underline;text-underline-offset:2px'>退出导入模式</span></div>";
+    html += "<div class='densityhint'>数据源：Gaussian / Multiwfn Cube · 真实电子密度（非 σ 半定量）· 颜色以分子平均电子密度归一（平均 = 1）· Total / Inductive / Resonance 已禁用 · <span id='exitCubeLink' style='color:#b893ff;cursor:pointer;text-decoration:underline;text-underline-offset:2px'>退出导入模式</span></div>";
     html += "<div class='cmaprow'><span class='cmaplabel'>低密度</span><div class='cmapbar' id='cmapBar'></div><span class='cmaplabel'>高密度</span></div>";
   }
   el.innerHTML = html;

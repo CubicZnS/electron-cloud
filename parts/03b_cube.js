@@ -432,8 +432,9 @@ function buildCubeVolume(parsed, opts){
   Rmol = Math.sqrt(Rmol);
   const capR2 = (Rmol + SPATIAL_MARGIN) * (Rmol + SPATIAL_MARGIN);
   // 采样 CDF（仅保留幅值 ≥ cutoff 且（密度模式）在分子包络内的体素；权重 = log1p(幅值/cutoff − 1)）
+  // 同时累计 kept 体素的幅值总和 → 分子平均电子密度 rhoMean（颜色归一化基准，平均=1）
   const cdf = new Float64Array(nVox);
-  let totalW = 0, kept = 0;
+  let totalW = 0, kept = 0, keptSum = 0;
   for (let i = 0; i < nVox; i++){
     let inCap = true;
     if (!signed){
@@ -447,9 +448,10 @@ function buildCubeVolume(parsed, opts){
       inCap = px * px + py * py + pz * pz <= capR2;
     }
     const v = magOf(i);
-    if (v >= cutoff && inCap){ totalW += Math.log1p(v / cutoff - 1); kept++; }
+    if (v >= cutoff && inCap){ totalW += Math.log1p(v / cutoff - 1); kept++; keptSum += v; }
     cdf[i] = totalW;
   }
+  const rhoMean = kept > 0 ? keptSum / kept : rhoMax;
   return {
     title: parsed.title, comment: parsed.comment,
     fileName: parsed.fileName || null,
@@ -459,7 +461,7 @@ function buildCubeVolume(parsed, opts){
     inv: inv,
     sample: sample,
     bounds: { min: lo, max: hi },
-    rhoMax: rhoMax, rhoCut: cutoff, keptVoxels: kept, keptFraction: kept / nVox,
+    rhoMax: rhoMax, rhoMean: rhoMean, rhoCut: cutoff, keptVoxels: kept, keptFraction: kept / nVox,
     cdf: cdf, totalW: totalW,
     vMean: parsed.vMean, vSum: parsed.vSum,
     negVox: parsed.negVox, maxAbs: parsed.maxAbs, fieldType: parsed.fieldType,
@@ -481,12 +483,16 @@ function sampleCloudCube(vol, count){
   const cdf = vol.cdf, totalW = vol.totalW;
   const nx = vol.dims[0], ny = vol.dims[1], nz = vol.dims[2], nxy = nx * ny;
   const org = vol.origin, ax = vol.axes;
-  // 颜色密度：以截断阈值为 0、峰值为 1 的对数重映射（真实密度跨 5 个数量级，
-  // 直接 log1p(ρ)/log1p(ρmax) 会让分子包络整片贴向 LUT 暗端 → 云看起来弥散/不可见）
+  // 颜色密度：以「分子平均电子密度 = 1」为基准的对数居中映射——
+  //   dAttr = 0.5 + 0.5·(log1p(ρ) − log1p(ρmean)) / half
+  //   · ρ = ρmean（分子平均密度）→ 色图正中央（0.5），高密度更暖、低密度更冷；
+  //   · half = 峰值/均值 与 均值/截断 中较大者（对数半程对称），避免大分子
+  //     （如环糊精 ρmean ≈ 12% ρmax）整片贴向暗端发紫；
+  //   · 轨道模式以「平均 |ψ|」为 1（相位双色仍按符号取 LUT）。
+  const logMean = Math.log1p(Math.max(vol.rhoMean, 1e-12));
   const logCut = Math.log1p(Math.max(vol.rhoCut, 1e-12));
   const logMax = Math.log1p(vol.rhoMax);
-  const denRange = Math.max(logMax - logCut, 1e-6);
-  const DEN_FLOOR = 0.12; // 包络最低可见度（LUT 暗端之上）
+  const half = Math.max(logMax - logMean, logMean - logCut, 1e-6);
   const rand = cubeMulberry32(20260828);
   const pos = new Float32Array(count * 3);
   const size = new Float32Array(count);
@@ -501,7 +507,7 @@ function sampleCloudCube(vol, count){
   const setP = function (i, px, py, pz, psi){
     const mag = psi < 0 ? -psi : psi;
     const magC = Math.max(mag, vol.rhoCut);
-    const dAttr = cubeClamp(DEN_FLOOR + (1 - DEN_FLOOR) * (Math.log1p(magC) - logCut) / denRange, 0, 1);
+    const dAttr = cubeClamp(0.5 + 0.5 * (Math.log1p(magC) - logMean) / half, 0, 1);
     pos[i * 3] = px; pos[i * 3 + 1] = py; pos[i * 3 + 2] = pz;
     size[i] = 0.55 + rand() * 0.75 + 0.35 * Math.min(mag / vol.rhoMax, 1);
     bright[i] = cubeClamp(0.14 + 0.28 * dAttr + rand() * 0.16, 0.05, 0.55);
