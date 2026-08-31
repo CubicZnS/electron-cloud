@@ -432,8 +432,11 @@ function buildCubeVolume(parsed, opts){
   Rmol = Math.sqrt(Rmol);
   const capR2 = (Rmol + SPATIAL_MARGIN) * (Rmol + SPATIAL_MARGIN);
   // 采样 CDF（仅保留幅值 ≥ cutoff 且（密度模式）在分子包络内的体素；权重 = log1p(幅值/cutoff − 1)）
-  // 同时累计 kept 体素的幅值总和 → 分子平均电子密度 rhoMean（颜色归一化基准，平均=1）
+  // 同时累计 kept 体素的幅值总和 → 分子平均电子密度 rhoMean（元数据展示用）
+  // 以及「加权密度分位」直方图 → rhoCDF（颜色分位展开：按粒子权重把密度映射到整条色图，
+  // 保证任何分布下颜色都有可见变化——修复电子密度模式下云呈单色的现象）
   const cdf = new Float64Array(nVox);
+  const wHist = new Float64Array(HIST_BINS);
   let totalW = 0, kept = 0, keptSum = 0;
   for (let i = 0; i < nVox; i++){
     let inCap = true;
@@ -448,10 +451,21 @@ function buildCubeVolume(parsed, opts){
       inCap = px * px + py * py + pz * pz <= capR2;
     }
     const v = magOf(i);
-    if (v >= cutoff && inCap){ totalW += Math.log1p(v / cutoff - 1); kept++; keptSum += v; }
+    if (v >= cutoff && inCap){
+      const w = Math.log1p(v / cutoff - 1);
+      totalW += w; kept++; keptSum += v;
+      wHist[binOf(v)] += w;
+    }
     cdf[i] = totalW;
   }
   const rhoMean = kept > 0 ? keptSum / kept : rhoMax;
+  // 加权密度分位 CDF（0..1）：rhoCDF[b] = 至 bin b 的累计权重占比
+  const rhoCDF = new Float64Array(HIST_BINS);
+  let wAcc = 0;
+  for (let b = 0; b < HIST_BINS; b++){
+    wAcc += wHist[b];
+    rhoCDF[b] = totalW > 0 ? wAcc / totalW : 0;
+  }
   return {
     title: parsed.title, comment: parsed.comment,
     fileName: parsed.fileName || null,
@@ -462,6 +476,7 @@ function buildCubeVolume(parsed, opts){
     sample: sample,
     bounds: { min: lo, max: hi },
     rhoMax: rhoMax, rhoMean: rhoMean, rhoCut: cutoff, keptVoxels: kept, keptFraction: kept / nVox,
+    rhoCDF: rhoCDF, rhoBins: HIST_BINS, rhoLogMax: logMax,
     cdf: cdf, totalW: totalW,
     vMean: parsed.vMean, vSum: parsed.vSum,
     negVox: parsed.negVox, maxAbs: parsed.maxAbs, fieldType: parsed.fieldType,
@@ -483,16 +498,21 @@ function sampleCloudCube(vol, count){
   const cdf = vol.cdf, totalW = vol.totalW;
   const nx = vol.dims[0], ny = vol.dims[1], nz = vol.dims[2], nxy = nx * ny;
   const org = vol.origin, ax = vol.axes;
-  // 颜色密度：以「分子平均电子密度 = 1」为基准的对数居中映射——
-  //   dAttr = 0.5 + 0.5·(log1p(ρ) − log1p(ρmean)) / half
-  //   · ρ = ρmean（分子平均密度）→ 色图正中央（0.5），高密度更暖、低密度更冷；
-  //   · half = 峰值/均值 与 均值/截断 中较大者（对数半程对称），避免大分子
-  //     （如环糊精 ρmean ≈ 12% ρmax）整片贴向暗端发紫；
-  //   · 轨道模式以「平均 |ψ|」为 1（相位双色仍按符号取 LUT）。
-  const logMean = Math.log1p(Math.max(vol.rhoMean, 1e-12));
-  const logCut = Math.log1p(Math.max(vol.rhoCut, 1e-12));
-  const logMax = Math.log1p(vol.rhoMax);
-  const half = Math.max(logMax - logMean, logMean - logCut, 1e-6);
+  // 颜色密度：加权密度分位展开（直方图均衡）——
+  //   dAttr = rhoCDF(log1p(ρ))（按粒子权重累计的分位，0..1 单调）
+  //   · 粒子颜色按密度分位铺满整条色图：低密度端暗/冷、高密度端亮/暖；
+  //   · 任何密度分布下颜色都有可见变化（修复电子密度模式云呈单色的现象）；
+  //   · 轨道模式同按 |ψ| 分位（相位双色仍按符号取 LUT）。
+  const rhoCDF = vol.rhoCDF, rhoBins = vol.rhoBins, rhoLogMax = vol.rhoLogMax;
+  const dAttrOf = function (mag){
+    const x = Math.log1p(Math.max(mag, vol.rhoCut));
+    const xc = Math.min(x / rhoLogMax, 1);
+    const b = Math.min(rhoBins - 1, Math.floor(xc * rhoBins));
+    const binLo = b / rhoBins, binHi = (b + 1) / rhoBins;
+    const t = (xc - binLo) / (binHi - binLo);
+    const below = b > 0 ? rhoCDF[b - 1] : 0;
+    return cubeClamp(below + (rhoCDF[b] - below) * t, 0, 1);
+  };
   const rand = cubeMulberry32(20260828);
   const pos = new Float32Array(count * 3);
   const size = new Float32Array(count);
@@ -506,8 +526,7 @@ function sampleCloudCube(vol, count){
   const nDens = Math.floor(count * (1 - baseline));
   const setP = function (i, px, py, pz, psi){
     const mag = psi < 0 ? -psi : psi;
-    const magC = Math.max(mag, vol.rhoCut);
-    const dAttr = cubeClamp(0.5 + 0.5 * (Math.log1p(magC) - logMean) / half, 0, 1);
+    const dAttr = dAttrOf(mag);
     pos[i * 3] = px; pos[i * 3 + 1] = py; pos[i * 3 + 2] = pz;
     size[i] = 0.55 + rand() * 0.75 + 0.35 * Math.min(mag / vol.rhoMax, 1);
     bright[i] = cubeClamp(0.14 + 0.28 * dAttr + rand() * 0.16, 0.05, 0.55);

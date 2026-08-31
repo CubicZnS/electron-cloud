@@ -246,9 +246,9 @@ function rebuildCubeLegend(){
       + "<div class='cmapbar' id='cmapBarNeg' style='background:" + colormapCSS(ORBITAL_LUTS.neg.stops) + "'></div>"
       + "<div class='cmapbar' id='cmapBarPos' style='background:" + colormapCSS(ORBITAL_LUTS.pos.stops) + "'></div>"
       + "<span class='cmaplabel' style='color:#ff9a6b'>正相位 ψ>0</span></div>";
-    html += "<div class='densityhint'>数据源：Gaussian / Multiwfn Cube · 轨道波函数 ψ（粒子按 |ψ| 分布、颜色按相位，平均 |ψ| = 1）· 节点面 ψ=0 处呈空隙 · 标注由用户指定（不自动推断 HOMO/LUMO）· <span id='exitCubeLink' style='color:#b893ff;cursor:pointer;text-decoration:underline;text-underline-offset:2px'>退出导入模式</span></div>";
+    html += "<div class='densityhint'>数据源：Gaussian / Multiwfn Cube · 轨道波函数 ψ（粒子按 |ψ| 分布、颜色按 |ψ| 分位 + 相位双色）· 节点面 ψ=0 处呈空隙 · 标注由用户指定（不自动推断 HOMO/LUMO）· <span id='exitCubeLink' style='color:#b893ff;cursor:pointer;text-decoration:underline;text-underline-offset:2px'>退出导入模式</span></div>";
   } else {
-    html += "<div class='densityhint'>数据源：Gaussian / Multiwfn Cube · 真实电子密度（非 σ 半定量）· 颜色以分子平均电子密度归一（平均 = 1）· Total / Inductive / Resonance 已禁用 · <span id='exitCubeLink' style='color:#b893ff;cursor:pointer;text-decoration:underline;text-underline-offset:2px'>退出导入模式</span></div>";
+    html += "<div class='densityhint'>数据源：Gaussian / Multiwfn Cube · 真实电子密度（非 σ 半定量）· 颜色按密度分位展开（低密度冷/暗 · 高密度暖/亮）· Total / Inductive / Resonance 已禁用 · <span id='exitCubeLink' style='color:#b893ff;cursor:pointer;text-decoration:underline;text-underline-offset:2px'>退出导入模式</span></div>";
     html += "<div class='cmaprow'><span class='cmaplabel'>低密度</span><div class='cmapbar' id='cmapBar'></div><span class='cmaplabel'>高密度</span></div>";
   }
   el.innerHTML = html;
