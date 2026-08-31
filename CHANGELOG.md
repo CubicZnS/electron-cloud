@@ -1,8 +1,22 @@
 本项目采用语义化版本（SemVer）：主版本号 = 功能里程碑，次版本号 = 兼容性新功能，补丁号 = 修复。
 
-## [v2.5.2] — 2026-08-31 · 修复：导入后电子云停留在旧状态（HOMO 全黄 / 密度仍为旧苯云）
+## [v2.5.3] — 2026-08-31 · UI 统一与防重叠：Quantum Data 面板高度、图例遮挡、文字层级
 
-### 修复
+### 修复与优化
+- **Quantum Data 面板高度/重叠**：面板从垂直居中改为顶对齐（top:76px），max-height 为底部工具区留 ≥82px —— 打开面板不再与下方分子栏/按钮/图例重叠；移动端 top:112px 避开折叠顶栏。
+- **图例遮挡**：左侧面板（Quantum Data / 创造模式）打开时自动隐藏左下角图例，关闭后恢复（避免面板盖住图例）。
+- **整体一致性**：创造面板、信息卡同步顶对齐 + 高度上限（infoCard 不再与调试面板重叠）；辅助提示文字统一规格（9px/faint/字距.5/行高1.7，覆盖 .qd-hint/.cr-hint/.densityhint）；Quantum 面板宽度 376px 与创造面板 378px 视觉一致。
+- **设计规格文档化**：parts/01_head.html 内置统一设计规格注释；docs/REFERENCES.md 新增 Resource 31（规范归纳自既有开源素材：dshell 皮肤 / Lucide / matplotlib·ChimeraX 色规范）。
+
+### 验证
+- node tools/validate-cube.mjs：59/59；node tools/validate-sigma.mjs：15/15；node tools/build.mjs：SYNTAX_OK
+
+### 文件
+- 修改：parts/01_head.html、parts/06b_cube_ui.js、parts/06_ui.js、docs/REFERENCES.md、index.html（组装产物）、CHANGELOG.md、README.md
+
+---
+
+## [v2.5.2] — 2026-08-31 · 修复：导入后电子云停留在旧状态（HOMO 全黄 / 密度仍为旧苯云）
 - **根因**：applyCubeVolume 的导入过渡走 transitionCloudFromData 的**异步分帧粒子匹配**（requestAnimationFrame 分帧执行）；在部分浏览器环境下匹配回调不完成（uTransStart 保持 -999、props/sign 不写入）→ 云停留在旧苯云状态：HOMO 用旧 props（w=0）→ 全部走正相位 LUT（全黄），密度仍是旧苯云。
 - **修复**（parts/05_render.js applyCubeSampleDirect）：导入模式改为**同步直接写入采样云 + 线性过渡**——旧位置快照 → 新位置/属性/相位立即写入，uTransStart/uTransDur 同步设置，随机延迟柔和波浪过渡；完全不依赖异步分帧匹配，导入后立即呈现正确云与相位双色。
 

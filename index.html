@@ -72,7 +72,7 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
 .pv-chip:hover{color:#fff;border-color:rgba(124,199,255,0.5);background:rgba(124,199,255,0.12)}
 .pv-chip.remove{color:#ff9a8f}
 .pv-chip.remove:hover{border-color:rgba(255,120,110,0.5);background:rgba(255,110,100,0.12)}
-#infoCard{position:fixed;right:18px;top:50%;transform:translateY(-50%);z-index:45;width:252px;padding:14px 16px;visibility:hidden;opacity:0;transition:opacity .25s ease, visibility .25s}
+#infoCard{position:fixed;right:18px;top:76px;z-index:45;width:252px;padding:14px 16px;visibility:hidden;opacity:0;transition:opacity .25s ease, visibility .25s;max-height:calc(100dvh - 170px);overflow-y:auto}
 #infoCard.show{visibility:visible;opacity:1}
 #infoCard h3{font-size:14px;letter-spacing:1px;font-weight:600;color:#fff;display:flex;align-items:center;justify-content:space-between}
 #infoCard h3 .zh{color:var(--dim);font-size:11px;font-weight:400}
@@ -98,8 +98,8 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
 #densityTag.show{visibility:visible;opacity:1;transform:translateY(0)}
 #densityTag .dt-val{font-size:15px;font-weight:700;color:#eaf6ff;font-variant-numeric:tabular-nums;letter-spacing:1px}
 #densityTag .dt-cap{font-size:8px;color:var(--faint);letter-spacing:1px;white-space:nowrap}
-#legend .densityhint{font-size:9px;color:var(--faint);letter-spacing:1px;margin-top:6px}
-#creator{position:fixed;left:18px;top:50%;transform:translateY(-50%);z-index:35;width:378px;padding:12px 14px;display:none;flex-direction:column;gap:8px}
+#legend .densityhint{font-size:9px;color:var(--faint);letter-spacing:.5px;margin-top:6px;line-height:1.7}
+#creator{position:fixed;left:18px;top:76px;z-index:35;width:378px;padding:12px 14px;display:none;flex-direction:column;gap:8px;max-height:calc(100dvh - 158px);overflow-y:auto}
 #creator.show{display:flex}
 #creator .cr-head{display:flex;justify-content:space-between;align-items:center;font-size:12px;letter-spacing:1.5px;color:#eaf6ff}
 #creator .cr-close{color:var(--faint);cursor:pointer;font-size:12px;padding:0 3px}
@@ -115,7 +115,7 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
 .cr-tool.active{color:#eaf6ff;background:rgba(124,199,255,0.14);border-color:rgba(124,199,255,0.45)}
 #creator .cr-actions{display:flex;gap:6px}
 #creator .cr-actions .dshell-btn{flex:1;padding:6px 0;font-size:11px}
-#creator .cr-hint{font-size:9px;color:var(--faint);letter-spacing:1px;line-height:1.7}
+#creator .cr-hint{font-size:9px;color:var(--faint);letter-spacing:.5px;line-height:1.7}
 
 .cr-gp{display:inline-flex;flex-direction:column;align-items:center;gap:1px;min-width:46px;padding:4px 6px;border:1px solid var(--stroke);background:rgba(255,255,255,0.04);color:var(--dim);font-size:9px;border-radius:7px;cursor:pointer;font-family:inherit;line-height:1.25;transition:all .15s}
 .cr-gp .sym{font-size:11px;font-weight:600;color:#d9e8ff}
@@ -135,13 +135,19 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
 #creatorBtn.active{color:#eaf6ff;background:rgba(124,199,255,0.16);border-color:rgba(124,199,255,0.55);
   box-shadow:0 0 22px rgba(124,199,255,0.30)}
 /* ================= Quantum Data（电子密度 Cube 导入） ================= */
+/* —— 设计规格（统一，延续既有开源素材语言：dshell 皮肤 / Lucide 图标 / matplotlib·ChimeraX 色规范）——
+   面板：深色玻璃 .panel 基底；左侧面板统一「顶对齐 top:76px」（避开顶部栏），
+   max-height 为下方底部工具区/图例留出 ≥82px → 打开面板不再与下方内容重叠；
+   Quantum 宽 376px 与创造面板 378px 视觉一致。
+   文字层级：面板标题 12px/字距1.5 · 描述 10px/字距.3 · 辅助提示统一
+   9px/var(--faint)/字距.5/行高1.7 · 状态/元数据 10px · 主按钮 dshell-btn。 */
 #quantumBtn{width:40px;height:40px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;
   color:var(--violet);cursor:pointer;flex:none;transition:all .18s}
 #quantumBtn:hover{color:#f3e8ff;border-color:rgba(184,147,255,0.55);box-shadow:0 0 18px rgba(184,147,255,0.20)}
 #quantumBtn.active{color:#f3e8ff;background:rgba(184,147,255,0.16);border-color:rgba(184,147,255,0.55);
   box-shadow:0 0 22px rgba(184,147,255,0.30)}
-#quantumPanel{position:fixed;left:18px;top:50%;transform:translateY(-50%);z-index:35;width:354px;padding:14px 16px;
-  display:none;flex-direction:column;gap:9px;max-height:calc(100dvh - 120px);overflow-y:auto}
+#quantumPanel{position:fixed;left:18px;top:76px;z-index:35;width:376px;padding:14px 16px;
+  display:none;flex-direction:column;gap:9px;max-height:calc(100dvh - 158px);overflow-y:auto}
 #quantumPanel.show{display:flex}
 .qd-head{display:flex;justify-content:space-between;align-items:center;font-size:12px;letter-spacing:1.5px;color:#eaf6ff}
 .qd-head b{display:flex;align-items:center;gap:7px}
@@ -217,13 +223,13 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
   .mol-chip .zh{font-size:9px}
   #creatorBtn{width:36px;height:36px}
   #quantumBtn{width:36px;height:36px}
-  #quantumPanel{left:10px;top:50%;width:calc(100vw - 20px);max-height:calc(100dvh - 100px);overflow-y:auto;padding:12px 14px}
-  #creator{left:10px;top:50%;width:calc(100vw - 20px);max-height:calc(100dvh - 100px);overflow-y:auto;padding:10px 12px}
+  #quantumPanel{left:10px;top:112px;width:calc(100vw - 20px);max-height:calc(100dvh - 182px);overflow-y:auto;padding:12px 14px}
+  #creator{left:10px;top:112px;width:calc(100vw - 20px);max-height:calc(100dvh - 182px);overflow-y:auto;padding:10px 12px}
   #crCanvas{height:240px}
   .cr-tool{font-size:10px;padding:8px 0}
   .cr-bord{padding:5px 10px}
   #popover{max-width:min(280px, calc(100vw - 16px))}
-  #infoCard{right:10px;width:min(252px, calc(100vw - 20px));padding:12px 14px}
+  #infoCard{right:10px;top:112px;width:min(252px, calc(100vw - 20px));padding:12px 14px;max-height:calc(100dvh - 192px);overflow-y:auto}
   #legend{display:none}
   #toast{top:auto;bottom:70px;width:max-content;max-width:92vw;font-size:10px;text-align:center;white-space:normal;line-height:1.6}
   #intro .big{font-size:20px;letter-spacing:6px}
@@ -3877,6 +3883,7 @@ function toggleCreator(show){
   document.getElementById("creatorBtn").classList.toggle("active", creatorState.open);
   if (creatorState.open) crRedraw();
   if (creatorState.open) toggleQuantumPanel(false); // 与 Quantum Data 面板互斥
+  if (typeof syncLegendVisibility === "function") syncLegendVisibility(); // 打开/关闭时同步图例可见性
 }
 if (crCanvas){
   crCanvas.addEventListener("click", function (e){
@@ -4093,6 +4100,13 @@ function renderCubeMeta(vol, name){
     + "<div class='row'><span class='k'>" + (cubeUI.mode === "orbital" ? "|ψ| 幅值" : "密度") + "</span><span class='v'>平均 " + vol.rhoMean.toExponential(2) + " · 峰 " + vol.rhoMax.toExponential(2) + " a.u. · 截断 ≥ " + vol.rhoCut.toExponential(2) + "（保留 " + (vol.keptFraction * 100).toFixed(1) + "% 体素）</span></div>"
     + "<div class='row'><span class='k'>单位/居中</span><span class='v' class='src'>bohr → Å（×0.5292）· 已按网格中心居中</span></div>";
 }
+/* 左侧面板打开时隐藏左下角图例，避免面板与图例重叠遮挡；关闭后恢复（移动端图例本就隐藏） */
+function syncLegendVisibility(){
+  const el = _qdEl("legend");
+  if (!el) return;
+  const hide = cubeUI.open || (typeof creatorState !== "undefined" && creatorState.open);
+  el.style.display = hide ? "none" : "";
+}
 /* ---------- 面板开关（与创造模式互斥） ---------- */
 function toggleQuantumPanel(show){
   const open = show !== undefined ? show : !cubeUI.open;
@@ -4100,6 +4114,7 @@ function toggleQuantumPanel(show){
   _qdEl("quantumPanel").classList.toggle("show", open);
   _qdEl("quantumBtn").classList.toggle("active", open);
   if (open){ toggleCreator(false); syncParticleSlider(); } // 两个左侧面板互斥；打开时同步粒子滑块
+  syncLegendVisibility();
 }
 /* ---------- 应用：切换到真实密度数据源（现有粒子过渡与 shader 全部复用） ---------- */
 function applyCubeVolume(vol){

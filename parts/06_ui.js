@@ -512,6 +512,7 @@ function toggleCreator(show){
   document.getElementById("creatorBtn").classList.toggle("active", creatorState.open);
   if (creatorState.open) crRedraw();
   if (creatorState.open) toggleQuantumPanel(false); // 与 Quantum Data 面板互斥
+  if (typeof syncLegendVisibility === "function") syncLegendVisibility(); // 打开/关闭时同步图例可见性
 }
 if (crCanvas){
   crCanvas.addEventListener("click", function (e){

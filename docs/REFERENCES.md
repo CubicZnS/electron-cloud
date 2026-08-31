@@ -208,3 +208,10 @@
 - License: 公开标准数据（NIST）
 - Used for: Cube 原子单位坐标/原点/轴 → 项目 Å 坐标系；元素符号表（原子序数→符号）为公开标准数据
 - Modified parts: 数值采用；统一按网格中心居中
+
+## Resource 31
+- Name: UI 设计规格（面板布局与文字层级统一规范）——延续本项目既有开源视觉语言
+- URL: （无新增外部素材）规范归纳自：dshell 皮肤（Resource 11）、Lucide 图标（Resource 20/26）、matplotlib/ChimeraX 色规范（Resource 12/13）
+- License: 同上述各资源
+- Used for: 统一 UI 设计规格——左侧面板顶对齐（top:76px，max-height 为底部工具区留 ≥82px，避免重叠遮挡）；文字层级：面板标题 12px/字距1.5、描述 10px/字距.3、辅助提示统一 9px/faint/字距.5/行高1.7、状态与元数据 10px、主按钮 dshell-btn；面板打开时隐藏左下角图例防遮挡
+- Modified parts: 本项目样式实现（未复制第三方 CSS）

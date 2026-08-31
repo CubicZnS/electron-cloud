@@ -140,6 +140,13 @@ function renderCubeMeta(vol, name){
     + "<div class='row'><span class='k'>" + (cubeUI.mode === "orbital" ? "|ψ| 幅值" : "密度") + "</span><span class='v'>平均 " + vol.rhoMean.toExponential(2) + " · 峰 " + vol.rhoMax.toExponential(2) + " a.u. · 截断 ≥ " + vol.rhoCut.toExponential(2) + "（保留 " + (vol.keptFraction * 100).toFixed(1) + "% 体素）</span></div>"
     + "<div class='row'><span class='k'>单位/居中</span><span class='v' class='src'>bohr → Å（×0.5292）· 已按网格中心居中</span></div>";
 }
+/* 左侧面板打开时隐藏左下角图例，避免面板与图例重叠遮挡；关闭后恢复（移动端图例本就隐藏） */
+function syncLegendVisibility(){
+  const el = _qdEl("legend");
+  if (!el) return;
+  const hide = cubeUI.open || (typeof creatorState !== "undefined" && creatorState.open);
+  el.style.display = hide ? "none" : "";
+}
 /* ---------- 面板开关（与创造模式互斥） ---------- */
 function toggleQuantumPanel(show){
   const open = show !== undefined ? show : !cubeUI.open;
@@ -147,6 +154,7 @@ function toggleQuantumPanel(show){
   _qdEl("quantumPanel").classList.toggle("show", open);
   _qdEl("quantumBtn").classList.toggle("active", open);
   if (open){ toggleCreator(false); syncParticleSlider(); } // 两个左侧面板互斥；打开时同步粒子滑块
+  syncLegendVisibility();
 }
 /* ---------- 应用：切换到真实密度数据源（现有粒子过渡与 shader 全部复用） ---------- */
 function applyCubeVolume(vol){
