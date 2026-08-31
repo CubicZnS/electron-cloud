@@ -20,6 +20,67 @@ GPU 粒子电子云交互可视化：分子 · 电子云 · 诱导效应 / 共�
 - **Quantum Data（电子密度 Cube 导入）**：底部 Quantum Data 入口导入 Gaussian cubegen / Multiwfn 导出的单标量场电子密度 `.cube/.cub`（64 MB / 400 万体素上限，本地解析不上传）；bohr→Å 换算并按网格中心居中；粒子按真实密度权重采样（对数密度加权；低密度截断 = max(95% 总质量阈值, 0.1%×峰值) 双保险，松包围盒/非零背景也不会弥散）；复用现有粒子过渡 / 色图 LUT / Bloom / 画质切换；图例标注 `Imported electron density`；导入模式下 Total/Inductive/Resonance 与官能团替换禁用并说明原因，可一键退出回半定量模式
 - Explain 模式 / 诱导-共轭分解模式 / 性能自适应降级 / 悬停密度标签
 
+## Quantum Data 支持文件清单（v2.5.9）
+
+> 本文档与代码同步维护：parts/03b_cube.js（解析/采样）、parts/06b_cube_ui.js（面板路由）改动后请同步更新下表。
+
+### 文件格式
+
+| 项目 | 支持情况 |
+|---|---|
+| 扩展名 | .cube / .cub（Gaussian Cube 格式） |
+| 来源 | Gaussian cubegen / Multiwfn / Psi4 / CPMD / CP2K / NWChem / PWScf / cclib 等一切按 Cube 规范输出的程序 |
+| 处理方式 | 本地解析，不上传（内存读取） |
+| 大小上限 | ≤ 64 MB |
+| 体素上限 | ≤ 4,000,000（约 159³ 网格） |
+
+### 字段类型自动识别与导入行为
+
+| 字段类型 | 判定依据 | 导入模式 | 元数据标注 |
+|---|---|---|---|
+| 电子密度 | 注释含 density（排除 functional/theory/potential 上下文）；或非负+大振幅 | 密度模式（单色 Plasma，颜色按密度分位展开） | 电子密度（置信高/中） |
+| 分子轨道 | 注释含 orbital/homo/lumo/wave function；或负值 >20% | 带符号双色相位（正/负） | 分子轨道（非电子密度） |
+| Hartree 势 | 注释含 hartree | 带符号双色相位 | Hartree 势（非电子密度） |
+| ESP 静电势 | 注释含 esp/electrostatic potential/mep | 带符号双色相位 | 静电势 ESP（非电子密度） |
+| ELF / Laplacian | 注释含对应关键词 | 带符号双色相位 | ELF / Laplacian（非电子密度） |
+| 自旋密度 | 负值约 50% | 双色显示正/负自旋区 | 带符号字段 |
+| 非负/未知场 | 无关键词启发式 | 密度或双色（按负值占比路由） | 低置信诚实标注 |
+
+> 势场类（orbital/hartree/esp/laplacian/elf/signed_field）一律按带符号双色相位路由，避免长程势场按密度截断弥散。
+
+### 数据布局 / 坐标处理
+
+| 能力 | 说明 |
+|---|---|
+| 非零原点 + 三轴仿射 | 任意 origin、非正方体网格、完整 3x3 逆变换（Cramer） |
+| 数据序自动检测 | 6 种布局（xyz..zyx）按原子处密度均值择优；非 x-fastest 自动重排 |
+| 单位自适应 | 原子坐标最近邻中位数 <1.5 → 判定 Å（÷0.529 统一到 bohr 再检测）——修复 CPMD 伪原子文件（坐标 Å / 网格 bohr）布局检测失效 |
+| 网格中心居中 | 分子与网格统一居中显示 |
+| CPMD 伪原子检测 | 原子序数 = 1..N 连续标签 + 部分电荷 → 元素几何推断（C/H/N/O/S），坐标按 Å 读（骨架尺寸正确） |
+| 元素视觉表 | 30 种元素（H/C/N/O/F/Cl + B/Si/P/S/Br/I + 碱金属/碱土 + 常见过渡金属），CPK 配色 |
+
+### 会拒绝的文件（明确中文报错）
+
+| 错误 | 条件 |
+|---|---|
+| EMPTY | 空文件 / 无法读取 |
+| BAD_HEADER / BAD_DIMS / BAD_ATOMS | 头部 / 网格轴 / 原子行格式或数值无效 |
+| TOO_MANY_VOXELS | 体素 > 400 万 |
+| MULTI_DATASET | 负原子数 / 数据集计数 ≥2（Multiwfn 多轨道合并） |
+| NON_FINITE | 体素含 NaN / Infinity |
+| DATA_COUNT | 体素数量与网格不符 |
+| NON_POSITIVE | 整体非正值（无有效密度） |
+| SIGNED_FIELD | 默认密度模式遇 >20% 负值（引导重新导出 electron density） |
+| DEGENERATE_AXES | 网格轴线性相关 |
+| 文件超 64MB | UI 层直接拒绝 |
+
+### 样例库（sample-cubes/，23 个文件全部验证）
+
+- **electron_density/（9）**：苯、乙醇、CO、NH₃、水、h-BN、Mn₂GeO₄ 自旋密度、913 原子蛋白-配体（CPMD）、Psi4 水密度
+- **orbital/（9）**：咖啡因 HOMO/LUMO/MO46/MO56、C9H3Cl3O3、CO LUMO、水 ESP×2、苯 Hartree 势
+- **unsupported/（5）**：负网格数 CPMD（913/4667 原子）、负原子数苯 HOMO、vspin 4 数据集、Cd MO48 双分量（格式变体参考）
+- 来源与许可证见 docs/REFERENCES.md Resources 32–39；数据文件不入 git
+
 ## 快速开始
 
 任意静态服务器打开 `index.html` 即可（需网络加载 three.js）：
@@ -38,7 +99,7 @@ python3 -m http.server 8080
 |---|---|
 | `index.html` | **单文件产物**（自包含：样式/着色器/数据/逻辑全部内嵌） |
 | `parts/` | 源码分片（01_head → 08_tail；新增 03b_cube.js 纯 Cube 解析/采样模块、06b_cube_ui.js 导入面板），`tools/build.mjs` 组装 |
-| `tools/` | 构建（build.mjs）、数据生成（gen-molecules.mjs）、σ 校验（validate-sigma.mjs，15/15 通过）、Cube 校验（validate-cube.mjs，35/35 通过） |
+| `tools/` | 构建（build.mjs）、数据生成（gen-molecules.mjs）、σ 校验（validate-sigma.mjs，15/15 通过）、Cube 校验（validate-cube.mjs，65/65 通过） |
 | `docs/RESEARCH.md` | 技术方案与模型推导（化学引擎/密度/构型/性能） |
 | `docs/REFERENCES.md` | 全部复用资源与许可证清单（务必随项目分发） |
 
