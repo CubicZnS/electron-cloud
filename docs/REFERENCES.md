@@ -213,5 +213,39 @@
 - Name: UI 设计规格（面板布局与文字层级统一规范）——延续本项目既有开源视觉语言
 - URL: （无新增外部素材）规范归纳自：dshell 皮肤（Resource 11）、Lucide 图标（Resource 20/26）、matplotlib/ChimeraX 色规范（Resource 12/13）
 - License: 同上述各资源
+## Resource 32
+- Name: cclib 测试 Cube 文件（benzene / CO / NH3 / H2O 电子密度）
+- URL: https://github.com/cclib/cclib （test/method/*.cube）
+- License: BSD-3-Clause
+- Used for: sample-cubes/electron_density/ 样例（苯 2.2M 体素等）；解析器跨来源验证
+- Modified parts: 未修改
+
+## Resource 33
+- Name: 3Dmol.js 测试 Cube 文件（乙醇密度、BN 密度、CO LUMO、苯 HOMO、CPMD 蛋白质-配体密度）
+- URL: https://github.com/3dmol/3Dmol.js （tests/auto/data/*）
+- License: BSD-3-Clause
+- Used for: sample-cubes/ 样例（electron_density/orbital/unsupported 分类）
+- Modified parts: 未修改；CPMD 负网格数变体、负原子数旧约定文件标注为 unsupported
+
+## Resource 34
+- Name: molorbdraw 示例（DD.cub，C9H3Cl3O3 分子轨道）
+- URL: https://github.com/PhelanShao/molorbdraw （examples/DD.cub）
+- License: MIT
+- Used for: sample-cubes/orbital/c9h3cl3o3_orbital.cube
+- Modified parts: 未修改
+
+## Resource 35
+- Name: fft_electronic_spin_density 示例（Mn2GeO4 / Cu2AC4 自旋密度，PWScf FFT 网格）
+- URL: https://github.com/liborvojacek/fft_electronic_spin_density （cube_files/*.cube）
+- License: MIT
+- Used for: sample-cubes/electron_density/mn2geo4_spin_density.cube（Cu2AC4 256³ 超出本项目 4M 体素上限，未收录）
+- Modified parts: 未修改
+
+## Resource 36
+- Name: Cubefile 测试（caffeine_46–56 分子轨道 Cube）
+- URL: https://github.com/alistairboyer/Cubefile （_testfiles/caffeine_*.cube）
+- License: MIT
+- Used for: sample-cubes/orbital/caffeine_homo|lumo|mo46|mo56.cube
+- Modified parts: 未修改；HOMO/LUMO 由轨道序号推断（咖啡因 102 电子 → MO51=HOMO、MO52=LUMO）
 - Used for: 统一 UI 设计规格——左侧面板顶对齐（top:76px，max-height 为底部工具区留 ≥82px，避免重叠遮挡）；文字层级：面板标题 12px/字距1.5、描述 10px/字距.3、辅助提示统一 9px/faint/字距.5/行高1.7、状态与元数据 10px、主按钮 dshell-btn；面板打开时隐藏左下角图例防遮挡
 - Modified parts: 本项目样式实现（未复制第三方 CSS）
