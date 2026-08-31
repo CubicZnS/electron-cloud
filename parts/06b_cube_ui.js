@@ -78,9 +78,11 @@ async function handleCubeFile(file){
     // allowSigned：保留原始带符号值，供轨道模式使用（密度/轨道由统计特征路由）
     parsed = parseCubeText(text, { allowSigned: true });
     parsed.fileName = name;
-    // 路由：负值体素 >20%（带符号字段）或注释行标注轨道 → 轨道模式（|ψ| 采样 + 相位）；
+    // 路由：负值体素 >20%（带符号字段）或注释行标注轨道/势场 → 带符号模式（|ψ| 采样 + 相位）；
     // 否则 → 电子密度模式（负值截断 + 单色 LUT）
-    const isOrbital = parsed.negVox / parsed.nVox > 0.20 || parsed.fieldType.type === "orbital";
+    // 势场类（Hartree / ESP / Laplacian）长程带符号，按密度模式截断会弥散全盒 → 一律走双色相位
+    const _nonDensityField = { orbital: 1, hartree: 1, esp: 1, laplacian: 1, elf: 1, signed_field: 1 };
+    const isOrbital = parsed.negVox / parsed.nVox > 0.20 || !!_nonDensityField[parsed.fieldType.type];
     cubeUI.mode = isOrbital ? "orbital" : "density";
     volume = buildCubeVolume(parsed, { mode: cubeUI.mode });
   } catch (e){
@@ -93,7 +95,14 @@ async function handleCubeFile(file){
   cubeUI.volume = volume;
   renderCubeMeta(volume, name);
   if (cubeUI.mode === "orbital"){
-    cubeUI_setState("ready", "ready — 检测为带符号字段（可能为分子轨道），将按轨道模式显示相位（正/负双色）");
+    // 势场（Hartree/ESP/Laplacian）与轨道都带符号 → 双色相位模式；文案诚实区分
+    const _ftZh = { orbital: "分子轨道", hartree: "Hartree 势场", esp: "静电势 ESP", laplacian: "Laplacian", elf: "ELF" };
+    const ftType = (volume.fieldType && volume.fieldType.type) || "";
+    const what = _ftZh[ftType] || (parsed.negVox / parsed.nVox > 0.20 ? "带符号字段" : "带符号标量场");
+    const nonDensity = ftType === "hartree" || ftType === "esp" || ftType === "laplacian" || ftType === "elf";
+    cubeUI_setState("ready", nonDensity
+      ? "ready — 检测为" + what + "（非电子密度），按带符号场显示正/负双色相位"
+      : "ready — 检测为" + what + "（带符号），按双色相位显示");
     // 轨道标注选择器（仅图例文字，不假装自动推断 HOMO/LUMO）
     const row = _qdEl("qdOrbitalRow");
     if (row) row.style.display = "";
@@ -121,9 +130,10 @@ function renderCubeMeta(vol, name){
       density: "电子密度",
       orbital: "分子轨道（非电子密度）",
       esp: "静电势 ESP（非电子密度）",
+      hartree: "Hartree 势（非电子密度）",
       elf: "ELF（非电子密度）",
       laplacian: "Laplacian（非电子密度）",
-      signed_field: "带符号标量场（分子轨道或 ESP，非电子密度）",
+      signed_field: "带符号标量场（分子轨道或 ESP 等，非电子密度）",
       electron_density_likely: "可能为电子密度",
       nonnegative_field: "非负标量场（可能为 ELF 等，未必是密度）",
       mixed_small_negative: "含少量负值（可能为密度差或数值噪声）",

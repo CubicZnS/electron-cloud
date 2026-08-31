@@ -70,6 +70,9 @@ const FIELD_HINT_KEYS = {
   esp:       ["esp", "electrostatic potential", "mep"],
   elf:       ["elf", "electron localization function"],
   laplacian: ["laplacian", "lap of"],
+  // CP2K / 其它 DFT 代码导出的 Hartree（库仑）势场：长程、处处非零、常带符号，
+  // 不是电子密度——按「势场」诚实标注并路由到带符号（双色相位）模式
+  hartree:   ["hartree"],
 };
 function estimateCubeFieldType(stats){
   const text = ((stats.title || "") + " " + (stats.comment || "")).toLowerCase();
@@ -78,6 +81,7 @@ function estimateCubeFieldType(stats){
     || (hit(["density"]) && !hit(["functional", "theory", "potential", "orbital"]));
   let hintKey = null;
   if (hit(FIELD_HINT_KEYS.orbital)) hintKey = "orbital";
+  else if (hit(FIELD_HINT_KEYS.hartree)) hintKey = "hartree";
   else if (hit(FIELD_HINT_KEYS.esp)) hintKey = "esp";
   else if (hit(FIELD_HINT_KEYS.elf)) hintKey = "elf";
   else if (hit(FIELD_HINT_KEYS.laplacian)) hintKey = "laplacian";

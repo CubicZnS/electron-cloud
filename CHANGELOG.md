@@ -1,5 +1,25 @@
 本项目采用语义化版本（SemVer）：主版本号 = 功能里程碑，次版本号 = 兼容性新功能，补丁号 = 修复。
 
+## [v2.5.7] — 2026-08-31 · 修复：势场 Cube（Hartree/ESP 等非电子密度）被误按密度导入导致弥散
+
+### 修复
+- **根因**：CP2K 等导出的 Hartree 势场（长程库仑势，处处非零、常带符号）被当作电子密度处理——注释行 "HARTREE POTENTIAL" 未被字段类型识别（fallback 到 mixed_small_negative），按密度模式时 cutoff（0.1%×峰值）截不掉势场背景 → 保留 90% 体素 → 粒子云铺满全盒弥散，且分子在网格角落时骨架与云错位。
+- **字段类型识别**（parts/03b_cube.js）：FIELD_HINT_KEYS 新增 `hartree: ["hartree"]`——注释含 "HARTREE" 即高置信标注为 hartree（非电子密度）。
+- **路由**（parts/06b_cube_ui.js）：势场类（orbital/hartree/esp/laplacian/elf/signed_field）一律按带符号（双色相位）模式路由，不再落入密度模式；ready 状态文案区分「Hartree 势场 / 静电势 ESP / 分子轨道」（非电子密度），元数据标签新增「Hartree 势（非电子密度）」。
+- **样例分类修正**：cp2k_benzene_Hartree.cube 从 electron_density/ 移入 orbital/（势场样本），README 说明其来自 CP2K 周期体系（tipscan）、分子位于网格一角。
+
+### 实测
+- cp2k_benzene_Hartree.cube：修复前 kept 90.1%（弥散）→ 修复后 kept 2.8%（粒子集中在势场高幅值区，双色相位）；字段类型 high 置信「Hartree 势（非电子密度）」。
+- 回归：苯/水/913 原子蛋白等密度文件仍走 density 模式；Mn2GeO4 自旋密度/咖啡因 HOMO/ESP 仍走双色相位。
+
+### 验证
+- node tools/validate-cube.mjs：61/61（新增 hartree 识别 2 项）；node tools/validate-sigma.mjs：15/15；node tools/build.mjs：SYNTAX_OK
+
+### 文件
+- 修改：parts/03b_cube.js、parts/06b_cube_ui.js、tools/validate-cube.mjs、docs/REFERENCES.md（Resource 38）、sample-cubes/README.md、CHANGELOG.md、README.md
+
+---
+
 ## [v2.5.6] — 2026-08-31 · 扩展：更多开源 Cube 样例（含 913 原子大分子）/ 修复验证脚本测试数据
 
 ### 新增样例（sample-cubes/，未纳入 git，来源记录见 docs/REFERENCES.md Resources 37–39）

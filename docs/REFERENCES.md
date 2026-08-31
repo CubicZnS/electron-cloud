@@ -259,8 +259,8 @@
 - Name: CP2K 测试 Cube（regtest-tipscan/vpot.cube，苯 Hartree 势）
 - URL: https://github.com/cp2k/cp2k （tests/QS/regtest-tipscan/vpot.cube）
 - License: GPL-2.0
-- Used for: sample-cubes/electron_density/cp2k_benzene_Hartree.cube —— 非密度类势场（Hartree 势，8.3% 负值噪声）按密度模式导入的验证样本
-- Modified parts: 未修改
+- Used for: sample-cubes/orbital/cp2k_benzene_Hartree.cube —— 势场样本：注释行 "HARTREE POTENTIAL" 高置信识别为 hartree（非电子密度），按带符号场双色相位显示（v2.5.7 起）；CP2K 周期体系（tipscan）分子位于网格一角
+- Modified parts: 未修改；v2.5.7 新增 FIELD_HINT_KEYS.hartree 识别与势场路由
 
 ## Resource 39
 - Name: 3Dmol.js 大分子 Cube（bohr.cube 913 原子蛋白-配体 / 4dln.cube 4667 原子蛋白，CPMD）
