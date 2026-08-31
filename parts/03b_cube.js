@@ -185,6 +185,19 @@ function parseCubeText(text, opts){
     }
     atomsB.push({ z: z, q: q, pos: p });
   }
+  // CPMD 等输出常把「原子序数」写成 1..N 的连续标签（伪原子/类型索引，非真实元素）。
+  // 检测：原子序数恰好为 1,2,3,…,natoms 且电荷列呈部分电荷特征（多数非 0 且绝对值小）→
+  // 标记 pseudoZ = true，由 buildCubeVolume 按键长/配位数推断真实元素（几何启发式）。
+  let pseudoZ = false;
+  {
+    let seq = true, nzq = 0;
+    for (let a = 0; a < atomsB.length; a++){
+      if (atomsB[a].z !== a + 1){ seq = false; break; }
+      if (atomsB[a].q !== 0) nzq++;
+    }
+    // 连续 1..N + 电荷列非全 0（部分电荷特征）→ 伪原子标签；全 0 电荷可能是真实元素但序号恰好连续（罕见），不误判
+    pseudoZ = seq && atomsB.length >= 4 && nzq >= Math.max(1, Math.floor(atomsB.length * 0.3));
+  }
   // 数据区（体素标量值，x 变化最快：index = ix + nx·iy + nx·ny·iz）
   const dataRaw = new Float32Array(nVox);
   let idx = 0, nonFinite = false;
@@ -317,7 +330,83 @@ function parseCubeText(text, opts){
     negVox: negVox, maxAbs: maxAbs, fieldType: fieldType,
     signed: allowSigned,
     dataOrder: dataOrder, // 检测到的原始数据顺序（xyz=标准 x-fastest）
+    pseudoZ: pseudoZ,     // 原子序数 = 1..N 连续标签（CPMD 伪原子），元素需几何推断
   };
+}
+
+/* ---------- CPMD 伪原子元素推断（几何启发式） ----------
+   伪原子标签（Z = 1..N）不含真实元素信息。真实分子的键长/配位数有元素特征：
+   · H：仅 1 个邻居，键长 < 1.15Å
+   · C：3-4 配位，键长 ~1.4-1.55Å
+   · N：2-3 配位，键长 ~1.3-1.5Å
+   · O：1-2 配位，键长 ~1.2-1.45Å
+   · S：1-2 配位，键长 ~1.8Å
+   仅作骨架视觉参考（颜色/球径），诚实标注；不冒充量子计算的元素分配。
+   坐标单位自适应：伪原子文件原子坐标多为 Å，但个别工具仍按 bohr —— 取最近邻
+   距离中位数判定（真实分子键长 1.0-1.8Å；若中位数明显 >2.2Å 则坐标疑似 bohr，
+   内部按 bohr 缩放后推断）。 */
+function inferCubeElements(atoms){
+  const n = atoms.length;
+  if (n < 2) return atoms;
+  // 最近邻距离（原始单位）→ 判定坐标单位
+  const nn = [];
+  for (let i = 0; i < n; i++){
+    let best = 1e9;
+    for (let j = 0; j < n; j++){
+      if (i === j) continue;
+      const d = Math.hypot(atoms[i].pos[0]-atoms[j].pos[0], atoms[i].pos[1]-atoms[j].pos[1], atoms[i].pos[2]-atoms[j].pos[2]);
+      if (d < best) best = d;
+    }
+    nn.push(best);
+  }
+  nn.sort(function (a, b){ return a - b; });
+  const med = nn[Math.floor(nn.length / 2)];
+  // 判定单位：中位数最近邻 < 1.5 → Å（真实分子最近键 0.9-1.5Å）；
+  // ≥ 1.5 → bohr（真实键长 2.0-3.0 bohr，C-H 2.04 bohr=1.08Å）
+  const asBohr = med >= 1.5;
+  const A = asBohr ? 0.529177210903 : 1; // 到 Å 的缩放
+  // 成键邻域阈值 1.75Å：涵盖 C-C(1.54)/C-N(1.47)/C-O(1.43)/C-S(1.8 略超，另判)/金属键，
+  // 排除 H-H 非键接触（CH₄ 中 H-H = 1.78Å > 1.75）→ H 的键邻只含其成键重原子（通常 1 个）。
+  // C 的最短键是 C-H(1.09)，H 的最短键也是 1.09 —— 键长重叠，必须配合配位数区分：
+  // H 的 nb=1（只连一个重原子），C/N/O 的 nb≥2（重原子骨架）或 4（sp³ 碳）。
+  const nb = new Array(n), bestD = new Array(n);
+  for (let i = 0; i < n; i++){
+    let cnt = 0, best = 1e9;
+    for (let j = 0; j < n; j++){
+      if (i === j) continue;
+      const d = Math.hypot(atoms[i].pos[0]-atoms[j].pos[0], atoms[i].pos[1]-atoms[j].pos[1], atoms[i].pos[2]-atoms[j].pos[2]) * A;
+      if (d < 1.75 && d < best){ best = d; }
+      if (d < 1.75) cnt++;
+    }
+    nb[i] = cnt; bestD[i] = best;
+  }
+  // 配位数分布：真实分子配位数 ≤ 6（金属可更高）；若普遍 > 8 → 非分子原子列表
+  // （如 CPMD 部分电荷网格点），放弃推断，全部中性 X
+  let heavy = 0;
+  for (let i = 0; i < n; i++) if (nb[i] > 8) heavy++;
+  if (heavy > n * 0.5){
+    for (let i = 0; i < n; i++) atoms[i].elInferred = "X";
+    atoms.inference = "grid"; // 网格点特征
+    return atoms;
+  }
+  const elOf = function (i){
+    const d = bestD[i], c = nb[i];
+    if (!Number.isFinite(d) || d > 1.9) return "X";
+    if (d < 1.3 && c === 1) return "H";               // 单键端基氢：键长 <1.3Å（C-H 1.09 / N-H 1.01 / O-H 0.96）且只连 1 个原子
+    if (c === 1 && d >= 1.3 && d < 1.5) return "O";  // 端基氧（羟基/羰基 ~1.2-1.4）
+    if (c === 1 && d >= 1.5) return "S";             // 端基硫（C-S ~1.8）
+    if (c <= 2 && d >= 1.6) return "S";              // 硫（C-S ~1.8Å）
+    if (c <= 2 && d >= 1.2) return "O";              // 羰基/醚氧（C=O 1.2-1.25 / C-O 1.4）
+    if (c === 4) return "C";                          // 四面体碳（4 个短键邻，含 3H+1C / 2H+2C）
+    if (c === 3 && d < 1.5) return "N";               // 平面氮（胺/酰胺 1.35-1.47）
+    if (c === 3) return "C";                          // sp² 碳（1.4-1.5）
+    if (c === 2 && d < 1.35) return "N";              // 炔/腈/酰胺短键氮
+    if (c === 2) return "C";                          // sp 碳或烯碳
+    return "C";
+  };
+  for (let i = 0; i < n; i++) atoms[i].elInferred = elOf(i);
+  atoms.inference = asBohr ? "bohr" : "angstrom";
+  return atoms;
 }
 
 /* ---------- CubeVolume：体数据（单位换算 + 居中 + 采样 + 统计） ---------- */
@@ -337,16 +426,25 @@ function buildCubeVolume(parsed, opts){
     origin[2] + ((dims[0] - 1) / 2) * axes[0][2] + ((dims[1] - 1) / 2) * axes[1][2] + ((dims[2] - 1) / 2) * axes[2][2],
   ];
   const orgC = [origin[0] - center[0], origin[1] - center[1], origin[2] - center[2]];
+  // CPMD 伪原子：原子坐标实测为 Å（键长 ~1.0-1.5Å、键角 109° 与真实分子一致），
+  // 而网格轴/原点为 bohr —— 混合单位。检测伪原子后，原子坐标不再乘 bohr→Å 系数。
+  const pseudo = !!parsed.pseudoZ;
+  const unitA = pseudo; // 伪原子文件坐标按 Å 读（不再 ×0.529）
   const atoms = parsed.atomsB.map(function (a, i){
     return {
-      idx: i, z: a.z, el: symbolOfZ(a.z), q: a.q,
+      idx: i, z: a.z, el: pseudo ? "X" : symbolOfZ(a.z), q: a.q,
       pos: [
-        a.pos[0] * BOHR_TO_ANGSTROM - center[0],
-        a.pos[1] * BOHR_TO_ANGSTROM - center[1],
-        a.pos[2] * BOHR_TO_ANGSTROM - center[2],
+        (unitA ? a.pos[0] : a.pos[0] * BOHR_TO_ANGSTROM) - center[0],
+        (unitA ? a.pos[1] : a.pos[1] * BOHR_TO_ANGSTROM) - center[1],
+        (unitA ? a.pos[2] : a.pos[2] * BOHR_TO_ANGSTROM) - center[2],
       ],
     };
   });
+  // 伪原子元素推断（键长/配位几何启发式；仅骨架视觉参考）
+  if (pseudo){
+    inferCubeElements(atoms);
+    atoms.forEach(function (a){ a.el = a.elInferred || "X"; });
+  }
   // 逆变换矩阵（3×3，Cramer 法则）
   const m = axes;
   const det = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])

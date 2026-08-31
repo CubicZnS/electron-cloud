@@ -416,5 +416,39 @@ const cubeText = (lines) => lines.join("\n");
   check("小分子（14 原子）采样正常", fin);
 }
 
+// ---------- 15) CPMD 伪原子检测 + 元素几何推断 ----------
+{
+  // CH4 甲烷：C(0,0,0) + 4H 四面体 1.09Å；原子序数伪装为 1..5（CPMD 伪原子标签）
+  const h = 1.09 / Math.sqrt(3);
+  const atomL = [
+    "1 0.1 0 0 0",
+    "2 0.1 " + h + " " + h + " " + h,
+    "3 0.1 " + h + " " + (-h) + " " + (-h),
+    "4 0.1 " + (-h) + " " + h + " " + (-h),
+    "5 0.1 " + (-h) + " " + (-h) + " " + h,
+  ];
+  const _vox27000 = Array.from({ length: 27000 }, function (_, i){ return (i % 7) / 10; }).join(" ");
+  const ch4 = cubeText(["pseudo", "test", "5  0 0 0", "30  1 0 0", "30  0 1 0", "30  0 0 1"].concat(atomL).concat([_vox27000]));
+  const pc = m.parseCubeText(ch4);
+  check("连续原子序数 1..N + 部分电荷 → 伪原子检测", pc.pseudoZ === true, "pseudoZ=" + pc.pseudoZ);
+  const vc = m.buildCubeVolume(pc);
+  const elC = vc.atoms.map(function (a){ return a.el; }).join(",");
+  check("伪原子元素推断（CH4 → C,H,H,H,H）", elC === "C,H,H,H,H", elC);
+  // 骨架跨度（Å）：四面体半径 1.09 → 对径 2.18，跨度应 ~2.2Å（坐标按 Å 读，不再缩小 0.529）
+  const spanC = vc.atoms.reduce(function (acc, a, i, arr){
+    for (let j = i + 1; j < arr.length; j++){
+      const d = Math.hypot(a.pos[0]-arr[j].pos[0], a.pos[1]-arr[j].pos[1], a.pos[2]-arr[j].pos[2]);
+      if (d > acc) acc = d;
+    }
+    return acc;
+  }, 0);
+  check("伪原子坐标按 Å 读（CH4 对径 ~2.2Å）", spanC > 1.5 && spanC < 3, spanC.toFixed(2));
+  // 正常文件（真实元素序数）不触发伪原子
+  const normal = m.parseCubeText(cubeText(["t", "d", "5  0 0 0", "30  1 0 0", "30  0 1 0", "30  0 0 1",
+    "6 6 0 0 0", "1 1 " + h + " " + h + " " + h, "1 1 " + h + " " + (-h) + " " + (-h), "1 1 " + (-h) + " " + h + " " + (-h), "1 1 " + (-h) + " " + (-h) + " " + h,
+    _vox27000]));
+  check("真实元素序数（6,1,1,1,1）不触发伪原子", normal.pseudoZ !== true, "pseudoZ=" + normal.pseudoZ);
+}
+
 console.log("\n==== " + pass + " PASS / " + fail + " FAIL ====");
 process.exit(fail ? 1 : 0);

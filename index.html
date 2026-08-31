@@ -354,6 +354,9 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
 const MOLECULE_DATA = {"ringR":1.3949,"source":"pubchem","fetchedAt":"2026-08-28T16:27:11.870Z","molecules":{"benzene":{"name":"Benzene","zh":"苯","formula":"C6H6","fragments":[]},"toluene":{"name":"Toluene","zh":"甲苯","formula":"C7H8","fragments":[{"pos":5,"group":"CH3"}]},"anisole":{"name":"Anisole","zh":"苯甲醚","formula":"C7H8O","fragments":[{"pos":2,"group":"OMe"}]},"phenol":{"name":"Phenol","zh":"苯酚","formula":"C6H6O","fragments":[{"pos":0,"group":"OH"}]},"aniline":{"name":"Aniline","zh":"苯胺","formula":"C6H7N","fragments":[{"pos":0,"group":"NH2"}]},"fluorobenzene":{"name":"Fluorobenzene","zh":"氟苯","formula":"C6H5F","fragments":[{"pos":5,"group":"F"}]},"chlorobenzene":{"name":"Chlorobenzene","zh":"氯苯","formula":"C6H5Cl","fragments":[{"pos":5,"group":"Cl"}]},"benzonitrile":{"name":"Benzonitrile","zh":"苯甲腈","formula":"C7H5N","fragments":[{"pos":3,"group":"CN"}]},"nitrobenzene":{"name":"Nitrobenzene","zh":"硝基苯","formula":"C6H5NO2","fragments":[{"pos":2,"group":"NO2"}]},"benzaldehyde":{"name":"Benzaldehyde","zh":"苯甲醛","formula":"C7H6O","fragments":[{"pos":3,"group":"CHO"}]},"benzoicacid":{"name":"Benzoic acid","zh":"苯甲酸","formula":"C7H6O2","fragments":[{"pos":3,"group":"COOH"}]},"benzotrifluoride":{"name":"Benzotrifluoride","zh":"三氟甲苯","formula":"C7H5F3","fragments":[{"pos":2,"group":"CF3"}]}},"fragments":{"CH3":{"atoms":[{"el":"C","p":[1.4916,0,0]},{"el":"H","p":[1.8867,0.8802,0.5186]},{"el":"H","p":[1.8869,-0.8807,0.5177]},{"el":"H","p":[1.8672,0.0006,-1.028]}],"bonds":[[0,1,1],[0,2,1],[0,3,1]],"attachOrder":1},"OMe":{"atoms":[{"el":"O","p":[1.3608,0,0]},{"el":"C","p":[2.0104,1.2705,0.0012]},{"el":"H","p":[1.785,1.8368,0.9112]},{"el":"H","p":[1.7851,1.8385,-0.9078]},{"el":"H","p":[3.089,1.082,0.001]}],"bonds":[[0,1,1],[1,2,1],[1,3,1],[1,4,1]],"attachOrder":1},"OH":{"atoms":[{"el":"O","p":[1.3611,0,0]},{"el":"H","p":[1.6762,-0.9202,0.0002]}],"bonds":[[0,1,1]],"attachOrder":1},"NH2":{"atoms":[{"el":"N","p":[1.4105,0,0]},{"el":"H","p":[1.9167,0.8756,-0.0012]},{"el":"H","p":[1.9167,-0.8755,-0.0015]}],"bonds":[[0,1,1],[0,2,1]],"attachOrder":1},"F":{"atoms":[{"el":"F","p":[1.3393,0,0]}],"bonds":[],"attachOrder":1},"Cl":{"atoms":[{"el":"Cl","p":[1.7213,0,0]}],"bonds":[],"attachOrder":1},"CN":{"atoms":[{"el":"C","p":[1.429,0,0]},{"el":"N","p":[2.5909,0.0001,0.0001]}],"bonds":[[1,0,3]],"attachOrder":1},"NO2":{"atoms":[{"el":"N","p":[1.42,0,0]},{"el":"O","p":[2.0279,1.0976,0.0003]},{"el":"O","p":[2.0279,-1.0976,0]}],"bonds":[[1,0,1],[2,0,2]],"attachOrder":1},"CHO":{"atoms":[{"el":"C","p":[1.4542,0,0]},{"el":"O","p":[2.1282,-1.0339,-0.0002]},{"el":"H","p":[1.9492,0.986,0.0006]}],"bonds":[[1,0,2],[0,2,1]],"attachOrder":1},"CF3":{"atoms":[{"el":"C","p":[1.4915,0,0]},{"el":"F","p":[2.0388,1.2515,-0.0019]},{"el":"F","p":[2.0382,-0.6259,1.0841]},{"el":"F","p":[2.0166,-0.6308,-1.0904]}],"bonds":[[1,0,1],[2,0,1],[3,0,1]],"attachOrder":1},"COOH":{"atoms":[{"el":"C","p":[1.4542,0,0]},{"el":"O","p":[1.9748,-1.2578,0.0002]},{"el":"O","p":[2.1704,1.0067,0.0007]},{"el":"H","p":[2.9558,-1.2467,0.0008]}],"bonds":[[1,0,1],[1,3,1],[2,0,2]],"attachOrder":1}},"fragSource":"pubchem"};
 /* ================= 常量与数据 ================= */
 const RING_R = MOLECULE_DATA.ringR;
+/* 元素视觉表（CPK 惯例配色 + 共价半径比例球；覆盖常见主族/过渡金属，导入 Cube 的
+    S/P/Br/I/金属等不再一律灰球）。ball = 球半径（Å），sigma/base 供 σ 骨架流动参考，
+    emissive = 发光强度（低占比元素弱发光避免过曝）。未覆盖元素仍走 UNKNOWN_ELEMENT 中性回退。 */
 const ELEMENTS = {
   H:  { color:0xdfe6ee, ball:0.26, sigma:0.60, base:0.80, emissive:0.04 },
   C:  { color:0x9aa5b1, ball:0.38, sigma:0.80, base:1.55, emissive:0.07 },
@@ -361,6 +364,27 @@ const ELEMENTS = {
   O:  { color:0xff5a52, ball:0.34, sigma:0.76, base:2.30, emissive:0.28 },
   F:  { color:0x8fe388, ball:0.32, sigma:0.72, base:2.50, emissive:0.18 },
   Cl: { color:0x63d69a, ball:0.44, sigma:0.92, base:2.40, emissive:0.16 },
+  // 主族（CPK 标准色）
+  B:  { color:0xffb5b5, ball:0.42, sigma:0.95, base:1.80, emissive:0.08 },
+  Si: { color:0x8c7f6d, ball:0.46, sigma:1.05, base:1.90, emissive:0.08 },
+  P:  { color:0xffa54f, ball:0.44, sigma:1.00, base:2.30, emissive:0.22 },
+  S:  { color:0xffe033, ball:0.44, sigma:1.00, base:2.30, emissive:0.22 },
+  Br: { color:0xa52a2a, ball:0.47, sigma:1.10, base:2.50, emissive:0.14 },
+  I:  { color:0x9400d3, ball:0.50, sigma:1.18, base:2.70, emissive:0.14 },
+  // 碱金属 / 碱土金属
+  Li: { color:0xcc80ff, ball:0.52, sigma:1.20, base:1.80, emissive:0.10 },
+  Na: { color:0xab5cf2, ball:0.58, sigma:1.40, base:2.00, emissive:0.10 },
+  K:  { color:0x8f40d4, ball:0.66, sigma:1.60, base:2.20, emissive:0.10 },
+  Mg: { color:0x8aff00, ball:0.54, sigma:1.30, base:2.00, emissive:0.10 },
+  Ca: { color:0x3dff00, ball:0.62, sigma:1.50, base:2.20, emissive:0.10 },
+  // 常见过渡金属（CPK 惯例）
+  Fe: { color:0xe06633, ball:0.50, sigma:1.20, base:2.00, emissive:0.10 },
+  Zn: { color:0x7d80b0, ball:0.48, sigma:1.15, base:1.90, emissive:0.08 },
+  Cu: { color:0xc88033, ball:0.48, sigma:1.15, base:1.90, emissive:0.08 },
+  Mn: { color:0x9c7c7c, ball:0.48, sigma:1.15, base:1.90, emissive:0.08 },
+  Co: { color:0xf090a0, ball:0.48, sigma:1.15, base:1.90, emissive:0.08 },
+  Ni: { color:0x50d050, ball:0.46, sigma:1.10, base:1.90, emissive:0.08 },
+  Mo: { color:0x54b5b5, ball:0.50, sigma:1.20, base:2.00, emissive:0.08 },
 };
 /* 元素表未覆盖的原子（导入 Cube 可能含 S/P/Br/I/金属等）：安全的中性回退显示，绝不因单个未知元素崩溃 */
 const UNKNOWN_ELEMENT = { color:0x9aa5b1, ball:0.38, sigma:0.80, base:1.55, emissive:0.07 };
@@ -1730,6 +1754,19 @@ function parseCubeText(text, opts){
     }
     atomsB.push({ z: z, q: q, pos: p });
   }
+  // CPMD 等输出常把「原子序数」写成 1..N 的连续标签（伪原子/类型索引，非真实元素）。
+  // 检测：原子序数恰好为 1,2,3,…,natoms 且电荷列呈部分电荷特征（多数非 0 且绝对值小）→
+  // 标记 pseudoZ = true，由 buildCubeVolume 按键长/配位数推断真实元素（几何启发式）。
+  let pseudoZ = false;
+  {
+    let seq = true, nzq = 0;
+    for (let a = 0; a < atomsB.length; a++){
+      if (atomsB[a].z !== a + 1){ seq = false; break; }
+      if (atomsB[a].q !== 0) nzq++;
+    }
+    // 连续 1..N + 电荷列非全 0（部分电荷特征）→ 伪原子标签；全 0 电荷可能是真实元素但序号恰好连续（罕见），不误判
+    pseudoZ = seq && atomsB.length >= 4 && nzq >= Math.max(1, Math.floor(atomsB.length * 0.3));
+  }
   // 数据区（体素标量值，x 变化最快：index = ix + nx·iy + nx·ny·iz）
   const dataRaw = new Float32Array(nVox);
   let idx = 0, nonFinite = false;
@@ -1862,7 +1899,83 @@ function parseCubeText(text, opts){
     negVox: negVox, maxAbs: maxAbs, fieldType: fieldType,
     signed: allowSigned,
     dataOrder: dataOrder, // 检测到的原始数据顺序（xyz=标准 x-fastest）
+    pseudoZ: pseudoZ,     // 原子序数 = 1..N 连续标签（CPMD 伪原子），元素需几何推断
   };
+}
+
+/* ---------- CPMD 伪原子元素推断（几何启发式） ----------
+   伪原子标签（Z = 1..N）不含真实元素信息。真实分子的键长/配位数有元素特征：
+   · H：仅 1 个邻居，键长 < 1.15Å
+   · C：3-4 配位，键长 ~1.4-1.55Å
+   · N：2-3 配位，键长 ~1.3-1.5Å
+   · O：1-2 配位，键长 ~1.2-1.45Å
+   · S：1-2 配位，键长 ~1.8Å
+   仅作骨架视觉参考（颜色/球径），诚实标注；不冒充量子计算的元素分配。
+   坐标单位自适应：伪原子文件原子坐标多为 Å，但个别工具仍按 bohr —— 取最近邻
+   距离中位数判定（真实分子键长 1.0-1.8Å；若中位数明显 >2.2Å 则坐标疑似 bohr，
+   内部按 bohr 缩放后推断）。 */
+function inferCubeElements(atoms){
+  const n = atoms.length;
+  if (n < 2) return atoms;
+  // 最近邻距离（原始单位）→ 判定坐标单位
+  const nn = [];
+  for (let i = 0; i < n; i++){
+    let best = 1e9;
+    for (let j = 0; j < n; j++){
+      if (i === j) continue;
+      const d = Math.hypot(atoms[i].pos[0]-atoms[j].pos[0], atoms[i].pos[1]-atoms[j].pos[1], atoms[i].pos[2]-atoms[j].pos[2]);
+      if (d < best) best = d;
+    }
+    nn.push(best);
+  }
+  nn.sort(function (a, b){ return a - b; });
+  const med = nn[Math.floor(nn.length / 2)];
+  // 判定单位：中位数最近邻 < 1.5 → Å（真实分子最近键 0.9-1.5Å）；
+  // ≥ 1.5 → bohr（真实键长 2.0-3.0 bohr，C-H 2.04 bohr=1.08Å）
+  const asBohr = med >= 1.5;
+  const A = asBohr ? 0.529177210903 : 1; // 到 Å 的缩放
+  // 成键邻域阈值 1.75Å：涵盖 C-C(1.54)/C-N(1.47)/C-O(1.43)/C-S(1.8 略超，另判)/金属键，
+  // 排除 H-H 非键接触（CH₄ 中 H-H = 1.78Å > 1.75）→ H 的键邻只含其成键重原子（通常 1 个）。
+  // C 的最短键是 C-H(1.09)，H 的最短键也是 1.09 —— 键长重叠，必须配合配位数区分：
+  // H 的 nb=1（只连一个重原子），C/N/O 的 nb≥2（重原子骨架）或 4（sp³ 碳）。
+  const nb = new Array(n), bestD = new Array(n);
+  for (let i = 0; i < n; i++){
+    let cnt = 0, best = 1e9;
+    for (let j = 0; j < n; j++){
+      if (i === j) continue;
+      const d = Math.hypot(atoms[i].pos[0]-atoms[j].pos[0], atoms[i].pos[1]-atoms[j].pos[1], atoms[i].pos[2]-atoms[j].pos[2]) * A;
+      if (d < 1.75 && d < best){ best = d; }
+      if (d < 1.75) cnt++;
+    }
+    nb[i] = cnt; bestD[i] = best;
+  }
+  // 配位数分布：真实分子配位数 ≤ 6（金属可更高）；若普遍 > 8 → 非分子原子列表
+  // （如 CPMD 部分电荷网格点），放弃推断，全部中性 X
+  let heavy = 0;
+  for (let i = 0; i < n; i++) if (nb[i] > 8) heavy++;
+  if (heavy > n * 0.5){
+    for (let i = 0; i < n; i++) atoms[i].elInferred = "X";
+    atoms.inference = "grid"; // 网格点特征
+    return atoms;
+  }
+  const elOf = function (i){
+    const d = bestD[i], c = nb[i];
+    if (!Number.isFinite(d) || d > 1.9) return "X";
+    if (d < 1.3 && c === 1) return "H";               // 单键端基氢：键长 <1.3Å（C-H 1.09 / N-H 1.01 / O-H 0.96）且只连 1 个原子
+    if (c === 1 && d >= 1.3 && d < 1.5) return "O";  // 端基氧（羟基/羰基 ~1.2-1.4）
+    if (c === 1 && d >= 1.5) return "S";             // 端基硫（C-S ~1.8）
+    if (c <= 2 && d >= 1.6) return "S";              // 硫（C-S ~1.8Å）
+    if (c <= 2 && d >= 1.2) return "O";              // 羰基/醚氧（C=O 1.2-1.25 / C-O 1.4）
+    if (c === 4) return "C";                          // 四面体碳（4 个短键邻，含 3H+1C / 2H+2C）
+    if (c === 3 && d < 1.5) return "N";               // 平面氮（胺/酰胺 1.35-1.47）
+    if (c === 3) return "C";                          // sp² 碳（1.4-1.5）
+    if (c === 2 && d < 1.35) return "N";              // 炔/腈/酰胺短键氮
+    if (c === 2) return "C";                          // sp 碳或烯碳
+    return "C";
+  };
+  for (let i = 0; i < n; i++) atoms[i].elInferred = elOf(i);
+  atoms.inference = asBohr ? "bohr" : "angstrom";
+  return atoms;
 }
 
 /* ---------- CubeVolume：体数据（单位换算 + 居中 + 采样 + 统计） ---------- */
@@ -1882,16 +1995,25 @@ function buildCubeVolume(parsed, opts){
     origin[2] + ((dims[0] - 1) / 2) * axes[0][2] + ((dims[1] - 1) / 2) * axes[1][2] + ((dims[2] - 1) / 2) * axes[2][2],
   ];
   const orgC = [origin[0] - center[0], origin[1] - center[1], origin[2] - center[2]];
+  // CPMD 伪原子：原子坐标实测为 Å（键长 ~1.0-1.5Å、键角 109° 与真实分子一致），
+  // 而网格轴/原点为 bohr —— 混合单位。检测伪原子后，原子坐标不再乘 bohr→Å 系数。
+  const pseudo = !!parsed.pseudoZ;
+  const unitA = pseudo; // 伪原子文件坐标按 Å 读（不再 ×0.529）
   const atoms = parsed.atomsB.map(function (a, i){
     return {
-      idx: i, z: a.z, el: symbolOfZ(a.z), q: a.q,
+      idx: i, z: a.z, el: pseudo ? "X" : symbolOfZ(a.z), q: a.q,
       pos: [
-        a.pos[0] * BOHR_TO_ANGSTROM - center[0],
-        a.pos[1] * BOHR_TO_ANGSTROM - center[1],
-        a.pos[2] * BOHR_TO_ANGSTROM - center[2],
+        (unitA ? a.pos[0] : a.pos[0] * BOHR_TO_ANGSTROM) - center[0],
+        (unitA ? a.pos[1] : a.pos[1] * BOHR_TO_ANGSTROM) - center[1],
+        (unitA ? a.pos[2] : a.pos[2] * BOHR_TO_ANGSTROM) - center[2],
       ],
     };
   });
+  // 伪原子元素推断（键长/配位几何启发式；仅骨架视觉参考）
+  if (pseudo){
+    inferCubeElements(atoms);
+    atoms.forEach(function (a){ a.el = a.elInferred || "X"; });
+  }
   // 逆变换矩阵（3×3，Cramer 法则）
   const m = axes;
   const det = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])

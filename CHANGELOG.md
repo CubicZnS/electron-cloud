@@ -1,5 +1,22 @@
 本项目采用语义化版本（SemVer）：主版本号 = 功能里程碑，次版本号 = 兼容性新功能，补丁号 = 修复。
 
+## [v2.5.8] — 2026-08-31 · 原子适配：扩展元素视觉表 + CPMD 伪原子检测与元素几何推断
+
+### 新增
+- **元素视觉表扩展**（parts/03_core.js）：ELEMENTS 从 6 种（H/C/N/O/F/Cl）扩至 30 种——新增 B/Si/P/S/Br/I、碱金属（Li/Na/K）、碱土（Mg/Ca）、过渡金属（Fe/Zn/Cu/Mn/Co/Ni/Mo），CPK 惯例配色 + 共价半径球。导入含 S/P/Br/I/金属的 Cube 时骨架不再一律灰球。
+- **CPMD 伪原子检测**（parts/03b_cube.js）：原子序数恰为 1..N 连续标签且电荷列呈部分电荷特征 → 标记 pseudoZ（CPMD 等将原子序数写成类型索引，非真实元素）。
+- **元素几何推断**（inferCubeElements）：对伪原子文件按键长/配位数启发式推断 C/H/N/O/S——H（短键单邻 <1.3Å）、C（4 配位/sp²）、N（2-3 配位）、O（1-2 配位短键）、S（1.8Å 级）；坐标单位自适应（最近邻中位数 <1.5Å 判 Å，否则 bohr）；配位数普遍 >8（部分电荷网格点）时放弃推断全部中性 X。
+- **伪原子坐标按 Å 读**：CPMD 伪原子文件原子坐标实测为 Å（键长 1.0-1.5Å、键角 109°），不再误乘 bohr→Å 系数——913 原子蛋白-配体骨架从 18.5Å 修正为 34.8Å（真实尺寸）。
+
+### 验证
+- node tools/validate-cube.mjs：65/65（新增伪原子检测/元素推断/Å 单位读取/真实元素不误判 4 项）；node tools/validate-sigma.mjs：15/15；node tools/build.mjs：SYNTAX_OK
+- CH4 伪装伪原子：推断 C,H,H,H,H ✓；真实元素序数不触发伪原子 ✓；headless 实测 913 原子导入正常（骨架按 Å、元素有区分）
+
+### 文件
+- 修改：parts/03_core.js、parts/03b_cube.js、tools/validate-cube.mjs、CHANGELOG.md、README.md
+
+---
+
 ## [v2.5.7] — 2026-08-31 · 修复：势场 Cube（Hartree/ESP 等非电子密度）被误按密度导入导致弥散
 
 ### 修复

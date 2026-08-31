@@ -1,5 +1,8 @@
 /* ================= 常量与数据 ================= */
 const RING_R = MOLECULE_DATA.ringR;
+/* 元素视觉表（CPK 惯例配色 + 共价半径比例球；覆盖常见主族/过渡金属，导入 Cube 的
+    S/P/Br/I/金属等不再一律灰球）。ball = 球半径（Å），sigma/base 供 σ 骨架流动参考，
+    emissive = 发光强度（低占比元素弱发光避免过曝）。未覆盖元素仍走 UNKNOWN_ELEMENT 中性回退。 */
 const ELEMENTS = {
   H:  { color:0xdfe6ee, ball:0.26, sigma:0.60, base:0.80, emissive:0.04 },
   C:  { color:0x9aa5b1, ball:0.38, sigma:0.80, base:1.55, emissive:0.07 },
@@ -7,6 +10,27 @@ const ELEMENTS = {
   O:  { color:0xff5a52, ball:0.34, sigma:0.76, base:2.30, emissive:0.28 },
   F:  { color:0x8fe388, ball:0.32, sigma:0.72, base:2.50, emissive:0.18 },
   Cl: { color:0x63d69a, ball:0.44, sigma:0.92, base:2.40, emissive:0.16 },
+  // 主族（CPK 标准色）
+  B:  { color:0xffb5b5, ball:0.42, sigma:0.95, base:1.80, emissive:0.08 },
+  Si: { color:0x8c7f6d, ball:0.46, sigma:1.05, base:1.90, emissive:0.08 },
+  P:  { color:0xffa54f, ball:0.44, sigma:1.00, base:2.30, emissive:0.22 },
+  S:  { color:0xffe033, ball:0.44, sigma:1.00, base:2.30, emissive:0.22 },
+  Br: { color:0xa52a2a, ball:0.47, sigma:1.10, base:2.50, emissive:0.14 },
+  I:  { color:0x9400d3, ball:0.50, sigma:1.18, base:2.70, emissive:0.14 },
+  // 碱金属 / 碱土金属
+  Li: { color:0xcc80ff, ball:0.52, sigma:1.20, base:1.80, emissive:0.10 },
+  Na: { color:0xab5cf2, ball:0.58, sigma:1.40, base:2.00, emissive:0.10 },
+  K:  { color:0x8f40d4, ball:0.66, sigma:1.60, base:2.20, emissive:0.10 },
+  Mg: { color:0x8aff00, ball:0.54, sigma:1.30, base:2.00, emissive:0.10 },
+  Ca: { color:0x3dff00, ball:0.62, sigma:1.50, base:2.20, emissive:0.10 },
+  // 常见过渡金属（CPK 惯例）
+  Fe: { color:0xe06633, ball:0.50, sigma:1.20, base:2.00, emissive:0.10 },
+  Zn: { color:0x7d80b0, ball:0.48, sigma:1.15, base:1.90, emissive:0.08 },
+  Cu: { color:0xc88033, ball:0.48, sigma:1.15, base:1.90, emissive:0.08 },
+  Mn: { color:0x9c7c7c, ball:0.48, sigma:1.15, base:1.90, emissive:0.08 },
+  Co: { color:0xf090a0, ball:0.48, sigma:1.15, base:1.90, emissive:0.08 },
+  Ni: { color:0x50d050, ball:0.46, sigma:1.10, base:1.90, emissive:0.08 },
+  Mo: { color:0x54b5b5, ball:0.50, sigma:1.20, base:2.00, emissive:0.08 },
 };
 /* 元素表未覆盖的原子（导入 Cube 可能含 S/P/Br/I/金属等）：安全的中性回退显示，绝不因单个未知元素崩溃 */
 const UNKNOWN_ELEMENT = { color:0x9aa5b1, ball:0.38, sigma:0.80, base:1.55, emissive:0.07 };
