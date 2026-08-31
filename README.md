@@ -5,7 +5,7 @@ GPU 粒子电子云交互可视化：分子 · 电子云 · 诱导效应 / 共�
 
 > by CubicZnS · 单文件 HTML 产物，无构建依赖（three.js 由 CDN 加载）
 >
-> **当前版本：v2.5.9（修复伪原子文件数据序检测——913 原子蛋白-配体电子云不再弥散）** · 版本历史见 [CHANGELOG.md](CHANGELOG.md)
+> **当前版本：v2.5.10（新增粒子可见度滑块——Quantum Data 面板粒子总数下方）** · 版本历史见 [CHANGELOG.md](CHANGELOG.md)
 
 ## 功能
 
@@ -74,12 +74,12 @@ GPU 粒子电子云交互可视化：分子 · 电子云 · 诱导效应 / 共�
 | DEGENERATE_AXES | 网格轴线性相关 |
 | 文件超 64MB | UI 层直接拒绝 |
 
-### 样例库（sample-cubes/，23 个文件全部验证）
+### 样例库（sample-cubes/，27 个文件全部验证）
 
-- **electron_density/（9）**：苯、乙醇、CO、NH₃、水、h-BN、Mn₂GeO₄ 自旋密度、913 原子蛋白-配体（CPMD）、Psi4 水密度
-- **orbital/（9）**：咖啡因 HOMO/LUMO/MO46/MO56、C9H3Cl3O3、CO LUMO、水 ESP×2、苯 Hartree 势
+- **electron_density/（11）**：苯、乙醇、CO、NH₃、水、h-BN、Mn₂GeO₄ 自旋密度、913 原子蛋白-配体（CPMD）、Psi4 水密度、Curcumin_3OH、α-环糊精
+- **orbital/（11）**：咖啡因 HOMO/LUMO/MO46/MO56、C9H3Cl3O3、CO LUMO、水 ESP×2、苯 Hartree 势、Curcumin_3OH HOMO/LUMO
 - **unsupported/（5）**：负网格数 CPMD（913/4667 原子）、负原子数苯 HOMO、vspin 4 数据集、Cd MO48 双分量（格式变体参考）
-- 来源与许可证见 docs/REFERENCES.md Resources 32–39；数据文件不入 git
+- 新增样例均比咖啡因（24 原子）复杂且不超过环糊精级别；详细规格、来源与许可证见 sample-cubes/README.md 和 docs/REFERENCES.md Resources 32–41；数据文件不入 git
 
 ## 快速开始
 

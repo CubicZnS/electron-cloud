@@ -290,6 +290,25 @@ if (pSlider){
   });
 }
 
+/* ---------- 粒子可见度滑块 ---------- */
+/* 控制粒子云亮度/可见度（uCloudAlpha → vBright），对半定量模式与导入的电子密度均生效。
+   复用 SETTINGS.cloudAlpha（调试面板同参数），两处联动。 */
+const aSlider = _qdEl("qdAlpha");
+const aValEl = _qdEl("qdAlphaVal");
+function syncAlphaSlider(){
+  if (aSlider) aSlider.value = String(SETTINGS.cloudAlpha);
+  if (aValEl) aValEl.textContent = SETTINGS.cloudAlpha.toFixed(2);
+}
+if (aSlider){
+  aSlider.addEventListener("input", function (){
+    const v = parseFloat(aSlider.value);
+    SETTINGS.cloudAlpha = v;
+    if (cloud) cloud.uniforms.uCloudAlpha.value = v;
+    if (aValEl) aValEl.textContent = v.toFixed(2);
+  });
+}
+syncAlphaSlider();
+
 /* ---------- 事件绑定 ---------- */
 (function (){
   const drop = _qdEl("qdDrop");

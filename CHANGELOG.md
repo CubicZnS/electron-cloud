@@ -1,5 +1,21 @@
 本项目采用语义化版本（SemVer）：主版本号 = 功能里程碑，次版本号 = 兼容性新功能，补丁号 = 修复。
 
+## [v2.5.10] — 2026-08-31 · 新增：粒子可见度滑块（Quantum Data 面板，粒子总数下方）
+
+### 新增
+- Quantum Data 面板在「粒子总数」滑条下方新增「粒子可见度」滑条（0.1–1.4），控制粒子云亮度/可见度（uCloudAlpha → 顶点着色器 vBright）。
+- 对半定量模式与导入的电子密度（Cube）均生效；与调试面板的 Cloud alpha 共享 SETTINGS.cloudAlpha，两处联动（每帧 tick 同步 uniform）。
+- 拖动即时生效；大分子（环糊精等）粒子密集时调低可见度可避免过曝，调高可看清稀薄区域。
+
+### 验证
+- node tools/validate-cube.mjs：65/65；node tools/validate-sigma.mjs：15/15；node tools/build.mjs：SYNTAX_OK
+- headless 实测：滑条可见、初始 0.6 同步 uniform、拖动至 1.0 后数值与 uniform 均更新
+
+### 文件
+- 修改：parts/01_head.html（滑条行 + 样式）、parts/06b_cube_ui.js（绑定逻辑）、index.html（组装产物）、CHANGELOG.md、README.md
+
+---
+
 ## [v2.5.9] — 2026-08-31 · 修复：伪原子文件（CPMD）数据序检测失效导致电子云弥散
 
 ### 修复

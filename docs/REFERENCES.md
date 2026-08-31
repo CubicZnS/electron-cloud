@@ -268,5 +268,19 @@
 - License: BSD-3-Clause
 - Used for: sample-cubes/electron_density/protein_ligand_913atoms_CPMD_3Dmol.cube（913 原子、1.2M 体素，yxz 数据序自动检测正确，正网格数可导入）；sample-cubes/unsupported/protein_4667atoms_CPMD.cube（负网格数 + 130MB 超限）
 - Modified parts: 未修改；CPMD 伪原子序数列（1..913）映射为未知元素中性显示，分子骨架仅为视觉参考
+
+## Resource 40
+- Name: MolShape-Original α-环糊精电子密度 Cube（aCD.cube）
+- URL: https://github.com/molshape/MolShape-Original （examples/aCD.cube.zip）
+- License: MIT
+- Used for: sample-cubes/electron_density/alpha_cyclodextrin.cube；α-环糊精 C36H60O30，126 原子，92×97×58 网格（517,592 体素），作为环糊精级别的大分子电子密度样例
+- Modified parts: 未修改；仅从 zip 解包并重命名
+
+## Resource 41
+- Name: DFT Investigation of Curcumin_3OH ORCA Cube 文件
+- URL: https://github.com/R7Srahulsharma/DFT_Investigation_of_Curcumin_3OH （03_Cube_Files）
+- License: MIT（仓库 LICENSE）
+- Used for: sample-cubes/electron_density/curcumin_3oh_density.cube；sample-cubes/orbital/curcumin_3oh_homo.cube / curcumin_3oh_lumo.cube；Curcumin_3OH C21H20O9，50 原子，密度 80³ 网格，HOMO/LUMO 100³ 网格
+- Modified parts: 密度文件未修改；HOMO/LUMO 仅将 ORCA 单轨道标记的负原子数 `-50` 改为 `50`，并移除其后的 `1 108` / `1 109` 轨道描述行，以适配当前解析器的单标量场格式；坐标、网格和体素数据未修改
 - Used for: 统一 UI 设计规格——左侧面板顶对齐（top:76px，max-height 为底部工具区留 ≥82px，避免重叠遮挡）；文字层级：面板标题 12px/字距1.5、描述 10px/字距.3、辅助提示统一 9px/faint/字距.5/行高1.7、状态与元数据 10px、主按钮 dshell-btn；面板打开时隐藏左下角图例防遮挡
 - Modified parts: 本项目样式实现（未复制第三方 CSS）
