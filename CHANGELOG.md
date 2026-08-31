@@ -1,5 +1,27 @@
 本项目采用语义化版本（SemVer）：主版本号 = 功能里程碑，次版本号 = 兼容性新功能，补丁号 = 修复。
 
+## [v2.5.6] — 2026-08-31 · 扩展：更多开源 Cube 样例（含 913 原子大分子）/ 修复验证脚本测试数据
+
+### 新增样例（sample-cubes/，未纳入 git，来源记录见 docs/REFERENCES.md Resources 37–39）
+- **大分子**：`electron_density/protein_ligand_913atoms_CPMD_3Dmol.cube`——CPMD 蛋白-配体密度，913 原子 / 129×97×97 网格 / 121 万体素（3Dmol.js bohr.cube，BSD-3）；正网格数、yxz 数据序自动检测正确，可完整导入（67% 体素保留、160k 粒子实测正常）。
+- **超大分子（unsupported）**：`unsupported/protein_4667atoms_CPMD.cube`——4667 原子蛋白质密度（3Dmol.js 4dln.cube，BSD-3），负网格数 + 130MB 超 64MB 上限。
+- **ESP 场类型**：`orbital/psi4_water_ESP.cube`（Psi4 水 ESP，43% 负值）、`orbital/water_ESP_80grid.cube`（80³ 网格水 ESP，52.5% 负值）——负值 >20% 自动进入双色相位模式，面板诚实标注「静电势 ESP（非电子密度）」。
+- **Psi4 密度**：`electron_density/psi4_water_Dt.cube`；**CP2K 势场**：`electron_density/cp2k_benzene_Hartree.cube`（Hartree 势，8.3% 负值噪声按密度模式导入）。
+- **unsupported 变体**：`vspin_4datasets.cube`（体素数恰为 4 数据集）、`twoc_cd_mo48_multidataset.cube`（负原子数 + 48 数据集，双分量）。
+
+### 修复
+- **validate-cube.mjs 测试数据 bug**：末尾「小分子」用例声明 12 原子但实际写入 14 行原子（2 C + 12 H），导致 DATA_COUNT 崩溃 → 声明修正为 14（仍 <16 阈值，验证「小分子不启用每原子基准」的意图不变），测试恢复 59/59。
+
+### 验证
+- node tools/validate-cube.mjs：59/59；node tools/validate-sigma.mjs：15/15；node tools/build.mjs：SYNTAX_OK
+- headless Chrome 实测 913 原子导入：state=applied、160k 粒子、67% 体素保留、相机自动取景正常
+
+### 文件
+- 新增：docs/REFERENCES.md（Resources 37–39）、sample-cubes/README.md（本地样例目录）
+- 修改：tools/validate-cube.mjs、CHANGELOG.md、README.md
+
+---
+
 ## [v2.5.5] — 2026-08-31 · 修复：电子密度模式无颜色变化（颜色按密度分位展开）
 
 ### 修复

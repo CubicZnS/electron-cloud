@@ -247,5 +247,26 @@
 - License: MIT
 - Used for: sample-cubes/orbital/caffeine_homo|lumo|mo46|mo56.cube
 - Modified parts: 未修改；HOMO/LUMO 由轨道序号推断（咖啡因 102 电子 → MO51=HOMO、MO52=LUMO）
+
+## Resource 37
+- Name: two-component_cubes 示例（水 ESP、相对论自旋 vspin、双分量 Cd MO48）
+- URL: https://github.com/jjgoings/two-component_cubes
+- License: MIT
+- Used for: sample-cubes/orbital/water_ESP_80grid.cube（80³ 网格 ESP，负值 52.5%，高置信 esp 标注）；vspin/双分量多数据集文件归入 unsupported
+- Modified parts: 未修改；esp 场类型经注释行关键词（"Electrostatic potential"）高置信识别
+
+## Resource 38
+- Name: CP2K 测试 Cube（regtest-tipscan/vpot.cube，苯 Hartree 势）
+- URL: https://github.com/cp2k/cp2k （tests/QS/regtest-tipscan/vpot.cube）
+- License: GPL-2.0
+- Used for: sample-cubes/electron_density/cp2k_benzene_Hartree.cube —— 非密度类势场（Hartree 势，8.3% 负值噪声）按密度模式导入的验证样本
+- Modified parts: 未修改
+
+## Resource 39
+- Name: 3Dmol.js 大分子 Cube（bohr.cube 913 原子蛋白-配体 / 4dln.cube 4667 原子蛋白，CPMD）
+- URL: https://github.com/3dmol/3Dmol.js （tests/auto/data/bohr.cube、4dln.cube.gz）
+- License: BSD-3-Clause
+- Used for: sample-cubes/electron_density/protein_ligand_913atoms_CPMD_3Dmol.cube（913 原子、1.2M 体素，yxz 数据序自动检测正确，正网格数可导入）；sample-cubes/unsupported/protein_4667atoms_CPMD.cube（负网格数 + 130MB 超限）
+- Modified parts: 未修改；CPMD 伪原子序数列（1..913）映射为未知元素中性显示，分子骨架仅为视觉参考
 - Used for: 统一 UI 设计规格——左侧面板顶对齐（top:76px，max-height 为底部工具区留 ≥82px，避免重叠遮挡）；文字层级：面板标题 12px/字距1.5、描述 10px/字距.3、辅助提示统一 9px/faint/字距.5/行高1.7、状态与元数据 10px、主按钮 dshell-btn；面板打开时隐藏左下角图例防遮挡
 - Modified parts: 本项目样式实现（未复制第三方 CSS）

@@ -403,13 +403,13 @@ const cubeText = (lines) => lines.join("\n");
   }
   const mO = avg.O[0] / avg.O[1], mC = avg.C[0] / avg.C[1], mH = avg.H[0] / avg.H[1];
   check("颜色反映相对密度（O>C>H）", mO > mC && mC > mH, mO.toFixed(2) + "/" + mC.toFixed(2) + "/" + mH.toFixed(2));
-  // 小分子（12 原子）不启用基准（无回归）
-  const volS = m.buildCubeVolume(m.parseCubeText(cubeText(["t", "d", "12  0 0 0", "2  1 0 0", "2  0 1 0", "2  0 0 1", "6  6 0 0 0", "6  6 1.54 0 0", "1  1 -0.5 0.9 0", "1  1 2.04 0.9 0", "1  1 0 1.54 0", "1  1 1.54 1.54 0", "1  1 -0.5 -0.9 0", "1  1 2.04 -0.9 0", "1  1 0 -1.54 0", "1  1 1.54 -1.54 0", "1  1 -0.5 0 -0.9", "1  1 -0.5 0 0.9", "1  1 2.04 0 -0.9", "1  1 2.04 0 0.9", "1 2 3 4 5 6 7 8"])));
+  // 小分子（14 原子 < 16 阈值）不启用每原子基准（无回归）
+  const volS = m.buildCubeVolume(m.parseCubeText(cubeText(["t", "d", "14  0 0 0", "2  1 0 0", "2  0 1 0", "2  0 0 1", "6  6 0 0 0", "6  6 1.54 0 0", "1  1 -0.5 0.9 0", "1  1 2.04 0.9 0", "1  1 0 1.54 0", "1  1 1.54 1.54 0", "1  1 -0.5 -0.9 0", "1  1 2.04 -0.9 0", "1  1 0 -1.54 0", "1  1 1.54 -1.54 0", "1  1 -0.5 0 -0.9", "1  1 -0.5 0 0.9", "1  1 2.04 0 -0.9", "1  1 2.04 0 0.9", "1 2 3 4 5 6 7 8"])));
   // 只需确认小分子不崩且 sign 全 0
   const dS = m.sampleCloudCube(volS, 500);
   let fin = true;
   for (let i = 0; i < 500; i++) if (!Number.isFinite(dS.pos[i * 3])) fin = false;
-  check("小分子（12 原子）采样正常", fin);
+  check("小分子（14 原子）采样正常", fin);
 }
 
 console.log("\n==== " + pass + " PASS / " + fail + " FAIL ====");
