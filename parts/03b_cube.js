@@ -284,10 +284,29 @@ function parseCubeText(text, opts){
   };
   let dataOrder = "xyz", bestMean = -1, xyzMean = 0;
   const ax0 = Math.abs(axesB[0][0]) || 1e-9, ay0 = Math.abs(axesB[1][1]) || 1e-9, az0 = Math.abs(axesB[2][2]) || 1e-9;
+  // atom unit adaptive: angstrom if median NN < 1.5
+  let atomB = atomsB;
+  if (atomsB.length >= 2){
+    const _d0 = [];
+    for (let i = 0; i < Math.min(atomsB.length, 300); i++){
+      let best = 1e18;
+      for (let j = 0; j < atomsB.length; j++){
+        if (i === j) continue;
+        const d = Math.hypot(atomsB[i].pos[0]-atomsB[j].pos[0], atomsB[i].pos[1]-atomsB[j].pos[1], atomsB[i].pos[2]-atomsB[j].pos[2]);
+        if (d < best) best = d;
+      }
+      _d0.push(best);
+    }
+    _d0.sort(function (a, b){ return a - b; });
+    const _med = _d0[Math.floor(_d0.length / 2)];
+    if (_med < 1.5){
+      atomB = atomsB.map(function (a){ return { z: a.z, q: a.q, pos: [a.pos[0] / BOHR_TO_ANGSTROM, a.pos[1] / BOHR_TO_ANGSTROM, a.pos[2] / BOHR_TO_ANGSTROM] }; });
+    }
+  }
   for (const name in _orders){
     const f = _orders[name];
     let s = 0, cnt = 0;
-    for (const a of atomsB){
+    for (const a of atomB){
       const ix0 = Math.round((a.pos[0] - originB[0]) / ax0);
       const iy0 = Math.round((a.pos[1] - originB[1]) / ay0);
       const iz0 = Math.round((a.pos[2] - originB[2]) / az0);
@@ -309,7 +328,8 @@ function parseCubeText(text, opts){
       if (mean > bestMean){ bestMean = mean; dataOrder = name; }
     }
   }
-  if (dataOrder !== "xyz" && bestMean > Math.max(xyzMean * 1.5, 1e-30)){
+  // relax reorder threshold 1.5 -> 1.15 (913 file zyx is only ~1.4x of xyz but correct)
+  if (dataOrder !== "xyz" && bestMean > Math.max(xyzMean * 1.15, xyzMean + 0.01, 1e-30)){
     // 重排为标准 x-fastest
     const perm = new Float32Array(nVox);
     const f = _orders[dataOrder];
