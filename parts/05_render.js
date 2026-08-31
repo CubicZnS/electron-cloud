@@ -799,6 +799,42 @@ function setParticleCount(n){
   if (typeof syncParticleSlider === "function") syncParticleSlider(); // 粒子数变化时同步面板滑块
 }
 
+/* 导入模式：同步直接写入采样云 + 线性过渡（不依赖异步分帧匹配）。
+   背景：transitionCloudFromData 的粒子匹配经 requestAnimationFrame 分帧执行，
+   在部分浏览器环境下不完成（uTransStart 保持 -999、props 不更新）→ 云停留在
+   旧状态（HOMO 导入后全是正相位暖色、密度导入后仍是旧苯云）。导入是全新数据源，
+   用直线过渡（旧位置 → 新位置 平滑插值 + 相位交叉渐变）即可，稳定且更干净。 */
+function applyCubeSampleDirect(data){
+  if (!cloud) return;
+  const n = cloud.count;
+  const geo = cloud.geo;
+  const oldPos = new Float32Array(geo.attributes.position.array); // 旧位置快照（过渡起点）
+  geo.attributes.aOldPos.array.set(oldPos);
+  geo.attributes.aOldPos.needsUpdate = true;
+  geo.attributes.aOldProps.array.set(geo.attributes.aProps.array);
+  geo.attributes.aOldProps.needsUpdate = true;
+  geo.attributes.position.array.set(data.pos);
+  geo.attributes.position.needsUpdate = true;
+  padCloudPaths(data.pos, geo);
+  {
+    const props = new Float32Array(n * 4);
+    for (let i = 0; i < n; i++){
+      props[i * 4] = data.size[i];
+      props[i * 4 + 1] = data.bright[i];
+      props[i * 4 + 2] = data.density[i];
+      props[i * 4 + 3] = data.sign ? data.sign[i] : 0; // 轨道相位（随过渡平滑交叉渐变）
+    }
+    geo.attributes.aProps.array.set(props);
+    geo.attributes.aProps.needsUpdate = true;
+  }
+  geo.attributes.aSeed.array.set(data.seed);
+  const sd = geo.attributes.aSeed.array;
+  for (let i = 0; i < n; i++) sd[i * 4 + 3] = seededRand() * 0.4; // 简单随机延迟（柔和波浪过渡）
+  geo.attributes.aSeed.needsUpdate = true;
+  cloud.uniforms.uTransStart.value = simTime;
+  cloud.uniforms.uTransDur.value = SETTINGS.transDur;
+}
+
 /* 悬停显示：把场模型的相对因子挂到碳记录上。
    预置分子：苯环碳=1.00（原规范）；创造模式：所有碳平均=1.00（含碳架本征基线） */
 function updateRelDensities(){

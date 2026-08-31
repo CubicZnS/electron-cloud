@@ -1,8 +1,22 @@
 本项目采用语义化版本（SemVer）：主版本号 = 功能里程碑，次版本号 = 兼容性新功能，补丁号 = 修复。
 
-## [v2.5.1] — 2026-08-31 · 颜色归一化：以分子平均电子密度 = 1（修复大分子通体发紫）
+## [v2.5.2] — 2026-08-31 · 修复：导入后电子云停留在旧状态（HOMO 全黄 / 密度仍为旧苯云）
 
 ### 修复
+- **根因**：applyCubeVolume 的导入过渡走 transitionCloudFromData 的**异步分帧粒子匹配**（requestAnimationFrame 分帧执行）；在部分浏览器环境下匹配回调不完成（uTransStart 保持 -999、props/sign 不写入）→ 云停留在旧苯云状态：HOMO 用旧 props（w=0）→ 全部走正相位 LUT（全黄），密度仍是旧苯云。
+- **修复**（parts/05_render.js applyCubeSampleDirect）：导入模式改为**同步直接写入采样云 + 线性过渡**——旧位置快照 → 新位置/属性/相位立即写入，uTransStart/uTransDur 同步设置，随机延迟柔和波浪过渡；完全不依赖异步分帧匹配，导入后立即呈现正确云与相位双色。
+
+### 验证（headless 实测）
+- Apply 后 1.2s：uTrans=0.31/2.6（过渡运行）、aProps.w 含 ±1、orbSign=1、云位置更新（max r 5.0Å）
+- 渲染像素：暖(正相位) 2637 / 冷(负相位) 3102 → 红蓝双瓣可见 ✓
+- node tools/validate-cube.mjs：59/59；node tools/validate-sigma.mjs：15/15；node tools/build.mjs：SYNTAX_OK
+
+### 文件
+- 修改：parts/05_render.js、parts/06b_cube_ui.js、index.html（组装产物）、CHANGELOG.md、README.md
+
+---
+
+## [v2.5.1] — 2026-08-31 · 颜色归一化：以分子平均电子密度 = 1（修复大分子通体发紫）
 - **根因**：原颜色映射以「截断→0.12、峰值→1」为基准；大分子（环糊精 ρmean ≈ 12.6% ρmax）的绝大多数粒子落在色图暗紫端 → 通体发紫。
 - **修复**（parts/03b_cube.js）：buildCubeVolume 计算 kept 体素的平均电子密度 ρmean；sampleCloudCube 改为**平均居中映射** dAttr = 0.5 + 0.5·(log1p(ρ) − log1p(ρmean))/half（half 取峰值/均值 与 均值/截断 的较大者，对数半程对称）——分子平均密度 = 1 = 色图正中央，高密度更暖、低密度更冷。
 - 轨道模式同样以「平均 |ψ| = 1」为基准（相位双色不变）；图例标注「颜色以分子平均电子密度归一（平均 = 1）」，面板元数据新增平均 ρ 显示。

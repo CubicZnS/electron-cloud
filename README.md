@@ -5,7 +5,7 @@ GPU 粒子电子云交互可视化：分子 · 电子云 · 诱导效应 / 共�
 
 > by CubicZnS · 单文件 HTML 产物，无构建依赖（three.js 由 CDN 加载）
 >
-> **当前版本：v2.5.1（颜色以分子平均电子密度归一，平均 = 1）** · 版本历史见 [CHANGELOG.md](CHANGELOG.md)
+> **当前版本：v2.5.2（修复导入后电子云停留在旧状态）** · 版本历史见 [CHANGELOG.md](CHANGELOG.md)
 
 ## 功能
 

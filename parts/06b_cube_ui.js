@@ -167,7 +167,7 @@ function applyCubeVolume(vol){
   cubeMode = true;
   setOrbitalRender(cubeUI.mode === "orbital"); // 轨道模式：固定正/负相位双 LUT
   const data = sampleCloudCube(vol, cloud.count); // 真实密度/|ψ| 权重采样，而非 computeField
-  transitionCloudFromData(data, [0, 0, 0], { direct: true }); // 直线过渡：不走大分子骨架，避免过渡期飞散观感
+  applyCubeSampleDirect(data); // 同步直接写入 + 线性过渡（不依赖异步分帧匹配，避免导入后云停在旧状态）
   // 相机自动取景：按采样云的实测范围拉远相机（导入结构常大于半定量世界默认视野 ±4Å）
   let maxR = 0;
   for (let i = 0; i < cloud.count; i++){
