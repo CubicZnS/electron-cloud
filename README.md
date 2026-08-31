@@ -5,7 +5,7 @@ GPU 粒子电子云交互可视化：分子 · 电子云 · 诱导效应 / 共�
 
 > by CubicZnS · 单文件 HTML 产物，无构建依赖（three.js 由 CDN 加载）
 >
-> **当前版本：v2.5.3（UI 统一与防重叠：面板高度/图例遮挡/文字层级）** · 版本历史见 [CHANGELOG.md](CHANGELOG.md)
+> **当前版本：v2.5.4（修复面板打开后图例消失 / 长文件名溢出）** · 版本历史见 [CHANGELOG.md](CHANGELOG.md)
 
 ## 功能
 

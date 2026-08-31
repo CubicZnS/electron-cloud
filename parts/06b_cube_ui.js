@@ -131,7 +131,7 @@ function renderCubeMeta(vol, name){
     ftText = zh + "（" + conf + "）";
   }
   el.innerHTML =
-    "<div class='row'><span class='k'>文件</span><span class='v'>" + name + "</span></div>"
+    "<div class='row'><span class='k'>文件</span><span class='v ellip' title='" + name + "'>" + name + "</span></div>"
     + "<div class='row'><span class='k'>字段类型</span><span class='v' class='src'>" + ftText + "</span></div>"
     + "<div class='row'><span class='k'>原子数</span><span class='v'>" + vol.natoms + "（" + elStr + "）</span></div>"
     + "<div class='row'><span class='k'>网格</span><span class='v'>" + vol.dims[0] + " × " + vol.dims[1] + " × " + vol.dims[2] + "</span></div>"
@@ -140,13 +140,6 @@ function renderCubeMeta(vol, name){
     + "<div class='row'><span class='k'>" + (cubeUI.mode === "orbital" ? "|ψ| 幅值" : "密度") + "</span><span class='v'>平均 " + vol.rhoMean.toExponential(2) + " · 峰 " + vol.rhoMax.toExponential(2) + " a.u. · 截断 ≥ " + vol.rhoCut.toExponential(2) + "（保留 " + (vol.keptFraction * 100).toFixed(1) + "% 体素）</span></div>"
     + "<div class='row'><span class='k'>单位/居中</span><span class='v' class='src'>bohr → Å（×0.5292）· 已按网格中心居中</span></div>";
 }
-/* 左侧面板打开时隐藏左下角图例，避免面板与图例重叠遮挡；关闭后恢复（移动端图例本就隐藏） */
-function syncLegendVisibility(){
-  const el = _qdEl("legend");
-  if (!el) return;
-  const hide = cubeUI.open || (typeof creatorState !== "undefined" && creatorState.open);
-  el.style.display = hide ? "none" : "";
-}
 /* ---------- 面板开关（与创造模式互斥） ---------- */
 function toggleQuantumPanel(show){
   const open = show !== undefined ? show : !cubeUI.open;
@@ -154,7 +147,6 @@ function toggleQuantumPanel(show){
   _qdEl("quantumPanel").classList.toggle("show", open);
   _qdEl("quantumBtn").classList.toggle("active", open);
   if (open){ toggleCreator(false); syncParticleSlider(); } // 两个左侧面板互斥；打开时同步粒子滑块
-  syncLegendVisibility();
 }
 /* ---------- 应用：切换到真实密度数据源（现有粒子过渡与 shader 全部复用） ---------- */
 function applyCubeVolume(vol){
@@ -247,7 +239,7 @@ function rebuildCubeLegend(){
   const elStr = Object.keys(cnt).sort().map(function (e){ return e + cnt[e]; }).join(" ");
   const isOrb = cubeUI.mode === "orbital";
   const title = isOrb ? "Imported orbital（" + (cubeUI.label || "未标注") + "）" : "Imported electron density";
-  let html = "<div class='mol' style='color:#c9b8ff'>" + title + " <span class='formula'>" + (vol.fileName || "Cube") + "</span></div>";
+  let html = "<div class='mol' style='color:#c9b8ff'>" + title + " <span class='formula' title='" + (vol.fileName || "Cube") + "'>" + (vol.fileName || "Cube") + "</span></div>";
   html += "<div class='fxrow'><span class='fx-badge' style='border-color:rgba(184,147,255,0.5);color:#c9b8ff'>" + elStr + " · " + vol.nVox.toLocaleString() + " voxels</span></div>";
   if (isOrb){
     html += "<div class='cmaprow'><span class='cmaplabel' style='color:#7cc7ff'>负相位 ψ<0</span>"

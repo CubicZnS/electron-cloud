@@ -52,7 +52,7 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
 .mol-chip.active .zh{color:var(--dim)}
 #legend{position:fixed;left:18px;bottom:20px;z-index:20;max-width:320px;padding:10px 12px;pointer-events:auto}
 #legend .mol{font-size:11px;letter-spacing:1.5px;font-weight:600;color:#e8f2ff;margin-bottom:6px;display:flex;align-items:center;gap:8px}
-#legend .formula{color:var(--faint);font-size:10px;letter-spacing:1px;font-weight:400}
+#legend .formula{color:var(--faint);font-size:10px;letter-spacing:1px;font-weight:400;display:inline-block;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
 #legend .fxrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
 .fx-badge{font-size:10px;letter-spacing:1px;padding:3px 9px;border-radius:999px;cursor:pointer;
   background:rgba(255,255,255,0.05);color:var(--dim);border:1px solid var(--stroke);transition:all .18s}
@@ -99,7 +99,7 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
 #densityTag .dt-val{font-size:15px;font-weight:700;color:#eaf6ff;font-variant-numeric:tabular-nums;letter-spacing:1px}
 #densityTag .dt-cap{font-size:8px;color:var(--faint);letter-spacing:1px;white-space:nowrap}
 #legend .densityhint{font-size:9px;color:var(--faint);letter-spacing:.5px;margin-top:6px;line-height:1.7}
-#creator{position:fixed;left:18px;top:76px;z-index:35;width:378px;padding:12px 14px;display:none;flex-direction:column;gap:8px;max-height:calc(100dvh - 158px);overflow-y:auto}
+#creator{position:fixed;left:18px;top:76px;z-index:35;width:378px;padding:12px 14px;display:none;flex-direction:column;gap:8px;max-height:calc(100dvh - 300px);overflow-y:auto}
 #creator.show{display:flex}
 #creator .cr-head{display:flex;justify-content:space-between;align-items:center;font-size:12px;letter-spacing:1.5px;color:#eaf6ff}
 #creator .cr-close{color:var(--faint);cursor:pointer;font-size:12px;padding:0 3px}
@@ -147,14 +147,15 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
 #quantumBtn.active{color:#f3e8ff;background:rgba(184,147,255,0.16);border-color:rgba(184,147,255,0.55);
   box-shadow:0 0 22px rgba(184,147,255,0.30)}
 #quantumPanel{position:fixed;left:18px;top:76px;z-index:35;width:376px;padding:14px 16px;
-  display:none;flex-direction:column;gap:9px;max-height:calc(100dvh - 158px);overflow-y:auto}
+  display:none;flex-direction:column;gap:9px;max-height:calc(100dvh - 300px);overflow-y:auto}
 #quantumPanel.show{display:flex}
 .qd-head{display:flex;justify-content:space-between;align-items:center;font-size:12px;letter-spacing:1.5px;color:#eaf6ff}
 .qd-head b{display:flex;align-items:center;gap:7px}
 .qd-head .qd-close{color:var(--faint);cursor:pointer;font-size:12px;padding:0 3px}
 .qd-sub{font-size:10px;color:var(--dim);line-height:1.7;letter-spacing:.3px}
 .qd-sub b{color:#c9b8ff}
-.qd-status{display:flex;align-items:center;gap:7px;font-size:10px;letter-spacing:1px;color:var(--dim)}
+.qd-status{display:flex;align-items:center;gap:7px;font-size:10px;letter-spacing:1px;color:var(--dim);min-width:0}
+#qdStatusText{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
 .qd-status .dot{width:7px;height:7px;border-radius:50%;background:#5b6678;transition:all .2s;flex:none}
 .qd-status.ready .dot{background:#9fe0b0;box-shadow:0 0 8px rgba(159,224,176,.6)}
 .qd-status.applied .dot{background:#b893ff;box-shadow:0 0 8px rgba(184,147,255,.7)}
@@ -169,6 +170,7 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
 .qd-meta .row{display:flex;justify-content:space-between;gap:10px}
 .qd-meta .row .k{color:var(--faint);flex:none}
 .qd-meta .row .v{color:#d9e8ff;text-align:right;word-break:break-all}
+.qd-meta .row .v.ellip{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
 .qd-meta .row .v.src{color:#b893ff}
 #qdErr{font-size:10px;color:#ff9a8f;line-height:1.7;background:rgba(255,110,100,0.08);border:1px solid rgba(255,110,100,0.28);
   border-radius:8px;padding:8px 10px;display:none;word-break:break-word}
@@ -3883,7 +3885,6 @@ function toggleCreator(show){
   document.getElementById("creatorBtn").classList.toggle("active", creatorState.open);
   if (creatorState.open) crRedraw();
   if (creatorState.open) toggleQuantumPanel(false); // 与 Quantum Data 面板互斥
-  if (typeof syncLegendVisibility === "function") syncLegendVisibility(); // 打开/关闭时同步图例可见性
 }
 if (crCanvas){
   crCanvas.addEventListener("click", function (e){
@@ -4091,7 +4092,7 @@ function renderCubeMeta(vol, name){
     ftText = zh + "（" + conf + "）";
   }
   el.innerHTML =
-    "<div class='row'><span class='k'>文件</span><span class='v'>" + name + "</span></div>"
+    "<div class='row'><span class='k'>文件</span><span class='v ellip' title='" + name + "'>" + name + "</span></div>"
     + "<div class='row'><span class='k'>字段类型</span><span class='v' class='src'>" + ftText + "</span></div>"
     + "<div class='row'><span class='k'>原子数</span><span class='v'>" + vol.natoms + "（" + elStr + "）</span></div>"
     + "<div class='row'><span class='k'>网格</span><span class='v'>" + vol.dims[0] + " × " + vol.dims[1] + " × " + vol.dims[2] + "</span></div>"
@@ -4100,13 +4101,6 @@ function renderCubeMeta(vol, name){
     + "<div class='row'><span class='k'>" + (cubeUI.mode === "orbital" ? "|ψ| 幅值" : "密度") + "</span><span class='v'>平均 " + vol.rhoMean.toExponential(2) + " · 峰 " + vol.rhoMax.toExponential(2) + " a.u. · 截断 ≥ " + vol.rhoCut.toExponential(2) + "（保留 " + (vol.keptFraction * 100).toFixed(1) + "% 体素）</span></div>"
     + "<div class='row'><span class='k'>单位/居中</span><span class='v' class='src'>bohr → Å（×0.5292）· 已按网格中心居中</span></div>";
 }
-/* 左侧面板打开时隐藏左下角图例，避免面板与图例重叠遮挡；关闭后恢复（移动端图例本就隐藏） */
-function syncLegendVisibility(){
-  const el = _qdEl("legend");
-  if (!el) return;
-  const hide = cubeUI.open || (typeof creatorState !== "undefined" && creatorState.open);
-  el.style.display = hide ? "none" : "";
-}
 /* ---------- 面板开关（与创造模式互斥） ---------- */
 function toggleQuantumPanel(show){
   const open = show !== undefined ? show : !cubeUI.open;
@@ -4114,7 +4108,6 @@ function toggleQuantumPanel(show){
   _qdEl("quantumPanel").classList.toggle("show", open);
   _qdEl("quantumBtn").classList.toggle("active", open);
   if (open){ toggleCreator(false); syncParticleSlider(); } // 两个左侧面板互斥；打开时同步粒子滑块
-  syncLegendVisibility();
 }
 /* ---------- 应用：切换到真实密度数据源（现有粒子过渡与 shader 全部复用） ---------- */
 function applyCubeVolume(vol){
@@ -4207,7 +4200,7 @@ function rebuildCubeLegend(){
   const elStr = Object.keys(cnt).sort().map(function (e){ return e + cnt[e]; }).join(" ");
   const isOrb = cubeUI.mode === "orbital";
   const title = isOrb ? "Imported orbital（" + (cubeUI.label || "未标注") + "）" : "Imported electron density";
-  let html = "<div class='mol' style='color:#c9b8ff'>" + title + " <span class='formula'>" + (vol.fileName || "Cube") + "</span></div>";
+  let html = "<div class='mol' style='color:#c9b8ff'>" + title + " <span class='formula' title='" + (vol.fileName || "Cube") + "'>" + (vol.fileName || "Cube") + "</span></div>";
   html += "<div class='fxrow'><span class='fx-badge' style='border-color:rgba(184,147,255,0.5);color:#c9b8ff'>" + elStr + " · " + vol.nVox.toLocaleString() + " voxels</span></div>";
   if (isOrb){
     html += "<div class='cmaprow'><span class='cmaplabel' style='color:#7cc7ff'>负相位 ψ<0</span>"

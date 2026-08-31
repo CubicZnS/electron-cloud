@@ -1,8 +1,20 @@
 本项目采用语义化版本（SemVer）：主版本号 = 功能里程碑，次版本号 = 兼容性新功能，补丁号 = 修复。
 
-## [v2.5.3] — 2026-08-31 · UI 统一与防重叠：Quantum Data 面板高度、图例遮挡、文字层级
+## [v2.5.4] — 2026-08-31 · 修复：面板打开后图例消失 / 长文件名溢出
 
-### 修复与优化
+### 修复
+- **图例不再随面板隐藏**：移除 v2.5.3 的「面板打开时隐藏图例」逻辑；改为将 Quantum Data / 创造面板的高度上限收紧为 calc(100dvh - 300px)（面板底部停在左下角图例区上方）→ 图例始终可见且不与面板重叠。
+- **长文件名省略号**：面板元数据「文件」行、状态文本、图例文件名均改为单行省略号（text-overflow:ellipsis），悬停显示完整文件名（title）；避免超长文件名撑爆/溢出布局。
+
+### 验证
+- node tools/validate-cube.mjs：59/59；node tools/validate-sigma.mjs：15/15；node tools/build.mjs：SYNTAX_OK
+
+### 文件
+- 修改：parts/01_head.html、parts/06b_cube_ui.js、parts/06_ui.js、index.html（组装产物）、CHANGELOG.md、README.md
+
+---
+
+## [v2.5.3] — 2026-08-31 · UI 统一与防重叠：Quantum Data 面板高度、图例遮挡、文字层级
 - **Quantum Data 面板高度/重叠**：面板从垂直居中改为顶对齐（top:76px），max-height 为底部工具区留 ≥82px —— 打开面板不再与下方分子栏/按钮/图例重叠；移动端 top:112px 避开折叠顶栏。
 - **图例遮挡**：左侧面板（Quantum Data / 创造模式）打开时自动隐藏左下角图例，关闭后恢复（避免面板盖住图例）。
 - **整体一致性**：创造面板、信息卡同步顶对齐 + 高度上限（infoCard 不再与调试面板重叠）；辅助提示文字统一规格（9px/faint/字距.5/行高1.7，覆盖 .qd-hint/.cr-hint/.densityhint）；Quantum 面板宽度 376px 与创造面板 378px 视觉一致。
