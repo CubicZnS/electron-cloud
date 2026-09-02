@@ -354,10 +354,28 @@ if (aSlider){
 }
 syncAlphaSlider();
 
+const rSlider = _qdEl("qdRes");
+const rValEl = _qdEl("qdResVal");
+if (rSlider){
+  rSlider.addEventListener("input", function (){
+    const v = parseInt(rSlider.value, 10);
+    if (typeof setIsoRes === "function") setIsoRes(v, cubeUI.volume);
+    if (rValEl) rValEl.textContent = v + (v >= 2 ? "x(fine)" : "x(standard)");
+  });
+}
+
 /* ---------- 滑块标签/范围按轨道显示模式切换 ---------- */
 function syncSliderMode(){
   const isoMode = !!(cubeMode && cubeUI.mode === "orbital" && cubeUI.viewMode !== "cloud");
+  const resRowEl = _qdEl("qdResRow");
+  const resHintEl = _qdEl("qdResHint");
+  if (resRowEl) resRowEl.style.display = isoMode ? "" : "none";
+  if (resHintEl) resHintEl.style.display = isoMode ? "" : "none";
   if (isoMode){
+    const rEl = _qdEl("qdRes");
+    const rVEl = _qdEl("qdResVal");
+    if (rEl) rEl.value = String(isoRes || 1);
+    if (rVEl) rVEl.textContent = (isoRes || 1) + (isoRes >= 2 ? "x(fine)" : "x(standard)");
     if (pLabelEl) pLabelEl.textContent = "边界值大小";
     if (aLabelEl) aLabelEl.textContent = "边界可见度";
     if (pSlider){ pSlider.min = "5"; pSlider.max = "50"; pSlider.step = "1"; pSlider.value = String(Math.round(isoFraction * 100)); pSlider.title = "拖动调整等值面边界（iso 阈值，百分比 × max|ψ|）"; }

@@ -1,5 +1,25 @@
 本项目采用语义化版本（SemVer）：主版本号 = 功能里程碑，次版本号 = 兼容性新功能，补丁号 = 修复。
 
+## [v2.5.15] — 2026-09-02 · 新增：等值面拟合精度滑块（多边形细分）
+
+### 新增
+- 等值面细分精度：cubeMarchingCubes(vol, iso, sign, res) 支持 res 细分，res=2 时每个原始体素单元每维再分一倍，三线性插值采样，三角形约 4 倍、曲面更平滑。
+- UI 滑块（仅等值面/both 模式显示）：新增“拟合精度”（标准 1x / 精细 2x），放在边界值/可见度滑块上方；粒子云模式隐藏。拖动即重建等值面（setIsoRes）。
+- res=1 走原始快路径（零回归）。
+
+### 实测
+- 咖啡因 HOMO：res 1x 14260 三角形 -> res 2x 57132（4 倍），bbox 不变。
+- validate 新增 3 项（res2 三角形增加、bbox 不变、res1 与默认一致），共 73/73。
+- headless：等值面模式显示拟合精度滑块，拖动到 2x(fine) 即时生效；粒子云模式隐藏。
+
+### 验证
+- validate-cube 73/73；validate-sigma 15/15；SYNTAX_OK
+
+### 文件
+- parts/03b_cube.js、parts/05_render.js、parts/06b_cube_ui.js、parts/01_head.html、tools/validate-cube.mjs、index.html、CHANGELOG.md、README.md
+
+---
+
 ## [v2.5.14] — 2026-09-02 · 等值面模式滑块复用：边界值大小 + 边界可见度
 
 ### 新增

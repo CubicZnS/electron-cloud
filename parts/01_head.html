@@ -334,6 +334,12 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
       <option value="both">等值面 + 粒子云</option>
     </select>
   </div>
+  <div class="qd-row" id="qdResRow" style="display:none">
+    <span class="qd-label" id="qdResLabel">拟合精度</span>
+    <input type="range" id="qdRes" min="1" max="2" step="1" title="等值面多边形细分精度：标准（1×）网格直接拟合 / 精细（2×）每维细分插值，曲面更平滑（三角形约 4 倍）">
+    <span class="qd-val" id="qdResVal">1×</span>
+  </div>
+  <div class="qd-hint" id="qdResHint" style="display:none">拟合精度：标准 = 按原始体素网格拟合（快）；精细 = 每维细分一倍插值，等值面更平滑（三角形约 4 倍，大分子会变慢）。</div>
   <button class="dshell-btn" id="qdApply" style="display:none">Apply electron density</button>
   <div class="qd-row" id="qdParticleRow">
     <span class="qd-label" id="qdParticlesLabel">粒子总数</span>

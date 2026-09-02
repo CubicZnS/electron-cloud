@@ -498,6 +498,14 @@ const cubeText = (lines) => lines.join("\n");
   const gridSpan = [volIso.dims[0] * h, volIso.dims[1] * h, volIso.dims[2] * h];
   check("负瓣等值面贴合分子（不外插到盒外）", negSpan[0] < gridSpan[0] * 0.5 && negSpan[1] < gridSpan[1] * 0.5 && negSpan[2] < gridSpan[2] * 0.5,
     negSpan.map(function (v){ return v.toFixed(1); }).join("x") + " vs grid " + gridSpan.map(function (v){ return v.toFixed(1); }).join("x"));
+  // polygon subdivision res=2: more triangles, same bbox
+  const posMc2 = m.cubeMarchingCubes(volIso, isoV, 1, 2);
+  const negMc2 = m.cubeMarchingCubes(volIso, isoV, -1, 2);
+  check("res=2 triangles increase", posMc2.count > posMc.count * 2.5, "pos " + posMc.count + " -> " + posMc2.count);
+  const span2 = spanOf(negMc2.positions);
+  check("res=2 bbox unchanged", span2[0] < gridSpan[0] * 0.5 && span2[1] < gridSpan[1] * 0.5 && span2[2] < gridSpan[2] * 0.5, span2.map(function (v){ return v.toFixed(1); }).join("x"));
+  const posMc1 = m.cubeMarchingCubes(volIso, isoV, 1, 1);
+  check("res=1 equals default", posMc1.count === posMc.count, "pos " + posMc.count + " vs " + posMc1.count);
 }
 
 console.log("\n==== " + pass + " PASS / " + fail + " FAIL ====");

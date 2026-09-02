@@ -805,7 +805,8 @@ function setParticleCount(n){
 /* ---------- 轨道等值面（Marching Cubes 双相位网格） ---------- */
 let isoGroup = null;          // THREE.Group：容纳正/负相位两个 Mesh（挂 scene，独立于分子网格）
 let isoOpacity = 0.7;         // 等值面半透明度（边界可见度，可被 UI 滑条修改）
-let isoFraction = 0.2;        // 等值面阈值 = isoFraction × 各相位 max|ψ|（边界值大小）
+let isoFraction = 0.2;
+let isoRes = 1;        // 等值面阈值 = isoFraction × 各相位 max|ψ|（边界值大小）
 function clearCubeIsosurface(){
   if (isoGroup){
     scene.remove(isoGroup);
@@ -830,7 +831,7 @@ function applyCubeIsosurface(vol){
   const isoPos = Math.max(maxPos * isoFraction, vol.rhoCut);
   const isoNeg = Math.max(maxNeg * isoFraction, vol.rhoCut);
   const build = function (sign, isoVal, colorHex, opacity){
-    const mc = cubeMarchingCubes(vol, isoVal, sign);
+    const mc = cubeMarchingCubes(vol, isoVal, sign, isoRes);
     if (!mc || mc.count === 0) return null;
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(mc.positions, 3));
@@ -870,6 +871,10 @@ function setIsoOpacity(v){
   }
 }
 // 边界值大小：更新 isoFraction 并重建等值面（需当前轨道体积）
+function setIsoRes(v, vol){
+  isoRes = (v >= 2) ? 2 : 1;
+  if (vol) applyCubeIsosurface(vol);
+}
 function setIsoFraction(v, vol){
   isoFraction = v;
   if (vol) applyCubeIsosurface(vol);

@@ -1005,24 +1005,42 @@ const MC_TRI_TABLE = new Int32Array([
    iso: isovalue (absolute); sign: +1 positive-lobe envelope / -1 negative-lobe envelope */
 const MC_CORNER_OFFSET = [[0,0,0],[1,0,0],[1,1,0],[0,1,0],[0,0,1],[1,0,1],[1,1,1],[0,1,1]];
 const MC_EDGE_CORNERS = [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
-function cubeMarchingCubes(vol, iso, sign){
+function cubeMarchingCubes(vol, iso, sign, res){
   const nx = vol.dims[0], ny = vol.dims[1], nz = vol.dims[2];
   const nxy = nx * ny;
   const data = vol.data, org = vol.origin, ax = vol.axes;
   const positions = [], normals = [];
-  const px = function (ix, iy, iz){
+  const resN = (res && res >= 2) ? Math.floor(res) : 1;
+  const sub = resN;
+  const triAt = function (fx, fy, fz){
+    if (fx < 0 || fx > nx - 1 || fy < 0 || fy > ny - 1 || fz < 0 || fz > nz - 1) return sign > 0 ? -Infinity : Infinity;
+    const x0 = fx < nx - 1 ? Math.floor(fx) : nx - 2;
+    const y0 = fy < ny - 1 ? Math.floor(fy) : ny - 2;
+    const z0 = fz < nz - 1 ? Math.floor(fz) : nz - 2;
+    const tx = fx - x0, ty = fy - y0, tz = fz - z0;
+    const i000 = x0 + nx * y0 + nxy * z0;
+    const c000 = data[i000], c100 = data[i000 + 1], c010 = data[i000 + nx], c110 = data[i000 + nx + 1];
+    const c001 = data[i000 + nxy], c101 = data[i000 + nxy + 1], c011 = data[i000 + nxy + nx], c111 = data[i000 + nxy + nx + 1];
+    const c00 = c000 * (1 - tx) + c100 * tx, c10 = c010 * (1 - tx) + c110 * tx;
+    const c01 = c001 * (1 - tx) + c101 * tx, c11 = c011 * (1 - tx) + c111 * tx;
+    const c0 = c00 * (1 - ty) + c10 * ty, c1 = c01 * (1 - ty) + c11 * ty;
+    return c0 * (1 - tz) + c1 * tz;
+  };
+  const pxFrac = function (fx, fy, fz){
     return [
-      org[0] + (ix + 0.5) * ax[0][0] + (iy + 0.5) * ax[1][0] + (iz + 0.5) * ax[2][0],
-      org[1] + (ix + 0.5) * ax[0][1] + (iy + 0.5) * ax[1][1] + (iz + 0.5) * ax[2][1],
-      org[2] + (ix + 0.5) * ax[0][2] + (iy + 0.5) * ax[1][2] + (iz + 0.5) * ax[2][2],
+      org[0] + (fx + 0.5) * ax[0][0] + (fy + 0.5) * ax[1][0] + (fz + 0.5) * ax[2][0],
+      org[1] + (fx + 0.5) * ax[0][1] + (fy + 0.5) * ax[1][1] + (fz + 0.5) * ax[2][1],
+      org[2] + (fx + 0.5) * ax[0][2] + (fy + 0.5) * ax[1][2] + (fz + 0.5) * ax[2][2],
     ];
   };
+  const px = function (ix, iy, iz){ return pxFrac(ix, iy, iz); };
   const valAt = function (ix, iy, iz){
     if (ix < 0 || ix >= nx || iy < 0 || iy >= ny || iz < 0 || iz >= nz) return sign > 0 ? -Infinity : Infinity;
     return data[ix + nx * iy + nxy * iz];
   };
   const cornerVal = function (ix, iy, iz, ci){
     const o = MC_CORNER_OFFSET[ci];
+    if (sub > 1) return triAt((ix + o[0]) / sub, (iy + o[1]) / sub, (iz + o[2]) / sub);
     return valAt(ix + o[0], iy + o[1], iz + o[2]);
   };
   const edgePos = function (ix, iy, iz, ei){
@@ -1032,13 +1050,16 @@ function cubeMarchingCubes(vol, iso, sign){
     const target = sign > 0 ? iso : -iso;
     const t = denom === 0 ? 0.5 : (target - v0) / denom;
     const o0 = MC_CORNER_OFFSET[c0], o1 = MC_CORNER_OFFSET[c1];
-    const p0 = px(ix + o0[0], iy + o0[1], iz + o0[2]);
-    const p1 = px(ix + o1[0], iy + o1[1], iz + o1[2]);
+    const f0x = (ix + o0[0]) / sub, f0y = (iy + o0[1]) / sub, f0z = (iz + o0[2]) / sub;
+    const f1x = (ix + o1[0]) / sub, f1y = (iy + o1[1]) / sub, f1z = (iz + o1[2]) / sub;
+    const p0 = pxFrac(f0x, f0y, f0z);
+    const p1 = pxFrac(f1x, f1y, f1z);
     return [p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t, p0[2] + (p1[2] - p0[2]) * t];
   };
-  for (let iz = 0; iz < nz - 1; iz++){
-    for (let iy = 0; iy < ny - 1; iy++){
-      for (let ix = 0; ix < nx - 1; ix++){
+  const cnx = (nx - 1) * sub, cny = (ny - 1) * sub, cnz = (nz - 1) * sub;
+  for (let iz = 0; iz < cnz; iz++){
+    for (let iy = 0; iy < cny; iy++){
+      for (let ix = 0; ix < cnx; ix++){
         let cubeIndex = 0;
         for (let ci = 0; ci < 8; ci++){
           const v = cornerVal(ix, iy, iz, ci);
