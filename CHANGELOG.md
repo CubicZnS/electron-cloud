@@ -1,5 +1,26 @@
 本项目采用语义化版本（SemVer）：主版本号 = 功能里程碑，次版本号 = 兼容性新功能，补丁号 = 修复。
 
+## [v2.5.14] — 2026-09-02 · 等值面模式滑块复用：边界值大小 + 边界可见度
+
+### 新增
+- **滑块随轨道显示模式切换**（parts/01_head.html + parts/06b_cube_ui.js）：
+  - 粒子云模式：滑块保持「粒子总数」（10000–600000）+「粒子可见度」（0.1–1.4）；
+  - 等值面模式（isosurface / both）：同一对滑块动态改为「**边界值大小**」（5%–50% × 各相位 max|ψ|，拖动即重建等值面）+「**边界可见度**」（0.1–1.0 表面不透明度，拖动即时生效不重建）；
+  - 切回粒子云自动恢复原标签/范围/值。
+- **渲染支持**（parts/05_render.js）：ISO_FRACTION → 可变 isoFraction；新增 setIsoFraction(v, vol)（重建）与 setIsoOpacity(v)（仅更新材质不透明度）。
+
+### 实测
+- headless：边界值 8% → 等值面暖橙 2818 + 冷蓝 11634 px；35% → 984 + 4152 px（面积随边界值单调变化，拖动即时重建）。
+- 滑块标签/范围/值切换正确（cloud↔isosurface 往返恢复）。
+
+### 验证
+- node tools/validate-cube.mjs：70/70；node tools/validate-sigma.mjs：15/15；node tools/build.mjs：SYNTAX_OK
+
+### 文件
+- 修改：parts/01_head.html、parts/06b_cube_ui.js、parts/05_render.js、index.html（组装产物）、CHANGELOG.md、README.md
+
+---
+
 ## [v2.5.13] — 2026-09-02 · 改进：轨道等值面每相位独立阈值 + 降低碎片化
 
 ### 改进

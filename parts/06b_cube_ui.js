@@ -199,6 +199,7 @@ function applyCubeVolume(vol){
     if (vm === "isosurface" || vm === "both") applyCubeIsosurface(vol);
     if (vm === "isosurface"){ if (cloud && cloud.pts) cloud.pts.visible = false; }
     if (vm === "cloud"){ if (cloud && cloud.pts) cloud.pts.visible = true; }
+    syncSliderMode();
   }
   setCubeModeUI(true);
   rebuildCubeLegend();
@@ -284,40 +285,67 @@ function rebuildCubeLegend(){
   const link = _qdEl("exitCubeLink");
   if (link) link.addEventListener("click", function (){ exitCubeMode(); });
 }
-/* ---------- 粒子总数滑块 ---------- */
-/* 控制当前电子云的总粒子数（覆盖画质档位预设，可超出 ULTRA 上限）。
-   大分子（环糊精等）粒子不足时可拖动调高；拖动即用 setParticleCount 重采样，即时生效。 */
+/* ---------- 粒子总数 / 边界值大小 滑块（按轨道显示模式复用） ---------- */
+/* 粒子云模式：控制总粒子数（setParticleCount 重采样）；
+   等值面模式（isosurface/both）：改为「边界值大小」= isoFraction（5%–50% × max|ψ|）。 */
 const pSlider = _qdEl("qdParticles");
 const pValEl = _qdEl("qdParticlesVal");
+const pLabelEl = _qdEl("qdParticlesLabel");
 function syncParticleSlider(){
   if (!cloud) return;
   if (pSlider) pSlider.value = String(Math.min(Math.max(cloud.count, 10000), 600000));
   if (pValEl) pValEl.textContent = fmtCount(cloud.count);
-  // 与某画质预设一致则高亮对应按钮，否则清除（自定义数量）
   const preset = QUALITY_ORDER.find(function (q){ return QUALITY[q].count === cloud.count; });
   document.querySelectorAll("#qualitySeg .seg-btn").forEach(function (b){
     b.classList.toggle("active", preset ? b.dataset.q === preset : false);
   });
 }
+function syncIsoFractionSlider(){
+  if (!pSlider) return;
+  pSlider.min = "5"; pSlider.max = "50"; pSlider.step = "1";
+  pSlider.value = String(Math.round(isoFraction * 100));
+  if (pValEl) pValEl.textContent = Math.round(isoFraction * 100) + "%";
+}
 if (pSlider){
   pSlider.addEventListener("input", function (){
+    // 等值面模式：边界值大小（iso 阈值百分比）
+    if (cubeMode && cubeUI.mode === "orbital" && cubeUI.viewMode !== "cloud"){
+      const v = parseFloat(pSlider.value);
+      if (typeof setIsoFraction === "function") setIsoFraction(v / 100, cubeUI.volume);
+      if (pValEl) pValEl.textContent = v + "%";
+      return;
+    }
     const v = parseInt(pSlider.value, 10);
     if (v !== cloud.count) setParticleCount(v);
     if (pValEl) pValEl.textContent = fmtCount(v);
   });
 }
 
-/* ---------- 粒子可见度滑块 ---------- */
-/* 控制粒子云亮度/可见度（uCloudAlpha → vBright），对半定量模式与导入的电子密度均生效。
-   复用 SETTINGS.cloudAlpha（调试面板同参数），两处联动。 */
+/* ---------- 粒子可见度 / 边界可见度 滑块（按轨道显示模式复用） ---------- */
+/* 粒子云模式：uCloudAlpha（复用 SETTINGS.cloudAlpha）；
+   等值面模式：等值面不透明度（setIsoOpacity，不重建几何）。 */
 const aSlider = _qdEl("qdAlpha");
 const aValEl = _qdEl("qdAlphaVal");
+const aLabelEl = _qdEl("qdAlphaLabel");
 function syncAlphaSlider(){
   if (aSlider) aSlider.value = String(SETTINGS.cloudAlpha);
   if (aValEl) aValEl.textContent = SETTINGS.cloudAlpha.toFixed(2);
 }
+function syncIsoOpacitySlider(){
+  if (!aSlider) return;
+  aSlider.min = "0.1"; aSlider.max = "1"; aSlider.step = "0.05";
+  aSlider.value = String(isoOpacity);
+  if (aValEl) aValEl.textContent = isoOpacity.toFixed(2);
+}
 if (aSlider){
   aSlider.addEventListener("input", function (){
+    // 等值面模式：边界可见度（不透明度）
+    if (cubeMode && cubeUI.mode === "orbital" && cubeUI.viewMode !== "cloud"){
+      const v = parseFloat(aSlider.value);
+      if (typeof setIsoOpacity === "function") setIsoOpacity(v);
+      if (aValEl) aValEl.textContent = v.toFixed(2);
+      return;
+    }
     const v = parseFloat(aSlider.value);
     SETTINGS.cloudAlpha = v;
     if (cloud) cloud.uniforms.uCloudAlpha.value = v;
@@ -325,6 +353,26 @@ if (aSlider){
   });
 }
 syncAlphaSlider();
+
+/* ---------- 滑块标签/范围按轨道显示模式切换 ---------- */
+function syncSliderMode(){
+  const isoMode = !!(cubeMode && cubeUI.mode === "orbital" && cubeUI.viewMode !== "cloud");
+  if (isoMode){
+    if (pLabelEl) pLabelEl.textContent = "边界值大小";
+    if (aLabelEl) aLabelEl.textContent = "边界可见度";
+    if (pSlider){ pSlider.min = "5"; pSlider.max = "50"; pSlider.step = "1"; pSlider.value = String(Math.round(isoFraction * 100)); pSlider.title = "拖动调整等值面边界（iso 阈值，百分比 × max|ψ|）"; }
+    if (aSlider){ aSlider.min = "0.1"; aSlider.max = "1"; aSlider.step = "0.05"; aSlider.value = String(isoOpacity); aSlider.title = "拖动调整等值面可见度（表面不透明度）"; }
+    if (pValEl) pValEl.textContent = Math.round(isoFraction * 100) + "%";
+    if (aValEl) aValEl.textContent = isoOpacity.toFixed(2);
+  } else {
+    if (pLabelEl) pLabelEl.textContent = "粒子总数";
+    if (aLabelEl) aLabelEl.textContent = "粒子可见度";
+    if (pSlider){ pSlider.min = "10000"; pSlider.max = "600000"; pSlider.step = "10000"; pSlider.title = "拖动调整电子云粒子总数（覆盖画质档位预设）"; }
+    if (aSlider){ aSlider.min = "0.1"; aSlider.max = "1.4"; aSlider.step = "0.05"; aSlider.title = "拖动调整粒子云亮度/可见度"; }
+    syncParticleSlider();
+    syncAlphaSlider();
+  }
+}
 
 /* ---------- 事件绑定 ---------- */
 (function (){
@@ -362,6 +410,7 @@ syncAlphaSlider();
     if (vm === "isosurface" || vm === "both") applyCubeIsosurface(cubeUI.volume);
     else clearCubeIsosurface();
     if (cloud && cloud.pts) cloud.pts.visible = (vm !== "isosurface");
+    syncSliderMode();
   });
   _qdEl("qdApply").addEventListener("click", function (){
     if (!cubeUI.volume) return;

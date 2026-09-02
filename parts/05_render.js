@@ -804,8 +804,8 @@ function setParticleCount(n){
 
 /* ---------- 轨道等值面（Marching Cubes 双相位网格） ---------- */
 let isoGroup = null;          // THREE.Group：容纳正/负相位两个 Mesh（挂 scene，独立于分子网格）
-let isoOpacity = 0.7;         // 等值面半透明度
-const ISO_FRACTION = 0.2;     // 等值面阈值 = 20% × 各相位 max|ψ|（30% 对稀疏轨道会过度碎片化）
+let isoOpacity = 0.7;         // 等值面半透明度（边界可见度，可被 UI 滑条修改）
+let isoFraction = 0.2;        // 等值面阈值 = isoFraction × 各相位 max|ψ|（边界值大小）
 function clearCubeIsosurface(){
   if (isoGroup){
     scene.remove(isoGroup);
@@ -827,8 +827,8 @@ function applyCubeIsosurface(vol){
     if (v > maxPos) maxPos = v;
     else if (v < 0 && -v > maxNeg) maxNeg = -v;
   }
-  const isoPos = Math.max(maxPos * ISO_FRACTION, vol.rhoCut);
-  const isoNeg = Math.max(maxNeg * ISO_FRACTION, vol.rhoCut);
+  const isoPos = Math.max(maxPos * isoFraction, vol.rhoCut);
+  const isoNeg = Math.max(maxNeg * isoFraction, vol.rhoCut);
   const build = function (sign, isoVal, colorHex, opacity){
     const mc = cubeMarchingCubes(vol, isoVal, sign);
     if (!mc || mc.count === 0) return null;
@@ -858,6 +858,21 @@ function applyCubeIsosurface(vol){
   } else {
     isoGroup = null;
   }
+}
+
+// 边界可见度：仅更新已有等值面材质不透明度（不重建几何，拖动即时生效）
+function setIsoOpacity(v){
+  isoOpacity = v;
+  if (isoGroup){
+    isoGroup.children.forEach(function (mesh, i){
+      if (mesh.material) mesh.material.opacity = i === 1 ? v * 0.9 : v;
+    });
+  }
+}
+// 边界值大小：更新 isoFraction 并重建等值面（需当前轨道体积）
+function setIsoFraction(v, vol){
+  isoFraction = v;
+  if (vol) applyCubeIsosurface(vol);
 }
 
 /* 导入模式：同步直接写入采样云 + 线性过渡（不依赖异步分帧匹配）。

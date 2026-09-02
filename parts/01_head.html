@@ -336,12 +336,12 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
   </div>
   <button class="dshell-btn" id="qdApply" style="display:none">Apply electron density</button>
   <div class="qd-row" id="qdParticleRow">
-    <span class="qd-label">粒子总数</span>
+    <span class="qd-label" id="qdParticlesLabel">粒子总数</span>
     <input type="range" id="qdParticles" min="10000" max="600000" step="10000" title="拖动调整电子云粒子总数（覆盖画质档位预设）">
     <span class="qd-val" id="qdParticlesVal">160k</span>
   </div>
   <div class="qd-row" id="qdAlphaRow">
-    <span class="qd-label">粒子可见度</span>
+    <span class="qd-label" id="qdAlphaLabel">粒子可见度</span>
     <input type="range" id="qdAlpha" min="0.1" max="1.4" step="0.05" title="拖动调整粒子云亮度/可见度（对半定量模式与导入的电子密度均生效）">
     <span class="qd-val" id="qdAlphaVal">0.6</span>
   </div>
