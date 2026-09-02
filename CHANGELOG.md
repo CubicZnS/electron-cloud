@@ -1,5 +1,21 @@
 本项目采用语义化版本（SemVer）：主版本号 = 功能里程碑，次版本号 = 兼容性新功能，补丁号 = 修复。
 
+## [v2.5.11] — 2026-09-02 · 新增：前线轨道等值面模式（Marching Cubes 双相位网格）
+
+### 新增
+- **轨道等值面**（parts/03b_cube.js + parts/05_render.js）：前线轨道（HOMO/LUMO 等带符号 Cube）新增等值面渲染——纯 JS Marching Cubes（标准 256 条目边/三角表）从体素生成 ±iso 两个网格：**正相位暖橙半透明表面 + 负相位冷蓝半透明表面**（等值面阈值 = 30% × max|ψ|）。
+- **显示模式切换**（parts/06b_cube_ui.js + parts/01_head.html）：轨道模式下新增「轨道显示」下拉（粒子云 / 等值面 / 等值面+粒子云），粒子云隐藏/显示联动；退出导入自动清理等值面。
+- Marching Cubes 为纯 JS 无 THREE 依赖，Node 可测（validate-cube.mjs 新增 4 项：正/负瓣三角形、顶点有限、法线同长）。
+
+### 验证
+- node tools/validate-cube.mjs：69/69（新增等值面 4 项）；node tools/validate-sigma.mjs：15/15；node tools/build.mjs：SYNTAX_OK
+- headless 实测：咖啡因 HOMO 等值面渲染成功（正瓣暖橙 432 像素 / 负瓣冷蓝 57792 像素）；三种模式（cloud/both/isosurface）切换正常，粒子云显隐联动正确
+
+### 文件
+- 修改：parts/03b_cube.js（Marching Cubes）、parts/05_render.js（等值面渲染）、parts/06b_cube_ui.js（显示模式）、parts/01_head.html（下拉）、tools/validate-cube.mjs（测试）、index.html（组装产物）、CHANGELOG.md、README.md
+
+---
+
 ## [v2.5.10] — 2026-08-31 · 新增：粒子可见度滑块（Quantum Data 面板，粒子总数下方）
 
 ### 新增

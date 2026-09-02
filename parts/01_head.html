@@ -326,6 +326,14 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
       <option value="other">其他轨道（未标注）</option>
     </select>
   </div>
+  <div class="qd-row" id="qdViewRow" style="display:none">
+    <span class="qd-label">轨道显示</span>
+    <select id="qdViewMode" class="cmap-sel">
+      <option value="cloud" selected>粒子云</option>
+      <option value="isosurface">等值面</option>
+      <option value="both">等值面 + 粒子云</option>
+    </select>
+  </div>
   <button class="dshell-btn" id="qdApply" style="display:none">Apply electron density</button>
   <div class="qd-row" id="qdParticleRow">
     <span class="qd-label">粒子总数</span>

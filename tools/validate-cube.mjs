@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const src = readFileSync(join(ROOT, "parts", "03b_cube.js"), "utf8");
-const m = new Function(src + "\nreturn { parseCubeText, buildCubeVolume, sampleCloudCube, inferSingleBonds, buildCubeMolecule, estimateCubeFieldType, CUBE_LIMITS, BOHR_TO_ANGSTROM, symbolOfZ, covalentRadius };")();
+const m = new Function(src + "\nreturn { parseCubeText, buildCubeVolume, sampleCloudCube, inferSingleBonds, buildCubeMolecule, estimateCubeFieldType, CUBE_LIMITS, BOHR_TO_ANGSTROM, symbolOfZ, covalentRadius, cubeMarchingCubes };")();
 const { parseCubeText, buildCubeVolume, sampleCloudCube, inferSingleBonds, buildCubeMolecule, estimateCubeFieldType, CUBE_LIMITS, BOHR_TO_ANGSTROM, symbolOfZ, covalentRadius } = m;
 
 let pass = 0, fail = 0;
@@ -448,6 +448,41 @@ const cubeText = (lines) => lines.join("\n");
     "6 6 0 0 0", "1 1 " + h + " " + h + " " + h, "1 1 " + h + " " + (-h) + " " + (-h), "1 1 " + (-h) + " " + h + " " + (-h), "1 1 " + (-h) + " " + (-h) + " " + h,
     _vox27000]));
   check("真实元素序数（6,1,1,1,1）不触发伪原子", normal.pseudoZ !== true, "pseudoZ=" + normal.pseudoZ);
+}
+
+// ---------- 16) Marching Cubes 轨道等值面 ----------
+{
+  const N = 24, h = 0.4;
+  const vals = [];
+  const cc = (N - 1) / 2;
+  for (let iz = 0; iz < N; iz++){
+    for (let iy = 0; iy < N; iy++){
+      for (let ix = 0; ix < N; ix++){
+        const dx = (ix - cc) * h, dy = (iy - cc) * h, dz = (iz - cc) * h;
+        const r2 = dx * dx + dy * dy + dz * dz;
+        let v = Math.exp(-r2 / 0.9);
+        if (dz > 0.35) v = -v * 0.8;
+        vals.push(v.toExponential(6));
+      }
+    }
+  }
+  const lines = ["iso", "orbital test", "1  0 0 0",
+    N + "  " + h + " 0 0", N + "  0 " + h + " 0", N + "  0 0 " + h,
+    "6  6  0  0  0"].concat(vals);
+  const pIso = m.parseCubeText(lines.join("\n"), { allowSigned: true });
+  const volIso = m.buildCubeVolume(pIso, { mode: "orbital" });
+  const isoV = volIso.rhoMax * 0.25;
+  const posMc = m.cubeMarchingCubes(volIso, isoV, 1);
+  const negMc = m.cubeMarchingCubes(volIso, isoV, -1);
+  check("等值面生成正瓣三角形", posMc.count > 50 && posMc.count < 50000, "tris=" + posMc.count);
+  check("等值面生成负瓣三角形", negMc.count > 50 && negMc.count < 50000, "tris=" + negMc.count);
+  let finMc = true, nonZeroMc = false;
+  for (let i = 0; i < posMc.positions.length; i++){
+    if (!Number.isFinite(posMc.positions[i])) finMc = false;
+    if (Math.abs(posMc.positions[i]) > 1e-9) nonZeroMc = true;
+  }
+  check("等值面顶点全部有限且非退化", finMc && nonZeroMc, "finite=" + finMc + " nonzero=" + nonZeroMc);
+  check("等值面法线与顶点同长", posMc.normals.length === posMc.positions.length, posMc.normals.length + " vs " + posMc.positions.length);
 }
 
 console.log("\n==== " + pass + " PASS / " + fail + " FAIL ====");

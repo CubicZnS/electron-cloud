@@ -11,6 +11,7 @@ const cubeUI = {
   volume: null,
   mode: "density", // "density" | "orbital"
   label: "HOMO",   // 轨道标注（仅图例文字；HOMO/LUMO/其他）
+  viewMode: "cloud", // 轨道显示："cloud" 粒子云 | "isosurface" 等值面 | "both" 叠加
   prev: null, // 退出导入时恢复的半定量状态 { custom, frags, mode }
 };
 const _qdEl = function (id){ return document.getElementById(id); };
@@ -108,9 +109,16 @@ async function handleCubeFile(file){
     if (row) row.style.display = "";
     const sel = _qdEl("qdOrbitalLabel");
     if (sel) sel.value = cubeUI.label === "未标注" ? "other" : cubeUI.label;
+    // 轨道显示模式切换（粒子云 / 等值面 / 叠加）
+    const vrow = _qdEl("qdViewRow");
+    if (vrow) vrow.style.display = "";
+    const vsel = _qdEl("qdViewMode");
+    if (vsel) vsel.value = cubeUI.viewMode || "cloud";
   } else {
     const row = _qdEl("qdOrbitalRow");
     if (row) row.style.display = "none";
+    const vrow = _qdEl("qdViewRow");
+    if (vrow) vrow.style.display = "none";
     cubeUI_setState("ready", "ready — 校验通过（非负标量场，按电子密度模式），可应用");
   }
 }
@@ -156,7 +164,7 @@ function toggleQuantumPanel(show){
   cubeUI.open = open;
   _qdEl("quantumPanel").classList.toggle("show", open);
   _qdEl("quantumBtn").classList.toggle("active", open);
-  if (open){ toggleCreator(false); syncParticleSlider(); } // 两个左侧面板互斥；打开时同步粒子滑块
+  if (open){ toggleCreator(false); syncParticleSlider(); syncAlphaSlider(); } // 两个左侧面板互斥；打开时同步粒子/可见度滑块
 }
 /* ---------- 应用：切换到真实密度数据源（现有粒子过渡与 shader 全部复用） ---------- */
 function applyCubeVolume(vol){
@@ -185,6 +193,13 @@ function applyCubeVolume(vol){
     if (rr > maxR) maxR = rr;
   }
   fitCameraToExtent(maxR + 0.8);
+  // 轨道等值面：根据显示模式构建/隐藏（粒子云已由 applyCubeSampleDirect 写入）
+  if (cubeUI.mode === "orbital"){
+    const vm = cubeUI.viewMode || "cloud";
+    if (vm === "isosurface" || vm === "both") applyCubeIsosurface(vol);
+    if (vm === "isosurface"){ if (cloud && cloud.pts) cloud.pts.visible = false; }
+    if (vm === "cloud"){ if (cloud && cloud.pts) cloud.pts.visible = true; }
+  }
   setCubeModeUI(true);
   rebuildCubeLegend();
   updateParticleUI();
@@ -196,6 +211,8 @@ function exitCubeMode(){
   const prev = cubeUI.prev || { custom: false, frags: [], mode: "total" };
   cubeMode = false;
   currentVolume = null;
+  clearCubeIsosurface();
+  if (cloud && cloud.pts) cloud.pts.visible = true;
   setOrbitalRender(false); // 恢复用户所选色图并关闭轨道分支
   resetCamera(); // 退出导入：恢复半定量世界默认取景
   if (prev.custom && creatorState && creatorState.pts && creatorState.pts.length){
@@ -335,6 +352,16 @@ syncAlphaSlider();
   if (orbSel) orbSel.addEventListener("change", function (){
     cubeUI.label = orbSel.value === "other" ? "未标注" : orbSel.value;
     if (cubeMode && cubeUI.mode === "orbital") rebuildCubeLegend();
+  });
+  // 轨道显示模式切换：粒子云 / 等值面 / 叠加（仅轨道模式生效）
+  const viewSel = _qdEl("qdViewMode");
+  if (viewSel) viewSel.addEventListener("change", function (){
+    cubeUI.viewMode = viewSel.value;
+    if (!cubeMode || cubeUI.mode !== "orbital" || !cubeUI.volume) return;
+    const vm = cubeUI.viewMode;
+    if (vm === "isosurface" || vm === "both") applyCubeIsosurface(cubeUI.volume);
+    else clearCubeIsosurface();
+    if (cloud && cloud.pts) cloud.pts.visible = (vm !== "isosurface");
   });
   _qdEl("qdApply").addEventListener("click", function (){
     if (!cubeUI.volume) return;

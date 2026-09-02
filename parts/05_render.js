@@ -799,6 +799,58 @@ function setParticleCount(n){
   if (typeof syncParticleSlider === "function") syncParticleSlider(); // 粒子数变化时同步面板滑块
 }
 
+
+
+
+/* ---------- 轨道等值面（Marching Cubes 双相位网格） ---------- */
+let isoGroup = null;          // THREE.Group：容纳正/负相位两个 Mesh（挂 scene，独立于分子网格）
+let isoOpacity = 0.55;        // 等值面半透明度
+const ISO_FRACTION = 0.3;     // 等值面阈值 = 30% × max|ψ|（轨道可视化惯例）
+function clearCubeIsosurface(){
+  if (isoGroup){
+    scene.remove(isoGroup);
+    isoGroup.traverse(function (o){
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) o.material.dispose();
+    });
+    isoGroup = null;
+  }
+}
+function applyCubeIsosurface(vol){
+  clearCubeIsosurface();
+  if (!vol || !cubeMarchingCubes) return;
+  const iso = Math.max(vol.rhoMax * ISO_FRACTION, vol.rhoCut);
+  const build = function (sign, colorHex, opacity){
+    const mc = cubeMarchingCubes(vol, iso, sign);
+    if (!mc || mc.count === 0) return null;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(mc.positions, 3));
+    geo.setAttribute("normal", new THREE.BufferAttribute(mc.normals, 3));
+    const mat = new THREE.MeshStandardMaterial({
+      color: colorHex,
+      transparent: true,
+      opacity: opacity,
+      side: THREE.DoubleSide,
+      roughness: 0.35,
+      metalness: 0.1,
+      depthWrite: false,   // 半透明：不写深度，避免正/负瓣互相遮挡
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.renderOrder = 4;   // 在粒子云（renderOrder 3）之后
+    return mesh;
+  };
+  const posMesh = build(1, 0xff7a3d, isoOpacity);       // 正相位：暖橙
+  const negMesh = build(-1, 0x3d7aff, isoOpacity * 0.9); // 负相位：冷蓝
+  isoGroup = new THREE.Group();
+  if (posMesh) isoGroup.add(posMesh);
+  if (negMesh) isoGroup.add(negMesh);
+  if (isoGroup.children.length){
+    scene.add(isoGroup);
+  } else {
+    isoGroup = null;
+  }
+}
+
 /* 导入模式：同步直接写入采样云 + 线性过渡（不依赖异步分帧匹配）。
    背景：transitionCloudFromData 的粒子匹配经 requestAnimationFrame 分帧执行，
    在部分浏览器环境下不完成（uTransStart 保持 -999、props 不更新）→ 云停留在

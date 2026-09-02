@@ -5,7 +5,7 @@ GPU 粒子电子云交互可视化：分子 · 电子云 · 诱导效应 / 共�
 
 > by CubicZnS · 单文件 HTML 产物，无构建依赖（three.js 由 CDN 加载）
 >
-> **当前版本：v2.5.10（新增粒子可见度滑块——Quantum Data 面板粒子总数下方）** · 版本历史见 [CHANGELOG.md](CHANGELOG.md)
+> **当前版本：v2.5.11（新增前线轨道等值面模式——Marching Cubes 双相位网格）** · 版本历史见 [CHANGELOG.md](CHANGELOG.md)
 
 ## 功能
 
