@@ -1056,32 +1056,48 @@ function cubeMarchingCubes(vol, iso, sign, res){
     const p1 = pxFrac(f1x, f1y, f1z);
     return [p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t, p0[2] + (p1[2] - p0[2]) * t];
   };
-  const cnx = (nx - 1) * sub, cny = (ny - 1) * sub, cnz = (nz - 1) * sub;
-  for (let iz = 0; iz < cnz; iz++){
-    for (let iy = 0; iy < cny; iy++){
-      for (let ix = 0; ix < cnx; ix++){
-        let cubeIndex = 0;
-        for (let ci = 0; ci < 8; ci++){
-          const v = cornerVal(ix, iy, iz, ci);
-          if (sign > 0 ? v >= iso : v <= -iso) cubeIndex |= 1 << ci;
-        }
-        if (cubeIndex === 0 || cubeIndex === 255) continue;
-        const edges = MC_EDGE_TABLE[cubeIndex];
-        const verts = new Array(12);
-        for (let ei = 0; ei < 12; ei++) if (edges & (1 << ei)) verts[ei] = edgePos(ix, iy, iz, ei);
-        const row = cubeIndex * 16;
-        for (let t = 0; t < 16; t += 3){
-          const i0 = MC_TRI_TABLE[row + t];
-          if (i0 < 0) break;
-          const i1 = MC_TRI_TABLE[row + t + 1], i2 = MC_TRI_TABLE[row + t + 2];
-          const a = verts[i0], b = verts[i1], c = verts[i2];
-          if (!a || !b || !c) continue;
-          const ux = b[0]-a[0], uy = b[1]-a[1], uz = b[2]-a[2];
-          const vx = c[0]-a[0], vy = c[1]-a[1], vz = c[2]-a[2];
-          const nX = uy*vz - uz*vy, nY = uz*vx - ux*vz, nZ = ux*vy - uy*vx;
-          const len = Math.sqrt(nX*nX + nY*nY + nZ*nZ) || 1;
-          positions.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
-          for (let k = 0; k < 3; k++) normals.push(nX/len, nY/len, nZ/len);
+  // process a sub-cell at (ix,iy,iz) - inline marching cube
+  const emitCell = function (ix, iy, iz){
+    let cubeIndex = 0;
+    for (let ci = 0; ci < 8; ci++){
+      const v = cornerVal(ix, iy, iz, ci);
+      if (sign > 0 ? v >= iso : v <= -iso) cubeIndex |= 1 << ci;
+    }
+    if (cubeIndex === 0 || cubeIndex === 255) return;
+    const edges = MC_EDGE_TABLE[cubeIndex];
+    const verts = new Array(12);
+    for (let ei = 0; ei < 12; ei++) if (edges & (1 << ei)) verts[ei] = edgePos(ix, iy, iz, ei);
+    const row = cubeIndex * 16;
+    for (let t = 0; t < 16; t += 3){
+      const i0 = MC_TRI_TABLE[row + t];
+      if (i0 < 0) break;
+      const i1 = MC_TRI_TABLE[row + t + 1], i2 = MC_TRI_TABLE[row + t + 2];
+      const a = verts[i0], b = verts[i1], c = verts[i2];
+      if (!a || !b || !c) continue;
+      const ux = b[0]-a[0], uy = b[1]-a[1], uz = b[2]-a[2];
+      const vx = c[0]-a[0], vy = c[1]-a[1], vz = c[2]-a[2];
+      const nX = uy*vz - uz*vy, nY = uz*vx - ux*vz, nZ = ux*vy - uy*vx;
+      const len = Math.sqrt(nX*nX + nY*nY + nZ*nZ) || 1;
+      positions.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+      for (let k = 0; k < 3; k++) normals.push(nX/len, nY/len, nZ/len);
+    }
+  };
+  if (sub === 1){
+    for (let iz = 0; iz < nz - 1; iz++) for (let iy = 0; iy < ny - 1; iy++) for (let ix = 0; ix < nx - 1; ix++) emitCell(ix, iy, iz);
+  } else {
+    // 细分化：仅遍历「跨等值面」的原始体素单元（避免扫描全部子格导致大网格卡死）
+    for (let iz = 0; iz < nz - 1; iz++){
+      for (let iy = 0; iy < ny - 1; iy++){
+        for (let ix = 0; ix < nx - 1; ix++){
+          let active = false;
+          for (let ci = 0; ci < 8; ci++){
+            const o = MC_CORNER_OFFSET[ci];
+            const v = valAt(ix + o[0], iy + o[1], iz + o[2]);
+            if (sign > 0 ? v >= iso : v <= -iso){ active = true; break; }
+          }
+          if (!active) continue;
+          const bx = ix * sub, by = iy * sub, bz = iz * sub;
+          for (let z2 = bz; z2 < bz + sub; z2++) for (let y2 = by; y2 < by + sub; y2++) for (let x2 = bx; x2 < bx + sub; x2++) emitCell(x2, y2, z2);
         }
       }
     }

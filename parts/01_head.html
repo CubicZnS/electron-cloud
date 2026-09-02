@@ -336,10 +336,15 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
   </div>
   <div class="qd-row" id="qdResRow" style="display:none">
     <span class="qd-label" id="qdResLabel">拟合精度</span>
-    <input type="range" id="qdRes" min="1" max="2" step="1" title="等值面多边形细分精度：标准（1×）网格直接拟合 / 精细（2×）每维细分插值，曲面更平滑（三角形约 4 倍）">
+    <select id="qdRes" class="cmap-sel" title="等值面多边形细分精度：标准 1× / 精细 2× / 4× / 8×（仅活跃区域细分，大网格也快）">
+      <option value="1" selected>1× 标准</option>
+      <option value="2">2× 精细</option>
+      <option value="4">4× 超精细</option>
+      <option value="8">8× 极致</option>
+    </select>
     <span class="qd-val" id="qdResVal">1×</span>
   </div>
-  <div class="qd-hint" id="qdResHint" style="display:none">拟合精度：标准 = 按原始体素网格拟合（快）；精细 = 每维细分一倍插值，等值面更平滑（三角形约 4 倍，大分子会变慢）。</div>
+  <div class="qd-hint" id="qdResHint" style="display:none">拟合精度：1× = 原始网格；2×/4×/8× = 每维细分 N 倍插值，曲面更平滑（仅活跃区域细分，速度可接受）。</div>
   <button class="dshell-btn" id="qdApply" style="display:none">Apply electron density</button>
   <div class="qd-row" id="qdParticleRow">
     <span class="qd-label" id="qdParticlesLabel">粒子总数</span>

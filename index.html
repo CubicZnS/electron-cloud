@@ -336,10 +336,15 @@ html,body{height:100%;overflow:hidden;background:#04060a;color:var(--ink);
   </div>
   <div class="qd-row" id="qdResRow" style="display:none">
     <span class="qd-label" id="qdResLabel">拟合精度</span>
-    <input type="range" id="qdRes" min="1" max="2" step="1" title="等值面多边形细分精度：标准（1×）网格直接拟合 / 精细（2×）每维细分插值，曲面更平滑（三角形约 4 倍）">
+    <select id="qdRes" class="cmap-sel" title="等值面多边形细分精度：标准 1× / 精细 2× / 4× / 8×（仅活跃区域细分，大网格也快）">
+      <option value="1" selected>1× 标准</option>
+      <option value="2">2× 精细</option>
+      <option value="4">4× 超精细</option>
+      <option value="8">8× 极致</option>
+    </select>
     <span class="qd-val" id="qdResVal">1×</span>
   </div>
-  <div class="qd-hint" id="qdResHint" style="display:none">拟合精度：标准 = 按原始体素网格拟合（快）；精细 = 每维细分一倍插值，等值面更平滑（三角形约 4 倍，大分子会变慢）。</div>
+  <div class="qd-hint" id="qdResHint" style="display:none">拟合精度：1× = 原始网格；2×/4×/8× = 每维细分 N 倍插值，曲面更平滑（仅活跃区域细分，速度可接受）。</div>
   <button class="dshell-btn" id="qdApply" style="display:none">Apply electron density</button>
   <div class="qd-row" id="qdParticleRow">
     <span class="qd-label" id="qdParticlesLabel">粒子总数</span>
@@ -2644,32 +2649,48 @@ function cubeMarchingCubes(vol, iso, sign, res){
     const p1 = pxFrac(f1x, f1y, f1z);
     return [p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t, p0[2] + (p1[2] - p0[2]) * t];
   };
-  const cnx = (nx - 1) * sub, cny = (ny - 1) * sub, cnz = (nz - 1) * sub;
-  for (let iz = 0; iz < cnz; iz++){
-    for (let iy = 0; iy < cny; iy++){
-      for (let ix = 0; ix < cnx; ix++){
-        let cubeIndex = 0;
-        for (let ci = 0; ci < 8; ci++){
-          const v = cornerVal(ix, iy, iz, ci);
-          if (sign > 0 ? v >= iso : v <= -iso) cubeIndex |= 1 << ci;
-        }
-        if (cubeIndex === 0 || cubeIndex === 255) continue;
-        const edges = MC_EDGE_TABLE[cubeIndex];
-        const verts = new Array(12);
-        for (let ei = 0; ei < 12; ei++) if (edges & (1 << ei)) verts[ei] = edgePos(ix, iy, iz, ei);
-        const row = cubeIndex * 16;
-        for (let t = 0; t < 16; t += 3){
-          const i0 = MC_TRI_TABLE[row + t];
-          if (i0 < 0) break;
-          const i1 = MC_TRI_TABLE[row + t + 1], i2 = MC_TRI_TABLE[row + t + 2];
-          const a = verts[i0], b = verts[i1], c = verts[i2];
-          if (!a || !b || !c) continue;
-          const ux = b[0]-a[0], uy = b[1]-a[1], uz = b[2]-a[2];
-          const vx = c[0]-a[0], vy = c[1]-a[1], vz = c[2]-a[2];
-          const nX = uy*vz - uz*vy, nY = uz*vx - ux*vz, nZ = ux*vy - uy*vx;
-          const len = Math.sqrt(nX*nX + nY*nY + nZ*nZ) || 1;
-          positions.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
-          for (let k = 0; k < 3; k++) normals.push(nX/len, nY/len, nZ/len);
+  // process a sub-cell at (ix,iy,iz) - inline marching cube
+  const emitCell = function (ix, iy, iz){
+    let cubeIndex = 0;
+    for (let ci = 0; ci < 8; ci++){
+      const v = cornerVal(ix, iy, iz, ci);
+      if (sign > 0 ? v >= iso : v <= -iso) cubeIndex |= 1 << ci;
+    }
+    if (cubeIndex === 0 || cubeIndex === 255) return;
+    const edges = MC_EDGE_TABLE[cubeIndex];
+    const verts = new Array(12);
+    for (let ei = 0; ei < 12; ei++) if (edges & (1 << ei)) verts[ei] = edgePos(ix, iy, iz, ei);
+    const row = cubeIndex * 16;
+    for (let t = 0; t < 16; t += 3){
+      const i0 = MC_TRI_TABLE[row + t];
+      if (i0 < 0) break;
+      const i1 = MC_TRI_TABLE[row + t + 1], i2 = MC_TRI_TABLE[row + t + 2];
+      const a = verts[i0], b = verts[i1], c = verts[i2];
+      if (!a || !b || !c) continue;
+      const ux = b[0]-a[0], uy = b[1]-a[1], uz = b[2]-a[2];
+      const vx = c[0]-a[0], vy = c[1]-a[1], vz = c[2]-a[2];
+      const nX = uy*vz - uz*vy, nY = uz*vx - ux*vz, nZ = ux*vy - uy*vx;
+      const len = Math.sqrt(nX*nX + nY*nY + nZ*nZ) || 1;
+      positions.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+      for (let k = 0; k < 3; k++) normals.push(nX/len, nY/len, nZ/len);
+    }
+  };
+  if (sub === 1){
+    for (let iz = 0; iz < nz - 1; iz++) for (let iy = 0; iy < ny - 1; iy++) for (let ix = 0; ix < nx - 1; ix++) emitCell(ix, iy, iz);
+  } else {
+    // 细分化：仅遍历「跨等值面」的原始体素单元（避免扫描全部子格导致大网格卡死）
+    for (let iz = 0; iz < nz - 1; iz++){
+      for (let iy = 0; iy < ny - 1; iy++){
+        for (let ix = 0; ix < nx - 1; ix++){
+          let active = false;
+          for (let ci = 0; ci < 8; ci++){
+            const o = MC_CORNER_OFFSET[ci];
+            const v = valAt(ix + o[0], iy + o[1], iz + o[2]);
+            if (sign > 0 ? v >= iso : v <= -iso){ active = true; break; }
+          }
+          if (!active) continue;
+          const bx = ix * sub, by = iy * sub, bz = iz * sub;
+          for (let z2 = bz; z2 < bz + sub; z2++) for (let y2 = by; y2 < by + sub; y2++) for (let x2 = bx; x2 < bx + sub; x2++) emitCell(x2, y2, z2);
         }
       }
     }
@@ -3773,7 +3794,7 @@ function setIsoOpacity(v){
 }
 // 边界值大小：更新 isoFraction 并重建等值面（需当前轨道体积）
 function setIsoRes(v, vol){
-  isoRes = (v >= 2) ? 2 : 1;
+  isoRes = (v >= 8) ? 8 : (v >= 4) ? 4 : (v >= 2) ? 2 : 1;
   if (vol) applyCubeIsosurface(vol);
 }
 function setIsoFraction(v, vol){
@@ -4964,13 +4985,14 @@ if (aSlider){
 }
 syncAlphaSlider();
 
+function isoResLabel(v){ return v >= 8 ? "8x(extreme)" : v >= 4 ? "4x(ultra)" : v >= 2 ? "2x(fine)" : "1x(standard)"; }
 const rSlider = _qdEl("qdRes");
 const rValEl = _qdEl("qdResVal");
 if (rSlider){
-  rSlider.addEventListener("input", function (){
-    const v = parseInt(rSlider.value, 10);
+  rSlider.addEventListener("change", function (){
+    const v = parseInt(rSlider.value, 10) || 1;
     if (typeof setIsoRes === "function") setIsoRes(v, cubeUI.volume);
-    if (rValEl) rValEl.textContent = v + (v >= 2 ? "x(fine)" : "x(standard)");
+    if (rValEl) rValEl.textContent = isoResLabel(v);
   });
 }
 
@@ -4985,7 +5007,7 @@ function syncSliderMode(){
     const rEl = _qdEl("qdRes");
     const rVEl = _qdEl("qdResVal");
     if (rEl) rEl.value = String(isoRes || 1);
-    if (rVEl) rVEl.textContent = (isoRes || 1) + (isoRes >= 2 ? "x(fine)" : "x(standard)");
+    if (rVEl) rVEl.textContent = isoResLabel(isoRes || 1);
     if (pLabelEl) pLabelEl.textContent = "边界值大小";
     if (aLabelEl) aLabelEl.textContent = "边界可见度";
     if (pSlider){ pSlider.min = "5"; pSlider.max = "50"; pSlider.step = "1"; pSlider.value = String(Math.round(isoFraction * 100)); pSlider.title = "拖动调整等值面边界（iso 阈值，百分比 × max|ψ|）"; }

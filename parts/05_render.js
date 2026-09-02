@@ -872,7 +872,7 @@ function setIsoOpacity(v){
 }
 // 边界值大小：更新 isoFraction 并重建等值面（需当前轨道体积）
 function setIsoRes(v, vol){
-  isoRes = (v >= 2) ? 2 : 1;
+  isoRes = (v >= 8) ? 8 : (v >= 4) ? 4 : (v >= 2) ? 2 : 1;
   if (vol) applyCubeIsosurface(vol);
 }
 function setIsoFraction(v, vol){

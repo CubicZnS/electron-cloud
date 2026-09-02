@@ -5,7 +5,7 @@ GPU 粒子电子云交互可视化：分子 · 电子云 · 诱导效应 / 共�
 
 > by CubicZnS · 单文件 HTML 产物，无构建依赖（three.js 由 CDN 加载）
 >
-> **当前版本：v2.5.15（新增等值面拟合精度滑块——多边形细分）** · 版本历史见 [CHANGELOG.md](CHANGELOG.md)
+> **当前版本：v2.5.16（等值面拟合精度扩展 4x / 8x 档位）** · 版本历史见 [CHANGELOG.md](CHANGELOG.md)
 
 ## 功能
 
@@ -99,7 +99,7 @@ python3 -m http.server 8080
 |---|---|
 | `index.html` | **单文件产物**（自包含：样式/着色器/数据/逻辑全部内嵌） |
 | `parts/` | 源码分片（01_head → 08_tail；新增 03b_cube.js 纯 Cube 解析/采样模块、06b_cube_ui.js 导入面板），`tools/build.mjs` 组装 |
-| `tools/` | 构建（build.mjs）、数据生成（gen-molecules.mjs）、σ 校验（validate-sigma.mjs，15/15 通过）、Cube 校验（validate-cube.mjs，65/65 通过） |
+| `tools/` | 构建（build.mjs）、数据生成（gen-molecules.mjs）、σ 校验（validate-sigma.mjs，15/15 通过）、Cube 校验（validate-cube.mjs，73/73 通过） |
 | `docs/RESEARCH.md` | 技术方案与模型推导（化学引擎/密度/构型/性能） |
 | `docs/REFERENCES.md` | 全部复用资源与许可证清单（务必随项目分发） |
 

@@ -354,13 +354,14 @@ if (aSlider){
 }
 syncAlphaSlider();
 
+function isoResLabel(v){ return v >= 8 ? "8x(extreme)" : v >= 4 ? "4x(ultra)" : v >= 2 ? "2x(fine)" : "1x(standard)"; }
 const rSlider = _qdEl("qdRes");
 const rValEl = _qdEl("qdResVal");
 if (rSlider){
-  rSlider.addEventListener("input", function (){
-    const v = parseInt(rSlider.value, 10);
+  rSlider.addEventListener("change", function (){
+    const v = parseInt(rSlider.value, 10) || 1;
     if (typeof setIsoRes === "function") setIsoRes(v, cubeUI.volume);
-    if (rValEl) rValEl.textContent = v + (v >= 2 ? "x(fine)" : "x(standard)");
+    if (rValEl) rValEl.textContent = isoResLabel(v);
   });
 }
 
@@ -375,7 +376,7 @@ function syncSliderMode(){
     const rEl = _qdEl("qdRes");
     const rVEl = _qdEl("qdResVal");
     if (rEl) rEl.value = String(isoRes || 1);
-    if (rVEl) rVEl.textContent = (isoRes || 1) + (isoRes >= 2 ? "x(fine)" : "x(standard)");
+    if (rVEl) rVEl.textContent = isoResLabel(isoRes || 1);
     if (pLabelEl) pLabelEl.textContent = "边界值大小";
     if (aLabelEl) aLabelEl.textContent = "边界可见度";
     if (pSlider){ pSlider.min = "5"; pSlider.max = "50"; pSlider.step = "1"; pSlider.value = String(Math.round(isoFraction * 100)); pSlider.title = "拖动调整等值面边界（iso 阈值，百分比 × max|ψ|）"; }
