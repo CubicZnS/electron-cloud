@@ -3678,8 +3678,8 @@ function setParticleCount(n){
 
 /* ---------- 轨道等值面（Marching Cubes 双相位网格） ---------- */
 let isoGroup = null;          // THREE.Group：容纳正/负相位两个 Mesh（挂 scene，独立于分子网格）
-let isoOpacity = 0.55;        // 等值面半透明度
-const ISO_FRACTION = 0.3;     // 等值面阈值 = 30% × max|ψ|（轨道可视化惯例）
+let isoOpacity = 0.7;         // 等值面半透明度
+const ISO_FRACTION = 0.2;     // 等值面阈值 = 20% × 各相位 max|ψ|（30% 对稀疏轨道会过度碎片化）
 function clearCubeIsosurface(){
   if (isoGroup){
     scene.remove(isoGroup);
@@ -3693,9 +3693,18 @@ function clearCubeIsosurface(){
 function applyCubeIsosurface(vol){
   clearCubeIsosurface();
   if (!vol || !cubeMarchingCubes) return;
-  const iso = Math.max(vol.rhoMax * ISO_FRACTION, vol.rhoCut);
-  const build = function (sign, colorHex, opacity){
-    const mc = cubeMarchingCubes(vol, iso, sign);
+  // 每相位独立阈值：正/负瓣幅值常不对称，用全局 max 会让较弱相位阈值偏高→更碎片化
+  const data = vol.data;
+  let maxPos = 0, maxNeg = 0;
+  for (let i = 0; i < data.length; i++){
+    const v = data[i];
+    if (v > maxPos) maxPos = v;
+    else if (v < 0 && -v > maxNeg) maxNeg = -v;
+  }
+  const isoPos = Math.max(maxPos * ISO_FRACTION, vol.rhoCut);
+  const isoNeg = Math.max(maxNeg * ISO_FRACTION, vol.rhoCut);
+  const build = function (sign, isoVal, colorHex, opacity){
+    const mc = cubeMarchingCubes(vol, isoVal, sign);
     if (!mc || mc.count === 0) return null;
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(mc.positions, 3));
@@ -3713,8 +3722,8 @@ function applyCubeIsosurface(vol){
     mesh.renderOrder = 4;   // 在粒子云（renderOrder 3）之后
     return mesh;
   };
-  const posMesh = build(1, 0xff7a3d, isoOpacity);       // 正相位：暖橙
-  const negMesh = build(-1, 0x3d7aff, isoOpacity * 0.9); // 负相位：冷蓝
+  const posMesh = build(1, isoPos, 0xff7a3d, isoOpacity);       // 正相位：暖橙
+  const negMesh = build(-1, isoNeg, 0x3d7aff, isoOpacity * 0.9); // 负相位：冷蓝
   isoGroup = new THREE.Group();
   if (posMesh) isoGroup.add(posMesh);
   if (negMesh) isoGroup.add(negMesh);

@@ -5,7 +5,7 @@ GPU 粒子电子云交互可视化：分子 · 电子云 · 诱导效应 / 共�
 
 > by CubicZnS · 单文件 HTML 产物，无构建依赖（three.js 由 CDN 加载）
 >
-> **当前版本：v2.5.12（修复轨道等值面负相位外插——不再出现巨大蓝色多边形）** · 版本历史见 [CHANGELOG.md](CHANGELOG.md)
+> **当前版本：v2.5.13（等值面每相位独立阈值 + 降低碎片化）** · 版本历史见 [CHANGELOG.md](CHANGELOG.md)
 
 ## 功能
 
