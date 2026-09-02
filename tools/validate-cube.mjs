@@ -483,6 +483,21 @@ const cubeText = (lines) => lines.join("\n");
   }
   check("等值面顶点全部有限且非退化", finMc && nonZeroMc, "finite=" + finMc + " nonzero=" + nonZeroMc);
   check("等值面法线与顶点同长", posMc.normals.length === posMc.positions.length, posMc.normals.length + " vs " + posMc.positions.length);
+  // 回归：负瓣等值面 bbox 必须贴合分子（曾因插值用 +iso 外插到网格外 → 巨大蓝色块）
+  const spanOf = function (arr){
+    let mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9];
+    for (let i = 0; i < arr.length; i += 3){
+      for (let k = 0; k < 3; k++){
+        if (arr[i + k] < mn[k]) mn[k] = arr[i + k];
+        if (arr[i + k] > mx[k]) mx[k] = arr[i + k];
+      }
+    }
+    return [mx[0]-mn[0], mx[1]-mn[1], mx[2]-mn[2]];
+  };
+  const negSpan = spanOf(negMc.positions);
+  const gridSpan = [volIso.dims[0] * h, volIso.dims[1] * h, volIso.dims[2] * h];
+  check("负瓣等值面贴合分子（不外插到盒外）", negSpan[0] < gridSpan[0] * 0.5 && negSpan[1] < gridSpan[1] * 0.5 && negSpan[2] < gridSpan[2] * 0.5,
+    negSpan.map(function (v){ return v.toFixed(1); }).join("x") + " vs grid " + gridSpan.map(function (v){ return v.toFixed(1); }).join("x"));
 }
 
 console.log("\n==== " + pass + " PASS / " + fail + " FAIL ====");

@@ -1,5 +1,22 @@
 本项目采用语义化版本（SemVer）：主版本号 = 功能里程碑，次版本号 = 兼容性新功能，补丁号 = 修复。
 
+## [v2.5.12] — 2026-09-02 · 修复：轨道等值面负相位外插（巨大蓝色多边形）
+
+### 修复
+- **根因**（parts/03b_cube.js cubeMarchingCubes）：负相位（sign<0）等值面插值时误用 `+iso` 而非 `-iso`——`t = (iso - v0)/(v1 - v0)` 对负值域（v0,v1<0）算出 t>1 或 t<0，顶点被线性外插到网格外 → 负瓣等值面铺满大半盒子（实测咖啡因 HOMO 负瓣 bbox 34×54×35Å，远超分子）→ 渲染成巨大蓝色多边形块。
+- **修复**：插值 target 与 cubeIndex 判定一致（sign>0 → iso，sign<0 → -iso），顶点严格内插在 0..1 区间。
+
+### 实测
+- 咖啡因 HOMO 负瓣 bbox：34×54×35Å（外插，错误）→ 6.4×5.0×2.1Å（贴合分子，与正瓣 6.3×5.0×2.0Å 一致）。
+
+### 验证
+- node tools/validate-cube.mjs：70/70（新增「负瓣等值面贴合分子不外插」回归测试）；node tools/validate-sigma.mjs：15/15；node tools/build.mjs：SYNTAX_OK
+
+### 文件
+- 修改：parts/03b_cube.js、tools/validate-cube.mjs、index.html（组装产物）、CHANGELOG.md、README.md
+
+---
+
 ## [v2.5.11] — 2026-09-02 · 新增：前线轨道等值面模式（Marching Cubes 双相位网格）
 
 ### 新增
