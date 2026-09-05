@@ -1,37 +1,44 @@
 /* ================= 依赖导入（多 CDN 回退，兼容国内网络） ================= */
+/* ================= 依赖导入（多 CDN 回退，兼容国内网络；附加组件逐文件跨 CDN 回退，任一缺失即明确报错） ================= */
+const BASES_CDN = [
+  "https://cdn.jsdelivr.net/npm/three@0.161.0",
+  "https://unpkg.com/three@0.161.0",
+  "https://registry.npmmirror.com/three/0.161.0/files",
+];
+const ADDON_FILES = [
+  "/examples/jsm/controls/OrbitControls.js",
+  "/examples/jsm/postprocessing/EffectComposer.js",
+  "/examples/jsm/postprocessing/RenderPass.js",
+  "/examples/jsm/postprocessing/UnrealBloomPass.js",
+  "/examples/jsm/postprocessing/OutputPass.js",
+];
 const THREE = await (async function (){
-  const BASES = [
-    "https://cdn.jsdelivr.net/npm/three@0.161.0",
-    "https://unpkg.com/three@0.161.0",
-    "https://registry.npmmirror.com/three/0.161.0/files",
-  ];
-  const ADDONS = [
-    "/examples/jsm/controls/OrbitControls.js",
-    "/examples/jsm/postprocessing/EffectComposer.js",
-    "/examples/jsm/postprocessing/RenderPass.js",
-    "/examples/jsm/postprocessing/UnrealBloomPass.js",
-    "/examples/jsm/postprocessing/OutputPass.js",
-  ];
-  for (const base of BASES){
-    try {
-      const THREE = Object.assign({}, await import(base + "/build/three.module.js"));
-      for (const f of ADDONS){
-        try {
-          const m = await import(base + f);
-          for (const k of Object.keys(m)) THREE[k] = m[k];
-        } catch (e){}
-      }
-      return THREE;
-    } catch (e){}
+  let three = null;
+  for (const base of BASES_CDN){
+    try { three = Object.assign({}, await import(base + "/build/three.module.js")); break; } catch (e){}
   }
-  return null;
+  if (!three) return null;
+  for (const f of ADDON_FILES){
+    for (const base of BASES_CDN){
+      try { const m = await import(base + f); Object.assign(three, m); break; } catch (e){}
+    }
+  }
+  return three;
 })();
-if (!THREE){
+function threeLoadError(message){
   const em = document.getElementById("errMsg");
-  if (em) em.textContent = "无法加载 three.js（网络受限？）请检查网络后重试";
+  if (em) em.textContent = message;
   const ov = document.getElementById("errOverlay");
   if (ov) ov.classList.add("show");
+}
+if (!THREE){
+  threeLoadError("无法加载 three.js（网络受限？）请检查网络后重试");
   throw new Error("three.js 加载失败");
+}
+const _missingAddons = ADDON_FILES.map(f=>f.split("/").pop().replace(".js","")).filter(k=>!THREE[k]);
+if (_missingAddons.length){
+  threeLoadError("未能加载 three.js 附加组件：" + _missingAddons.join("、") + "（网络受限？）请刷新重试或检查网络");
+  throw new Error("three.js addons 加载失败: " + _missingAddons.join(","));
 }
 const OrbitControls = THREE.OrbitControls;
 const EffectComposer = THREE.EffectComposer;

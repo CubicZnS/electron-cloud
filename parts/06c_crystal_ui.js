@@ -6,7 +6,7 @@ const CrystalLab = (() => {
 #crystalBtn{width:40px;height:40px;flex:0 0 40px;border-radius:50%;padding:0;display:grid;place-items:center;color:#9ddccf;cursor:pointer;transition:all .18s}
 #crystalBtn:hover{border-color:#9ddccf;box-shadow:0 0 18px #9ddccf22}
 #crystalLab{box-sizing:border-box;position:fixed;inset:0;z-index:70;display:none;padding:0;border:0;border-radius:0;background:#04060a;color:var(--ink);font:12px/1.6 "SF Pro Display","SF Pro Text",-apple-system,"PingFang SC","Segoe UI",system-ui,sans-serif;overflow:hidden;color-scheme:dark;user-select:none;-webkit-font-smoothing:antialiased}
-#crystalLab.open{display:block}
+#crystalLab.open{display:block;animation:clOpen .3s cubic-bezier(.22,.9,.32,1)}
 #crystalLab *{box-sizing:border-box}
 #crystalLab button,#crystalLab input,#crystalLab select{font:inherit;color:inherit}
 #crystalLab :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -24,6 +24,10 @@ const CrystalLab = (() => {
 #crystalLab .cl-engine[data-ready=load] i{background:var(--accent);animation:clPulse 1s infinite}
 #crystalLab .cl-engine[data-ready=no] i{background:#5b6678}
 @keyframes clPulse{50%{opacity:.3}}
+@keyframes clOpen{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes clClose{from{opacity:1;transform:none}to{opacity:0;transform:translateY(8px) scale(.99)}}
+#crystalLab.cl-closing{animation:clClose .16s ease-in forwards;pointer-events:none}
+@media (prefers-reduced-motion:reduce){#crystalLab.open,#crystalLab.cl-closing{animation:none}}
 #crystalLab .cl-close{width:30px;height:30px;padding:0;display:grid;place-items:center;border-radius:8px;border:1px solid var(--stroke);background:transparent;color:var(--dim);cursor:pointer;font-size:13px;line-height:1}
 #crystalLab .cl-close:hover{color:#eaf6ff;border-color:rgba(124,199,255,.45)}
 /* ---------- layout ---------- */
@@ -114,6 +118,23 @@ const CrystalLab = (() => {
   #crystalLab .cl-hint{display:none}
 }
 
+/* ---------- A 档扩展：驻点提示 / 参考态 / 组分扫描 / DFT 导出 ---------- */
+#crystalLab .cl-saddle{display:block;margin:0 0 10px;padding:8px 10px;border:1px solid rgba(255,179,92,.4);border-radius:10px;background:rgba(255,179,92,.08);color:#ffd9a8;font-size:10px;line-height:1.7;letter-spacing:.3px}
+#crystalLab .cl-refrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0 2px}
+#crystalLab .cl-refrow .cl-mono{font-size:10px;white-space:normal;overflow-wrap:anywhere}
+#crystalLab .cl-sublabel{font-size:10px;font-weight:600;letter-spacing:.14em;color:#cfe0f5;margin:12px 0 8px}
+#crystalLab .cl-btn3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:4px}
+#crystalLab .cl-sweep{margin-top:10px;border:1px solid var(--stroke);border-radius:10px;padding:8px;background:rgba(255,255,255,.015);overflow-x:auto;max-width:100%;scrollbar-width:thin;scrollbar-color:#2c3d57 transparent}
+#crystalLab .cl-sweep .cl-cap{font-size:10px;color:#b8e6c4;letter-spacing:.3px;margin:0 0 4px;line-height:1.6}
+#crystalLab .cl-sweep .cl-cap.err{color:#ffb3a8}
+#crystalLab .cl-sweep-table{width:100%;min-width:520px;border-collapse:collapse;font-size:10px;margin:4px 0 8px}
+#crystalLab .cl-sweep-table th{color:var(--faint);font-weight:500;text-align:left;letter-spacing:.4px;padding:3px 6px;border-bottom:1px solid var(--stroke);white-space:nowrap}
+#crystalLab .cl-sweep-table td{padding:4px 6px;border-bottom:1px solid rgba(163,182,214,.08);color:#cfe0f5;font-variant-numeric:tabular-nums;white-space:nowrap}
+#crystalLab .cl-sweep-table tr.run td{color:#9fd8ff}
+#crystalLab .cl-sweep-table tr.ok td{color:#b8e6c4}
+#crystalLab .cl-sweep-table tr.err td{color:#ffb3a8}
+#crystalLab .cl-sweep-table td.el{font-weight:600;color:#eef6ff}
+
 `;
   document.head.appendChild(style);
   const icon='<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="m12 2 9 5v10l-9 5-9-5V7zM3 7l9 5 9-5M12 12v10"/><path d="m7.5 4.5 9 5v10M7.5 19.5v-10l9-5" opacity=".5"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>';
@@ -203,6 +224,31 @@ const CrystalLab = (() => {
           <p>本引擎计算能量、力、应力与结构，不生成电子密度；真实电子场可经 Quantum Data 入口导入。</p>
         </details>
       </section>
+      <section class="cl-pane">
+        <h3><span class="cl-idx">04</span> 批量弛豫与 DFT 导出</h3>
+        <div class="cl-sublabel">组分扫描 · 整位替换</div>
+        <label class="cl-field">替换元素（逗号分隔，逐个弛豫）<input id="cl-sweep-elements" value="Co,Fe,Mn,Cr" spellcheck="false"></label>
+        <p class="cl-muted">把「02 位点与掺杂」当前选定的子晶格（A/B/C）整位替换为列表中的每种元素，并依次提交弛豫（引擎串行；可在任一步后停止）。ΔE 为同超胞 MACE 近似，非形成能。</p>
+        <div class="cl-actions">
+          <button id="cl-sweep-run" class="dshell-btn cl-wide" disabled>开始扫描</button>
+          <button id="cl-sweep-cancel" class="dshell-btnGhost cl-wide" hidden disabled>停止（当前步结束后）</button>
+        </div>
+        <div id="cl-sweep" class="cl-sweep" hidden>
+          <p id="cl-sweep-cap" class="cl-cap"></p>
+          <table class="cl-sweep-table">
+            <thead><tr><th>元素</th><th>化学式</th><th>E 终 · eV</th><th>ΔE · eV/atom</th><th>体积 · Å³</th><th>步数</th><th>最大力 · eV/Å</th><th>状态</th></tr></thead>
+            <tbody id="cl-sweep-body"></tbody>
+          </table>
+          <button id="cl-sweep-csv" class="dshell-btnGhost cl-wide" hidden>导出 CSV</button>
+        </div>
+        <div class="cl-sublabel">VASP 输入 · 外部 DFT 验证</div>
+        <div class="cl-btn3">
+          <button id="cl-export-poscar" class="dshell-btnGhost" disabled>POSCAR</button>
+          <button id="cl-export-incar" class="dshell-btnGhost" disabled>INCAR</button>
+          <button id="cl-export-kpoints" class="dshell-btnGhost" disabled>KPOINTS</button>
+        </div>
+        <p class="cl-muted">导出当前结构为 VASP 输入起点（POTCAR 按 POSCAR 物种顺序自行拼接；K 点与 ISMEAR 需按体系核对）。外部跑完后，把 CHGCAR / CHG 经底部 Quantum Data 入口导入，查看 DFT 计算的真实电子密度——本工具不计算电子密度。</p>
+      </section>
     </aside>
     <main class="cl-stagewrap">
       <div class="cl-viewportwrap">
@@ -229,6 +275,7 @@ const CrystalLab = (() => {
             <div class="cl-actions cl-quick"><button id="cl-quick-run" class="dshell-btn" disabled>计算当前结构</button></div>
           </div>
           <div id="cl-result" hidden>
+            <p id="cl-saddle" class="cl-saddle" hidden></p>
             <div class="cl-metrics">
               <div class="cl-metric"><small>弛豫能量变化 · eV/atom</small><b id="cl-energy">—</b></div>
               <div class="cl-metric"><small>内部位移 RMS · Å</small><b id="cl-rms">—</b></div>
@@ -245,6 +292,11 @@ const CrystalLab = (() => {
               <label class="cl-check"><input id="cl-arrows" type="checkbox" checked>位移箭头</label>
               <button id="cl-adopt" class="dshell-btnGhost">将结果作为新起点</button>
             </div>
+            <div class="cl-refrow">
+              <button id="cl-refset" class="dshell-btnGhost">存为参考</button>
+              <button id="cl-refclear" class="dshell-btnGhost" hidden>清除参考</button>
+              <span id="cl-refdesc" class="cl-mono"></span>
+            </div>
             <p class="cl-note">插值仅供结构比较，不代表动力学；倍率只影响显示，数值为真实尺度；能量差为弛豫能，非缺陷形成能。</p>
             <details><summary>模型、应力与可复现记录</summary><p id="cl-provenance" class="cl-mono"></p></details>
           </div>
@@ -257,8 +309,8 @@ const CrystalLab = (() => {
   document.body.appendChild(lab);
   const $=id=>lab.querySelector(`#cl-${id}`), val=id=>$(id).value, num=id=>Number(val(id));
   const counting=document.createElement('div');counting.id='cl-counting';counting.className='cl-caption';$('legend').after(counting);
-  const state={structure:null,source:'B2 · 3 × 3 × 3',selected:null,result:null,job:null,health:null,endpoint:'http://127.0.0.1:8765',history:[],engineBusy:false};
-  let visual=null, healthTimer=null, pollTimer=null, importBusy=false;
+  const state={structure:null,source:'B2 · 3 × 3 × 3',selected:null,result:null,job:null,health:null,endpoint:'http://127.0.0.1:8765',history:[],engineBusy:false,reference:null,sweepActive:false,sweepCancel:false,sweepRows:[]};
+  let visual=null, healthTimer=null, pollTimer=null, importBusy=false, closeTimer=null;
   const status=(message,tone='')=>{$('status').textContent=message;$('status').dataset.tone=tone;};
   const safely=fn=>async()=>{try{await fn();}catch(e){status(e.message||'操作失败','error');}};
   for(const id of ['el-a','el-b','el-c','dopant']) for(const symbol of CrystalCore.symbols){const o=document.createElement('option');o.value=symbol;o.textContent=symbol;$(id).appendChild(o);}
@@ -287,7 +339,7 @@ const CrystalLab = (() => {
   templateNote();kindFields();
   const fmt=(x,n=4)=>Number.isFinite(x)?x.toFixed(n):'—';
   function busyControls(){
-    const locked=!!state.job||importBusy;
+    const locked=!!state.job||importBusy||state.sweepActive;
     for(const id of ['build','regenerate','substitute','vacancy','random','import','adopt','endpoint','file'])$(id).disabled=locked;
     $('load-template').disabled=locked||!val('template');
     const unsupportedElements=state.health?.status==='ready'?[...new Set(state.structure?.atoms.filter(a=>!state.health.supportedElements.includes(a.element)).map(a=>a.element)||[])]:[];
@@ -298,6 +350,11 @@ const CrystalLab = (() => {
     $('compatibility').hidden=!unsupported;$('compatibility').textContent=unsupported?`当前模型不支持 ${unsupportedElements.join('、')}。结构仍可编辑和导出。`:'';
     $('cancel').hidden=!state.job;$('progress').hidden=!state.job;
     if(!state.job)$('detach').hidden=true;
+    $('sweep-run').textContent=state.sweepActive?'扫描中…':'开始扫描';
+    $('sweep-run').disabled=locked||!state.structure||state.health?.status!=='ready';
+    $('sweep-cancel').hidden=!state.sweepActive;
+    $('sweep-cancel').disabled=!state.sweepActive;
+    for(const id of ['export-poscar','export-incar','export-kpoints'])$(id).disabled=locked||!state.structure;
     $('engine-dot').textContent=state.health?.status==='ready'?'已连接':state.health?.status==='loading'?'加载中':'离线';
     const chip=lab.querySelector('.cl-engine');if(chip)chip.setAttribute('data-ready',state.health?.status==='ready'?'yes':state.health?.status==='loading'?'load':'no');
   }
@@ -393,8 +450,14 @@ const CrystalLab = (() => {
     CrystalCore.validateResult(r);
     const c=CrystalCore.compare(r.initial,r.final);state.result=r;state.structure=CrystalCore.clone(r.final);
     $('energy').textContent=fmt((r.energyFinal-r.energyInitial)/r.final.atoms.length,5);$('rms').textContent=fmt(c.rms);$('force').textContent=fmt(r.maxForce);$('volume').textContent=fmt(c.volumeChange,3);
+    $('saddle').hidden=true;
+    const _smax=Array.isArray(r.stressGPa)?Math.max(...r.stressGPa.map(Math.abs)):0;
+    if(r.converged&&r.steps===0&&_smax>2){
+      $('saddle').hidden=false;
+      $('saddle').textContent='⚠ 0 步收敛提示：结构可能停在高对称驻点（最大内部应力 '+fmt(_smax,1)+' GPa）。请先施加微扰（如移动或替换个别原子）再重试——0 步不代表已达平衡。';
+    }
     $('provenance').textContent=`${r.model.name} · ${r.model.version} · ${r.model.device} · ${r.model.dtype} | 参数 SHA256 ${r.model.sha256}\n${r.steps} 步 · ${fmt(r.elapsedSeconds,1)} s | 应力 (xx yy zz yz xz xy) GPa: ${r.stressGPa.map(x=>fmt(x,3)).join(' ')} | E初=${fmt(r.energyInitial,6)} eV，E终=${fmt(r.energyFinal,6)} eV。完整设置、模型标识和计算帧保存在导出项目中。`;
-    $('t').value='1';$('t-label').textContent='100%';$('amp').value='1';visual?.setOptions({t:1,amplification:1});refresh();visual?.fit();
+    $('t').value='1';$('t-label').textContent='100%';$('amp').value='1';visual?.setOptions({t:1,amplification:1});refresh();visual?.fit();syncRef();
   }
   async function poll(){
     if(!state.job)return;const id=state.job;let deliveringResult=false;
@@ -451,6 +514,177 @@ const CrystalLab = (() => {
       visual?.fit();status(project?.result?'项目已恢复（结构/结果/模型记录）。':'结构已导入：保留晶胞与周期边界，可继续编辑。','success');
     }finally{importBusy=false;busyControls();}
   }
+  /* ================= A 档扩展：参考态比较 / 0 步驻点提示 / 组分扫描 / DFT 导出 ================= */
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  function syncRef(){
+    const d=$('refdesc');const hasRef=!!state.reference;
+    $('refclear').hidden=!hasRef;
+    if(!hasRef){d.textContent='';return;}
+    const ref=state.reference;
+    if(!state.result){d.textContent='参考已存：'+ref.label+'（等待下一次弛豫结果以比较）';return;}
+    const r=state.result;
+    const dE=r.energyFinal-ref.energyFinal;
+    const dEa=dE/r.final.atoms.length;
+    const sameN=r.final.atoms.length===ref.atoms;
+    const dV=100*(CrystalCore.volume(r.final.cell)/ref.volumeFinal-1);
+    const note=sameN?'':'（原子数不同：ΔE 仅按原子归一，不作替换能差）';
+    const volPart=(ref.cellRelax&&!!r.settings&&r.settings.relaxCell)?(' · ΔV '+fmt(dV,2)+'%'):'';
+    d.textContent='参考：'+ref.label+'。ΔE = '+fmt(dE,4)+' eV（'+fmt(dEa,5)+' eV/atom）'+volPart+note+' · MACE 近似，非形成能。';
+  }
+  function setReference(){
+    if(!state.result)throw Error('请先完成一次弛豫，再把结果存为参考');
+    const r=state.result;
+    state.reference={label:CrystalCore.formulaSub(r.final)+' · '+fmt(r.energyFinal,5)+' eV · '+r.steps+' 步',
+      energyFinal:r.energyFinal,atoms:r.final.atoms.length,volumeFinal:CrystalCore.volume(r.final.cell),
+      cellRelax:!!(r.settings&&r.settings.relaxCell),at:new Date().toISOString()};
+    syncRef();status('已把本次结果存为参考：同超胞/同设置下后续弛豫可与它比较（非形成能）。','success');
+  }
+  function sweepSites(){
+    const site=val('site'),s=state.structure;
+    if(!site||site==='all')throw Error('请在“02 位点与掺杂”把子晶格选为 A/B/C 后开始扫描（整位替换不适用于“全部位点”）');
+    const ids=s.atoms.filter(a=>a.site===site).map(a=>a.id);
+    if(!ids.length)throw Error('当前结构没有 '+site+' 位原子');
+    return {site,ids};
+  }
+  async function sweepRun(){
+    if(state.job||state.sweepActive||importBusy)return;
+    CrystalCore.validate(state.structure);
+    if(state.health?.status!=='ready')throw Error('引擎未就绪，无法开始扫描');
+    const {site,ids}=sweepSites();
+    const list=[...new Set(val('sweep-elements').split(/[,，\s]+/).map(x=>x.trim()).filter(Boolean))];
+    if(!list.length)throw Error('请输入至少一个替换元素（逗号分隔）');
+    const fmax=num('fmax'),maxSteps=num('steps');
+    if(!Number.isFinite(fmax)||fmax<.001||fmax>.5||!Number.isInteger(maxSteps)||maxSteps<1||maxSteps>500)throw Error('力阈值范围为 0.001–0.5 eV/Å，最多步数为 1–500');
+    const settings={fmax,maxSteps,relaxCell:val('relax-cell')==='cell',pressureGPa:0};
+    const supported=state.health.supportedElements||[];
+    const base=state.structure;
+    state.sweepActive=true;state.sweepCancel=false;state.sweepRows=[];
+    const box=$('sweep'),body=$('sweep-body'),cap=$('sweep-cap');
+    box.hidden=false;body.replaceChildren();$('sweep-csv').hidden=true;
+    busyControls();status('组分扫描开始：'+site+' 位整位替换 '+(list.join(' / ')));
+    const rows=[];
+    for(let k=0;k<list.length;k++){
+      const el=list[k];
+      const tr=document.createElement('tr');
+      tr.innerHTML='<td class="el">'+el+'</td><td>…</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td class="st">排队</td>';
+      body.append(tr);
+      const row={el,tr,data:null};
+      rows.push(row);
+      const mark=(cls,st,formula)=>{tr.className=cls;tr.querySelector('.st').textContent=st;if(formula)tr.cells[1].textContent=formula;};
+      if(state.sweepCancel)break;
+      if(!supported.includes(el)){
+        mark('err','引擎不支持该元素');cap.textContent='跳过 '+el+'：引擎不支持';continue;
+      }
+      try{
+        mark('run','提交…');
+        const s2=CrystalCore.substitute(CrystalCore.clone(base),ids,el);
+        mark('run','弛豫中…',CrystalCore.formulaSub(s2));
+        cap.textContent='第 '+(k+1)+'/'+list.length+' · '+el+' 替换 '+site+' 位（'+ids.length+' 原子）…';
+        const j=await api('/v1/relax',{method:'POST',body:JSON.stringify({structure:s2,settings})});
+        if(typeof j.id!=='string')throw Error('任务编号无效');
+        let finished=false;
+        while(!finished){
+          await sleep(1200);
+          if(state.sweepCancel){
+            try{await api('/v1/jobs/'+encodeURIComponent(j.id),{method:'DELETE',body:'{}'});}catch(e){}
+            mark('err','已停止');finished=true;break;
+          }
+          const jr=await api('/v1/jobs/'+encodeURIComponent(j.id));
+          if(jr.status==='completed'){CrystalCore.validateResult(jr.result);row.data={res:jr.result,s2};mark('ok','已收敛',CrystalCore.formulaSub(jr.result.final));finished=true;break;}
+          if(jr.status==='cancelled'||jr.status==='error'){mark('err',jr.message||jr.status);finished=true;break;}
+          mark('run','弛豫中 · 第 '+(jr.step||0)+' 步');status('扫描 '+el+'：第 '+(jr.step||0)+' 步 · 力 '+fmt(jr.maxForce)+' eV/Å');
+        }
+      }catch(e){
+        mark('err',e.message||'失败');
+      }
+      if(state.sweepCancel)break;
+    }
+    state.sweepCancel=false;
+    const okCount=rows.filter(r=>r.data).length;
+    renderSweep(rows);
+    busyControls();
+    state.sweepActive=false;
+    status(okCount?'扫描完成：'+okCount+'/'+rows.length+' 成功，可导出 CSV。':(rows.length?'扫描未产生成功结果：检查引擎是否支持替换元素。':'扫描已取消。'),okCount===rows.length&&rows.length?'success':'error');
+  }
+  function renderSweep(rows){
+    const done=rows.filter(r=>r.data);
+    const cap=$('sweep-cap');
+    let baseE=null,baseNote='';
+    if(done.length){
+      const n0=done[0].data.s2.atoms.length;
+      if(state.reference&&state.reference.atoms===n0){baseE=state.reference.energyFinal;baseNote='ΔE 相对已存参考（'+state.reference.label+'）';}
+      else{if(state.reference)baseNote='参考原子数与扫描不一致，ΔE 相对首行。';else baseNote='ΔE 相对首行。';}
+      if(baseE===null)baseE=done[0].data.res.energyFinal;
+      cap.textContent=baseNote+'  ·  MACE 近似，非形成能 ·  成功 '+done.length+'/'+rows.length;
+      cap.className='cl-cap';
+    }else{
+      cap.textContent=rows.length?'扫描未产生成功结果（检查引擎元素支持）。':'扫描已取消，无数据。';
+      cap.className='cl-cap err';
+    }
+    for(const r of rows){
+      const tr=r.tr;
+      if(!r.data){
+        tr.cells[1].textContent='—';
+        for(let k=2;k<=6;k++)tr.cells[k].textContent='—';
+        tr.className='err';
+      }else{
+        const res=r.data.res,n=res.final.atoms.length;
+        tr.cells[1].textContent=CrystalCore.formulaSub(res.final);
+        tr.cells[2].textContent=fmt(res.energyFinal,5);
+        tr.cells[3].textContent=(baseE!==null&&Number.isFinite(baseE))?fmt((res.energyFinal-baseE)/n,5):'—';
+        tr.cells[4].textContent=fmt(CrystalCore.volume(res.final.cell),2);
+        tr.cells[5].textContent=String(res.steps);
+        tr.cells[6].textContent=fmt(res.maxForce,3);
+        tr.className='ok';
+      }
+    }
+    $('sweep-csv').hidden=false;
+  }
+    function sweepExportCsv(){
+    const rows=[...document.querySelectorAll('#cl-sweep-body tr')].map(tr=>({
+      el:tr.cells[0]?tr.cells[0].textContent.trim():'',
+      formula:tr.cells[1]?tr.cells[1].textContent.trim():'',
+      e:tr.cells[2]?tr.cells[2].textContent.trim():'',
+      de:tr.cells[3]?tr.cells[3].textContent.trim():'',
+      vol:tr.cells[4]?tr.cells[4].textContent.trim():'',
+      steps:tr.cells[5]?tr.cells[5].textContent.trim():'',
+      f:tr.cells[6]?tr.cells[6].textContent.trim():'',
+      st:tr.cells[7]?tr.cells[7].textContent.trim():'',
+    }));
+    const head='element,formula,E_final_eV,deltaE_per_atom_eV,volume_A3,steps,maxForce_eV_per_A,status';
+    const body=rows.map(r=>[r.el,r.formula,r.e,r.de,r.vol,r.steps,r.f,r.st].join(',')).join('\n');
+    if(!rows.length)throw Error('没有可导出的扫描结果');
+    download('crystal-sweep.csv',head+'\n'+body,'text/csv');
+  }
+    $('refset').addEventListener('click',safely(setReference));
+  $('refclear').addEventListener('click',()=>{state.reference=null;syncRef();status('已清除参考。');});
+  $('sweep-run').addEventListener('click',safely(sweepRun));
+  $('sweep-cancel').addEventListener('click',()=>{state.sweepCancel=true;$('sweep-cancel').disabled=true;status('正在停止：当前计算步结束后停止。','error');});
+  $('sweep-csv').addEventListener('click',safely(sweepExportCsv));
+  $('export-poscar').addEventListener('click',safely(()=>{
+    const s=state.structure;if(!s)throw Error('请先生成或导入结构');
+    download('POSCAR',CrystalCore.toPOSCAR(s),'chemical/x-vasp-poscar');
+    status('已请求保存 POSCAR（'+CrystalCore.formulaPlain(s)+' · '+s.atoms.length+' 原子）；POTCAR 需按物种顺序自行拼接。','success');
+  }));
+  $('export-incar').addEventListener('click',safely(()=>{
+    const s=state.structure;if(!s)throw Error('请先生成或导入结构');
+    const cell=val('relax-cell')==='cell',fmax=num('fmax'),maxSteps=num('steps');
+    const text='# Crystal Lab export — VASP 输入骨架（起始值，需按体系核对；未经校验）\n'
+      +'SYSTEM    = '+CrystalCore.formulaPlain(s)+'\n'
+      +'ENCUT     = 520\nPREC      = Accurate\nEDIFF     = 1E-6\n'
+      +'EDIFFG    = -'+fmax.toFixed(3)+'\nIBRION    = 2\nISIF      = '+(cell?3:2)+'\nNSW       = '+maxSteps+'\n'
+      +'ISMEAR    = 0\nSIGMA     = 0.05\nLREAL     = Auto\nLORBIT    = 11\n'
+      +'LWAVE     = .FALSE.\nLCHARG    = .TRUE.\n'
+      +'# 金属需核对 K 点密度；绝缘体/半导体可改 ISMEAR = -5\n';
+    download('INCAR',text,'text/plain');
+    status('已请求保存 INCAR（EDIFFG='+fmax.toFixed(3)+'，ISIF='+(cell?3:2)+'，NSW='+maxSteps+'）。','success');
+  }));
+    $('export-kpoints').addEventListener('click',safely(()=>{
+    if(!state.structure)throw Error('请先生成或导入结构');
+    download('KPOINTS','# k-mesh（起始值）：超胞越大可越稀；金属/小胞需加密\n0\nGamma\n4 4 4\n0 0 0\n','text/plain');
+    status('已请求保存 KPOINTS。','success');
+  }));
+
   $('template').addEventListener('change',templateNote);
   $('load-template').addEventListener('click',safely(()=>{
     if(state.job||importBusy)throw Error('请等待当前任务结束后再载入模板');
@@ -481,12 +715,17 @@ const CrystalLab = (() => {
   for(const id of ['t','amp','color','ghosts','arrows'])$(id).addEventListener('input',display);
   $('adopt').addEventListener('click',safely(()=>{edited(CrystalCore.clone(state.structure),'adopt relaxed structure');status('已将弛豫结果设为新起点（后续比较以此为准）。','success');}));
   function open(){
-    lab.classList.add('open');lab.setAttribute('aria-hidden','false');
+    if(closeTimer){clearTimeout(closeTimer);closeTimer=null;}
+    lab.classList.remove('cl-closing');lab.classList.add('open');lab.setAttribute('aria-hidden','false');
     if(!visual){visual=createCrystalRenderer($('viewport'),id=>{state.selected=state.selected===id?null:id;inspect();});if(!state.structure)build();else refresh();visual.fit();}
     visual.setOptions({active:true});visual.resize();connect();clearInterval(healthTimer);healthTimer=setInterval(()=>{if(lab.classList.contains('open'))connect();},12000);
   }
   function close(){
-    lab.classList.remove('open');lab.setAttribute('aria-hidden','true');visual?.setOptions({active:false});clearInterval(healthTimer);entry.focus();
+    if(!lab.classList.contains('open')||lab.classList.contains('cl-closing'))return;
+    lab.classList.add('cl-closing');lab.setAttribute('aria-hidden','true');
+    visual?.setOptions({active:false});clearInterval(healthTimer);entry.focus();
+    if(closeTimer)clearTimeout(closeTimer);
+    closeTimer=setTimeout(()=>{lab.classList.remove('open','cl-closing');closeTimer=null;},170);
   }
   entry.addEventListener('click',safely(open));
   $('close').addEventListener('click',close);

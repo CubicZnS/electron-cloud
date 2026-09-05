@@ -55,12 +55,14 @@ async function handleCubeFile(file){
   if (!file) return;
   const name = file.name || "";
   const lower = name.toLowerCase();
-  if (!lower.endsWith(".cube") && !lower.endsWith(".cub")){
-    cubeUI_setState("error", "仅支持 .cube / .cub 文件（当前：" + (name || "未命名") + "）。请选择 Gaussian cubegen / Multiwfn 导出的 Cube 文件。");
+  const isCube = lower.endsWith(".cube") || lower.endsWith(".cub");
+  const isChg = lower.endsWith(".chgcar") || lower.endsWith(".chg") || lower.endsWith(".chgc");
+  if (!isCube && !isChg){
+    cubeUI_setState("error", "仅支持 .cube / .cub 或 VASP .chgcar / .chg 文件（当前：" + (name || "未命名") + "）。");
     return;
   }
   if (file.size > CUBE_LIMITS.maxFileBytes){
-    cubeUI_setState("error", "文件超过 " + fmtBytes(CUBE_LIMITS.maxFileBytes) + " 上限（当前 " + fmtBytes(file.size) + "）。请在 Multiwfn 中调大 Grid spacing 或裁剪区域后重试。");
+    cubeUI_setState("error", "文件超过 " + fmtBytes(CUBE_LIMITS.maxFileBytes) + " 上限（当前 " + fmtBytes(file.size) + "）。" + (isChg ? "请在 VASP 中降低 NGXF/NGYF/NGZF 或用工具对 CHGCAR 降采样后重试。" : "请在 Multiwfn 中调大 Grid spacing 或裁剪区域后重试。"));
     return;
   }
   cubeUI.file = file;
@@ -72,18 +74,18 @@ async function handleCubeFile(file){
     cubeUI_setState("error", "读取文件失败：" + (e && e.message ? e.message : e));
     return;
   }
-  cubeUI_setState("validating", "validating — 解析 Cube 头部与体素（" + name + "）");
+  cubeUI_setState("validating", "validating — 解析 " + (isCube ? "Cube" : "CHGCAR") + " 头部与体素（" + name + "）");
   await new Promise(function (r){ setTimeout(r, 40); }); // 让“validating”状态先绘制
   let parsed = null, volume = null;
   try {
     // allowSigned：保留原始带符号值，供轨道模式使用（密度/轨道由统计特征路由）
-    parsed = parseCubeText(text, { allowSigned: true });
+    parsed = isCube ? parseCubeText(text, { allowSigned: true }) : parseChgcarText(text);
     parsed.fileName = name;
     // 路由：负值体素 >20%（带符号字段）或注释行标注轨道/势场 → 带符号模式（|ψ| 采样 + 相位）；
     // 否则 → 电子密度模式（负值截断 + 单色 LUT）
     // 势场类（Hartree / ESP / Laplacian）长程带符号，按密度模式截断会弥散全盒 → 一律走双色相位
     const _nonDensityField = { orbital: 1, hartree: 1, esp: 1, laplacian: 1, elf: 1, signed_field: 1 };
-    const isOrbital = parsed.negVox / parsed.nVox > 0.20 || !!_nonDensityField[parsed.fieldType.type];
+    const isOrbital = isCube && (parsed.negVox / parsed.nVox > 0.20 || !!_nonDensityField[parsed.fieldType.type]);
     cubeUI.mode = isOrbital ? "orbital" : "density";
     volume = buildCubeVolume(parsed, { mode: cubeUI.mode });
   } catch (e){

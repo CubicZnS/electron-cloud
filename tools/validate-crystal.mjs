@@ -118,4 +118,31 @@ test('noncubic internal parameters, hexagonal angle and binary supercells',()=>{
   assert.throws(()=>C.build({...t,repeats:[8,8,8]}));
   assert.throws(()=>build({kind:'toString'}));
 });
+test('toPOSCAR/formula exports cover species, counts and no wrapped duplicates',()=>{
+  for(const t of templates){
+    const s=C.build({...t,repeats:[1,1,1]});
+    const pos=C.toPOSCAR(s);
+    const lines=pos.trim().split('\n');
+    const species=lines[5].trim().split(/\s+/),counts=lines[6].trim().split(/\s+/).map(Number);
+    const fracLines=lines.slice(8);
+    assert.equal(fracLines.length,s.atoms.length,t.id);
+    assert.equal(species.length,counts.length,t.id);
+    assert.equal(counts.reduce((a,b)=>a+b,0),s.atoms.length,t.id);
+    const seen=new Set();
+    for(const fl of fracLines){
+      const parts=fl.trim().split(/\s+/).map(Number);
+      assert.equal(parts.length,3,t.id);
+      parts.forEach(x=>assert.ok(x>=-1e-9&&x<1,t.id+' frac '+x));
+      const key=parts.map(x=>x.toFixed(6)).join(',');
+      assert.ok(!seen.has(key),t.id+' duplicate wrapped frac');seen.add(key);
+    }
+    const byEl=new Map();s.atoms.forEach(a=>byEl.set(a.element,(byEl.get(a.element)||0)+1));
+    [...byEl.keys()].sort().forEach((el,i)=>assert.equal(species[i],el,t.id));
+  }
+  const big=C.build({kind:'B2',a:2.88,repeats:[3,3,3],elementA:'Ni',elementB:'Al'});
+  assert.equal(C.toPOSCAR(big).trim().split('\n').length-8,54);
+  assert.equal(C.formulaPlain(big),'Al27Ni27');
+  assert.ok(C.formulaSub(big).includes('₂₇'));
+  const before=JSON.stringify(big);C.toPOSCAR(big);assert.equal(JSON.stringify(big),before);
+});
 console.log(`${passed}/${passed} crystal checks passed`);

@@ -7,8 +7,8 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const src = readFileSync(join(ROOT, "parts", "03b_cube.js"), "utf8");
-const m = new Function(src + "\nreturn { parseCubeText, buildCubeVolume, sampleCloudCube, inferSingleBonds, buildCubeMolecule, estimateCubeFieldType, CUBE_LIMITS, BOHR_TO_ANGSTROM, symbolOfZ, covalentRadius, cubeMarchingCubes };")();
-const { parseCubeText, buildCubeVolume, sampleCloudCube, inferSingleBonds, buildCubeMolecule, estimateCubeFieldType, CUBE_LIMITS, BOHR_TO_ANGSTROM, symbolOfZ, covalentRadius } = m;
+const m = new Function(src + "\nreturn { parseCubeText, parseChgcarText, buildCubeVolume, sampleCloudCube, inferSingleBonds, buildCubeMolecule, estimateCubeFieldType, CUBE_LIMITS, BOHR_TO_ANGSTROM, symbolOfZ, covalentRadius, cubeMarchingCubes };")();
+const { parseCubeText, parseChgcarText, buildCubeVolume, sampleCloudCube, inferSingleBonds, buildCubeMolecule, estimateCubeFieldType, CUBE_LIMITS, BOHR_TO_ANGSTROM, symbolOfZ, covalentRadius } = m;
 
 let pass = 0, fail = 0;
 const check = (name, ok, detail) => {
@@ -506,6 +506,29 @@ const cubeText = (lines) => lines.join("\n");
   check("res=2 bbox unchanged", span2[0] < gridSpan[0] * 0.5 && span2[1] < gridSpan[1] * 0.5 && span2[2] < gridSpan[2] * 0.5, span2.map(function (v){ return v.toFixed(1); }).join("x"));
   const posMc1 = m.cubeMarchingCubes(volIso, isoV, 1, 1);
   check("res=1 equals default", posMc1.count === posMc.count, "pos " + posMc.count + " vs " + posMc1.count);
+}
+
+// ---------- VASP CHGCAR 解析（与 Cube 共用 buildCubeVolume） ----------
+{
+  const n=4, dim=n+" "+n+" "+n, vals=[];
+  for(let iz=0;iz<n;iz++)for(let iy=0;iy<n;iy++)for(let ix=0;ix<n;ix++){
+    const x=(ix+.5)/n*4-2,y=(iy+.5)/n*4-2,z=(iz+.5)/n*4-2;
+    vals.push(Math.exp(-(x*x+y*y+z*z)));
+  }
+  const rows=[];
+  for(let i=0;i<vals.length;i+=5)rows.push(vals.slice(i,i+5).map(v=>v.toExponential(4)).join(" "));
+  const head=["chg sample","1.0","4 0 0","0 4 0","0 0 4","Ni","1","0.5 0.5 0.5","",dim];
+  const txt=head.concat(rows).join("\n");
+  const p=m.parseChgcarText(txt);
+  check("CHGCAR grid dims", p.dims.join(",")==="4,4,4"&&p.nVox===64, p.nVox+" voxels");
+  check("CHGCAR atoms from symbols", p.atomsB.length===1&&p.atomsB[0].z===28, "z="+p.atomsB[0].z);
+  check("CHGCAR classified as density", p.fieldType&&p.fieldType.type==="density", p.fieldType&&p.fieldType.type);
+  check("CHGCAR voxels nonnegative with peak", p.vMax>0&&p.negVox===0, "vMax="+p.vMax);
+  check("CHGCAR cell-corner origin, axes = lattice/dim", p.originB.join()==="0,0,0"&&Math.abs(p.axesB[0][0]*B*n-4)<1e-6, String(p.axesB[0][0]));
+  const vol=buildCubeVolume(p,{mode:"density"});
+  check("CHGCAR buildCubeVolume smoke", !!vol&&vol.nVox===64&&vol.atoms.length===1, "atoms="+(vol&&vol.atoms.length));
+  const p2=m.parseChgcarText(["chg no symbols","1.0","4 0 0","0 4 0","0 0 4","1","0.5 0.5 0.5","",dim].concat(rows).join("\n"));
+  check("CHGCAR without symbols degrades to pseudo gray skeleton", p2.pseudoZ===true&&p2.atomsB.length===1&&p2.atomsB[0].z===0, "pseudoZ="+p2.pseudoZ);
 }
 
 console.log("\n==== " + pass + " PASS / " + fail + " FAIL ====");

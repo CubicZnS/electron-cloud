@@ -77,3 +77,19 @@
 - Models: https://github.com/ACEsuit/mace-foundations
 - ASE: https://gitlab.com/ase/ase
 - Detailed attribution and licenses: `docs/REFERENCES.md`, resources 42–44.
+
+## A-tier extensions (v2.8 preview)
+
+- VASP output loop: Crystal Lab exports POSCAR/INCAR/KPOINTS for external DFT;
+  resulting CHGCAR/CHG can be imported through Quantum Data (shared cube volume
+  pipeline). Crystal Lab never computes electron density itself.
+- Reference-state comparison (store a relaxed result, later same-supercell runs
+  show ΔE eV/eV-atom, ΔV when both relaxed the cell) is MACE-approximate, never
+  formation energy; differing atom counts force per-atom normalization with a note.
+- Sublattice sweep relaxes a site fully replaced by each listed element serially,
+  tabulates results and exports CSV; can stop after the current step.
+- A 0-step converged result with |stress| > 2 GPa is flagged as a likely
+  high-symmetry stationary point, not equilibrium.
+- three.js addons loader now falls back per file across CDNs and reports any
+  missing addon explicitly instead of failing silently.
+- Remote moved to https://github.com/CubicZnS/electron-cloud.git

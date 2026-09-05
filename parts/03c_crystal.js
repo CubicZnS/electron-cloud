@@ -174,6 +174,31 @@ const CrystalCore = (() => {
     return {vectors,magnitudes,translation,mapped,rms:Math.sqrt(magnitudes.reduce((s,x)=>s+x*x,0)/raw.length),max:Math.max(...magnitudes),volumeInitial:volume(initial.cell),volumeFinal:volume(final.cell),volumeChange:100*(volume(final.cell)/volume(initial.cell)-1)};
   }
   function toXYZ(s){ validate(s); const n=x=>Number(x.toPrecision(12)).toString();return `${s.atoms.length}\nLattice="${s.cell.flat().map(n).join(' ')}" Properties=species:S:1:pos:R:3 pbc="${s.pbc.map(x=>x?'T':'F').join(' ')}"\n${s.atoms.map(a=>`${a.element} ${a.position.map(n).join(' ')}`).join('\n')}\n`; }
+  function formulaPlain(s){
+    const counts=new Map();s.atoms.forEach(a=>counts.set(a.element,(counts.get(a.element)||0)+1));
+    return [...counts.keys()].sort().map(el=>el+(counts.get(el)>1?counts.get(el):'')).join('');
+  }
+  function formulaSub(s){
+    const counts=new Map();s.atoms.forEach(a=>counts.set(a.element,(counts.get(a.element)||0)+1));
+    return [...counts.keys()].sort().map(el=>el+String(counts.get(el)).replace(/\d/g,d=>'₀₁₂₃₄₅₆₇₈₉'[Number(d)])).join(' ');
+  }
+  function toPOSCAR(s){
+    validate(s);
+    if(s.pbc.some(p=>!p))throw Error('仅支持三方向周期结构导出 VASP POSCAR');
+    const counts=new Map();s.atoms.forEach(a=>counts.set(a.element,(counts.get(a.element)||0)+1));
+    const els=[...counts.keys()].sort();
+    const n=x=>{const v=Number(x.toPrecision(10));return v===0?'0':v.toString();};
+    const wrap=f=>{let v=f-Math.floor(f);if(v<0)v+=1;if(v>1-1e-9)v=0;return v;};
+    const order=[...s.atoms.keys()].sort((a,b)=>els.indexOf(s.atoms[a].element)-els.indexOf(s.atoms[b].element)||a-b);
+    const frac=i=>fractional(s.atoms[i].position,s.cell).map(wrap);
+    const seen=new Set();
+    for(const i of order){const key=frac(i).map(f=>f.toFixed(6)).join(',');if(seen.has(key))throw Error('POSCAR 导出：原子 '+s.atoms[i].id+' 与同位置镜像重合，请先“生成”恢复干净单晶胞');seen.add(key);}
+    const out=[formulaPlain(s)+' (Crystal Lab starting geometry; starting guess)','1.0',
+      ...s.cell.map(row=>'  '+row.map(n).join('  ')),
+      els.join('  '),els.map(el=>counts.get(el)).join('  '),'Direct',
+      ...order.map(i=>'  '+frac(i).map(f=>f.toFixed(8)).join('  '))];
+    return out.join('\n')+'\n';
+  }
   function validateResult(r){
     if(!r||typeof r!=='object')throw Error('无效的计算结果');
     validate(r.initial);validate(r.final);compare(r.initial,r.final);
@@ -185,5 +210,5 @@ const CrystalCore = (() => {
     if(!Array.isArray(r.frames)||r.frames.length>501||r.frames.some(f=>!f||!Number.isInteger(f.step)||!finite(f.energy)||!finite(f.maxForce)||!Array.isArray(f.positions)||f.positions.length!==r.initial.atoms.length||!f.positions.every(vec)||!Array.isArray(f.cell)||f.cell.length!==3||!f.cell.every(vec)))throw Error('无效的计算帧');
     return r;
   }
-  return {symbols,prototypes,clone,validate,validateResult,build,fractional,cartesian,minimumImage,boundaryImages,neighbors,substitute,remove,randomIds,compare,toXYZ,volume};
+  return {symbols,prototypes,clone,validate,validateResult,build,fractional,cartesian,minimumImage,boundaryImages,neighbors,substitute,remove,randomIds,compare,toXYZ,formulaPlain,formulaSub,toPOSCAR,volume};
 })();

@@ -354,6 +354,92 @@ function parseCubeText(text, opts){
   };
 }
 
+/* ---------- VASP CHGCAR/CHG 电荷密度解析（与 Cube 共用 buildCubeVolume） ----------
+   CHGCAR = POSCAR 头（title/scale/晶胞/物种与计数/坐标）+ 网格维数 + 体素标量（x 最快）。
+   数值为 VASP 导出原值（自旋极化文件含总密度与磁化两块，只读第一块总密度；单位缩放不影响
+   可视化——颜色按平均归一）。网格原点在胞角，按晶胞三行向量对齐；原子坐标由 Å 转 bohr 后
+   交给 buildCubeVolume 统一换算。不提供元素符号的 CHGCAR 按伪原子（灰球骨架）处理。 */
+function parseChgcarText(text){
+  if(typeof text!=="string"||!text.length)throw cubeError("EMPTY","文件为空或无法读取。请确认导出的是有效的 VASP CHGCAR/CHG 文件。");
+  let off=0;
+  const readLine=function(){const l=cubeNextLine(text,off);off=l.next;return l.line;};
+  const title=readLine().trim()||"VASP CHGCAR";
+  const scaleLine=readLine().trim().split(/\s+/).map(Number);
+  if(!scaleLine.length||scaleLine.some(isNaN)||scaleLine[0]<=0)throw cubeError("BAD_HEADER","CHGCAR 第 2 行（缩放系数）无效。");
+  const anisotropic=scaleLine.length===3;
+  const scaled=function(v){return anisotropic?[v[0]*scaleLine[0],v[1]*scaleLine[1],v[2]*scaleLine[2]]:v.map(function(x){return x*scaleLine[0];});};
+  const cell=[];
+  for(let k=0;k<3;k++){
+    const row=readLine().trim().split(/\s+/).map(Number);
+    if(row.length<3||row.slice(0,3).some(isNaN))throw cubeError("BAD_HEADER","CHGCAR 晶格向量行无效。");
+    cell.push(scaled([row[0],row[1],row[2]]));
+  }
+  let symbols=[],counts=[];
+  {
+    let first=readLine();let toks=first.trim().split(/\s+/).filter(Boolean);
+    if(!toks.length){first=readLine();toks=first.trim().split(/\s+/).filter(Boolean);}
+    if(toks.some(function(t){return /[A-Za-z]/.test(t);})){
+      symbols=toks;const lc=readLine();counts=lc.trim().split(/\s+/).filter(Boolean).map(Number);
+    }else counts=toks.map(Number);
+    if(!counts.length||counts.some(function(c){return !Number.isInteger(c)||c<=0;}))throw cubeError("BAD_HEADER","CHGCAR 原子计数行无效。");
+    if(symbols.length&&symbols.length!==counts.length)throw cubeError("BAD_HEADER","CHGCAR 元素符号与原子计数不一致。");
+  }
+  const natoms=counts.reduce(function(a,b){return a+b;},0);
+  if(!Number.isInteger(natoms)||natoms<=0||natoms>100000)throw cubeError("BAD_HEADER","CHGCAR 原子数异常（"+natoms+"）。");
+  let direct=true,extra="";
+  {
+    const mode=readLine();
+    if(/^direct$/i.test(mode.trim()))direct=true;
+    else if(/^cartesian$/i.test(mode.trim()))direct=false;
+    else extra=mode;
+  }
+  const coords=[];
+  const push=function(lineText){
+    const t=lineText.trim().split(/\s+/).filter(Boolean);
+    if(t.length>=3){const nums=t.slice(0,3).map(Number);if(!nums.some(isNaN))coords.push(nums);}
+  };
+  if(extra)push(extra);
+  while(coords.length<natoms){
+    if(off>=text.length)throw cubeError("BAD_ATOMS","CHGCAR 原子坐标行不足（应有 "+natoms+" 个）。");
+    push(readLine());
+  }
+  const atomSymbols=[];
+  for(let i=0;i<symbols.length;i++){for(let c=0;c<counts[i];c++)atomSymbols.push(symbols[i]);}
+  const toCart=function(f){return [0,1,2].map(function(k){return f[0]*cell[0][k]+f[1]*cell[1][k]+f[2]*cell[2][k];});};
+  const atomsB=coords.map(function(p,i){
+    const sym=atomSymbols[i]||"";
+    const z=sym?(1+ELEMENT_SYMBOLS.indexOf(sym)):0;
+    const cart=direct?toCart(p):p;
+    return {z:z,q:0,pos:[cart[0]/BOHR_TO_ANGSTROM,cart[1]/BOHR_TO_ANGSTROM,cart[2]/BOHR_TO_ANGSTROM]};
+  });
+  // 网格维数行
+  let grid=null;
+  while(off<text.length){
+    const l=readLine();const t=l.trim().split(/\s+/).filter(Boolean);
+    if(t.length>=3&&t.slice(0,3).every(function(x){return /^[0-9]+$/.test(x);})){grid=t.slice(0,3).map(Number);break;}
+  }
+  if(!grid)throw cubeError("BAD_DIMS","未找到 CHGCAR 网格维数行（应形如 nx ny nz）。");
+  const dims=grid;
+  if(!dims.every(function(n){return Number.isInteger(n)&&n>0;}))throw cubeError("BAD_DIMS","CHGCAR 网格维数无效。");
+  const nVox=dims[0]*dims[1]*dims[2];
+  if(nVox>CUBE_LIMITS.maxVoxels)throw cubeError("TOO_MANY_VOXELS","体素数量 "+nVox.toLocaleString()+" 超过上限 "+CUBE_LIMITS.maxVoxels.toLocaleString()+"。请在 VASP 中降低 NGXF/NGYF/NGZF，或先用工具对 CHGCAR 降采样再导入。");
+  const axesB=[[0,0,0],[0,0,0],[0,0,0]];
+  for(let k=0;k<3;k++)for(let j=0;j<3;j++)axesB[k][j]=cell[k][j]/dims[k]/BOHR_TO_ANGSTROM;
+  const dataRaw=new Float32Array(nVox);const nextTok=cubeTokenize(text,off);
+  let tok=nextTok(),idx=0,negVox=0,maxAbs=0,vMax=0,vSum=0;
+  while(tok!==null&&idx<nVox){
+    const v=Number(tok);
+    if(!Number.isFinite(v))throw cubeError("NON_FINITE","CHGCAR 体素数据包含 NaN 或 Infinity。");
+    const m=v<0?-v:v;if(m>maxAbs)maxAbs=m;if(m>vMax)vMax=m;if(v<0)negVox++;
+    const val=v<0?0:v;dataRaw[idx]=val;vSum+=val;idx++;tok=nextTok();
+  }
+  if(idx<nVox)throw cubeError("DATA_COUNT","CHGCAR 体素数据数量不足：应有 "+nVox.toLocaleString()+"，仅读到 "+idx.toLocaleString()+"。");
+  const comment="VASP CHGCAR total charge density（周期性网格；数值为 VASP 导出原值，颜色按平均归一；自旋极化文件只读取总密度块）";
+  const fieldType=estimateCubeFieldType({title:title,comment:comment,negVox:negVox,nVox:nVox,vMax:vMax,maxAbs:maxAbs});
+  if(vMax<=0)throw cubeError("NON_POSITIVE","CHGCAR 体素整体非正（最大值 ≤ 0），无法作为密度场。");
+  return {title:title,comment:comment,natoms:natoms,originB:[0,0,0],axesB:axesB,dims:dims,nVox:nVox,atomsB:atomsB,dataRaw:dataRaw,vMin:0,vMax:vMax,vSum:vSum,vMean:vSum/nVox,negVox:negVox,maxAbs:maxAbs,fieldType:fieldType,signed:false,dataOrder:"xyz",pseudoZ:!symbols.length};
+}
+
 /* ---------- CPMD 伪原子元素推断（几何启发式） ----------
    伪原子标签（Z = 1..N）不含真实元素信息。真实分子的键长/配位数有元素特征：
    · H：仅 1 个邻居，键长 < 1.15Å
