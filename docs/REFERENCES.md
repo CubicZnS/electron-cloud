@@ -1,5 +1,32 @@
 # External References
 
+## Crystal Lab additions — v2.6.0
+
+### Resource 42
+- Name: MACE 0.3.16 and MACE-MPA-0 medium foundation model
+- URL: https://github.com/ACEsuit/mace ; https://github.com/ACEsuit/mace-foundations
+- License: MIT for MACE code and specifically MACE-MPA-0 weights; other foundation model licenses differ. The runtime explicitly selects `medium-mpa-0`.
+- Used for: Optional local energy, force and stress inference during 0 K structural optimization, CPU float64. No model weights or MACE source are vendored in the HTML/repository.
+- Scientific citation: Batatia et al., *A foundation model for atomistic materials chemistry*, https://arxiv.org/abs/2401.00096 ; consult the model repository for its complete citation and training-data acknowledgments.
+- Modified parts: Unmodified installed dependency/model, wrapped by `crystal-engine/server.py`. Loaded parameters and buffers are hashed for result provenance. Element coverage is not an accuracy guarantee for arbitrary alloys.
+
+### Resource 43
+- Name: Atomic Simulation Environment (ASE), 3.29.0
+- URL: https://gitlab.com/ase/ase ; https://ase-lib.org/
+- License: LGPL-2.1-or-later (installed 3.29.0 package metadata)
+- Used for: Atomic structures, CIF/POSCAR/extended XYZ import, minimum-image geometry, BFGS optimization and FrechetCellFilter variable-cell optimization in the separately installed local engine.
+- Scientific citation: Larsen et al., *The atomic simulation environment—a Python library for working with atoms*, J. Phys.: Condens. Matter 29, 273002 (2017), https://doi.org/10.1088/1361-648X/aa680e
+- Modified parts: No ASE source modifications or vendoring; API wrapper and validation are project code.
+
+### Resource 44
+- Name: PyTorch 2.5.1
+- URL: https://github.com/pytorch/pytorch ; https://github.com/pytorch/pytorch/blob/main/LICENSE
+- License: BSD-3-Clause, with upstream third-party notices
+- Used for: CPU tensor inference underlying the optional MACE calculator. Installed separately through `crystal-engine/requirements.txt`.
+- Modified parts: None. Preserve upstream notices when redistributing dependency binaries; no binaries are included in this repository.
+
+Crystal Lab graphics reuse Resource 1 (three.js/OrbitControls) and the existing element-color helper. Its crystal entry SVG and scoped UI are project-native code; no new raster assets were generated or copied.
+
 > 复用/借鉴资源清单。所有复用代码的 License 已核对；内嵌的 shader 代码（Ashima simplex noise）为 MIT 许可并保留作者署名注释。
 
 ## Resource 1

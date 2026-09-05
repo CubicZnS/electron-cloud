@@ -3,9 +3,11 @@
 GPU 粒子电子云交互可视化：分子 · 电子云 · 诱导效应 / 共轭效应 · 自由碳架创造模式 · Quantum Data 电子密度 Cube 导入。
 半定量教学演示（非量子化学计算），密度着色、官能团取代、σ 骨架电子流全部实时；也可导入 Gaussian cubegen / Multiwfn 导出的真实电子密度 Cube（.cube/.cub）驱动粒子云（本地解析，不上传）。
 
+独立的 **Crystal Lab 晶体实验室**支持周期晶格、掺杂与空位编辑，通过可选的本地 ASE / MACE-MPA-0 引擎计算结构弛豫，比较原子位移、能量、力与晶胞变化。
+
 > by CubicZnS · 单文件 HTML 产物，无构建依赖（three.js 由 CDN 加载）
 >
-> **当前版本：v2.5.16（等值面拟合精度扩展 4x / 8x 档位）** · 版本历史见 [CHANGELOG.md](CHANGELOG.md)
+> **当前版本：v2.6.0（全屏晶体实验室与本地结构弛豫）** · 版本历史见 [CHANGELOG.md](CHANGELOG.md)
 
 ## 功能
 
@@ -19,6 +21,23 @@ GPU 粒子电子云交互可视化：分子 · 电子云 · 诱导效应 / 共�
 - **前线轨道可视化**：导入 HOMO/LUMO 等带符号轨道 Cube 自动进入轨道模式——粒子按 |ψ| 分布、正相位暖色 / 负相位冷色双 LUT、节点面 ψ=0 处呈空隙；轨道标注（HOMO/LUMO/其他）由用户指定，不假装自动推断
 - **Quantum Data（电子密度 Cube 导入）**：底部 Quantum Data 入口导入 Gaussian cubegen / Multiwfn 导出的单标量场电子密度 `.cube/.cub`（64 MB / 400 万体素上限，本地解析不上传）；bohr→Å 换算并按网格中心居中；粒子按真实密度权重采样（对数密度加权；低密度截断 = max(95% 总质量阈值, 0.1%×峰值) 双保险，松包围盒/非零背景也不会弥散）；复用现有粒子过渡 / 色图 LUT / Bloom / 画质切换；图例标注 `Imported electron density`；导入模式下 Total/Inductive/Resonance 与官能团替换禁用并说明原因，可一键退出回半定量模式
 - Explain 模式 / 诱导-共轭分解模式 / 性能自适应降级 / 悬停密度标签
+
+## Crystal Lab 晶体实验室（v2.6.0）
+
+底部第三个入口打开独立全屏工作区；退出后恢复原电子云场景。
+
+- **晶格与位点**：B2、BCC、FCC、HCP；元素、晶格常数、HCP c/a 和超胞尺寸可调，最多 512 个独立原子。支持选中替换、A/B/全部位点随机掺杂（保留种子）及空位。
+- **边界补全**：完整显示周期镜像。最小 FCC 常规晶胞显示 14 个球，按 8 × 1/8 + 6 × 1/2 折为 4 个原子；棱上按 1/4。点击镜像选择对应独立位点，计算、成分比例及导出不重复计数。非周期方向不补镜像、不分摊。
+- **恢复初始结构**：晶格常数旁的“生成”和“生成晶体”均按当前搭建参数重新生成，清除掺杂、空位和弛豫结果；这不会预测平衡晶格常数。
+- **真实弛豫**：可选本地 MACE-MPA-0 模型，0 K 原子位置优化或原子位置 + 晶胞零外压优化。离线时仍可搭建和编辑；真实计算与 CIF/POSCAR/XYZ 解析需启动引擎。
+- **比较**：弛豫能量变化、内部位移 RMS、最大原子力、体积变化、近邻间距、初始轮廓与位移箭头。显示倍率只影响画面；插值不代表动力学轨迹。能量差是同成分结构的弛豫能，不能直接当作缺陷形成能或占位偏好。
+- **交换与追溯**：导入 CIF、POSCAR/VASP、XYZ/extended XYZ（文件 ≤ 2 MiB）；导入/导出项目 JSON（schemaVersion 1，导入 ≤ 64 MiB），记录结构、编辑历史、计算设置、结果、模型参数 SHA-256 和计算帧；可导出 extended XYZ。无序/部分占据 CIF 会拒绝，避免静默选择元素。
+
+MACE 的元素覆盖不代表任意合金都已验证准确。科研使用需针对具体体系与 DFT/实验比较；本模块不生成电子密度，真实电子场仍由 DFT 等软件导出 Cube 后在 Quantum Data 中查看。初始 a = 2.88 Å 只是 B2 NiAl 的可编辑起点，切换元素不会自动估算新常数。
+
+引擎安装、启动和 API 见 [crystal-engine/README.md](crystal-engine/README.md)。结构坐标为 Å，能量 eV，力 eV/Å，应力 GPa；Python 环境与模型权重放在仓库外。
+
+已知验证限制：本机浏览器能触发 JSON/XYZ 保存请求，但 macOS 保存面板曾持续禁用“保存”，尚未完成浏览器导出落盘验证；真实结果 JSON 的导入恢复及序列化校验已通过。界面只提示“已请求保存”，不宣称文件已保存。
 
 ## Quantum Data 支持文件清单（v2.5.9）
 
@@ -93,13 +112,29 @@ python3 -m http.server 8080
 - three.js 0.161.0 由 jsdelivr CDN 提供（`importmap` 已内嵌）
 - 在 DSH 工作台内运行时使用工作台原生皮肤；独立打开时自动注入等价的极简按钮皮肤（`dshell-btn` 兜底）
 
+开发修改 `parts/` 后重新组装并验证：
+
+```bash
+node tools/build.mjs
+node tools/validate-sigma.mjs
+node tools/validate-cube.mjs
+node tools/validate-crystal.mjs
+```
+
+前端无安装/打包依赖；组装需要 Node.js。本地计算需另行安装 Python 依赖，详见引擎说明。
+
 ## 目录结构
 
 | 路径 | 说明 |
 |---|---|
 | `index.html` | **单文件产物**（自包含：样式/着色器/数据/逻辑全部内嵌） |
 | `parts/` | 源码分片（01_head → 08_tail；新增 03b_cube.js 纯 Cube 解析/采样模块、06b_cube_ui.js 导入面板），`tools/build.mjs` 组装 |
+| `parts/03c_crystal.js` | 晶体几何、周期边界、镜像折算与结果校验 |
+| `parts/05c_crystal_render.js` / `parts/06c_crystal_ui.js` | 独立晶体场景、全屏交互与本地引擎请求 |
+| `crystal-engine/` | ASE / MACE 本地服务、固定版本依赖、测试与运行说明 |
 | `tools/` | 构建（build.mjs）、数据生成（gen-molecules.mjs）、σ 校验（validate-sigma.mjs，15/15 通过）、Cube 校验（validate-cube.mjs，73/73 通过） |
+| `tools/validate-crystal.mjs` | 晶体校验（17/17），含边界权重、非正交晶胞与结果追溯 |
+| `AGENTS.md` / `MEMORY.md` | 协作规范与长期架构决策 |
 | `docs/RESEARCH.md` | 技术方案与模型推导（化学引擎/密度/构型/性能） |
 | `docs/REFERENCES.md` | 全部复用资源与许可证清单（务必随项目分发） |
 
@@ -118,3 +153,4 @@ python3 -m http.server 8080
 - three.js（MIT）· Ashima Arts / Gustavson simplex noise（MIT，shader 内保留署名）
 - Lucide 图标（ISC）· matplotlib 色图（BSD）· PubChem 数据（公共领域）
 - 文献常数（Hammett/Taft/Hinze–Jaffé/Pauling/Hückel 等）为公开科学数据
+- 可选计算依赖：MACE 代码与 MACE-MPA-0 权重（MIT）、ASE（LGPL-2.1-or-later）、PyTorch（BSD-3-Clause）；均通过外部环境安装，未打包进 HTML。详见 `docs/REFERENCES.md` Resource 42–44。

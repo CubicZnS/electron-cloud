@@ -1,5 +1,51 @@
 # Research Report — 有机化合物电子效应可视化（Phase 1）
 
+## v2.6.0 extension: Crystal Lab
+
+The new fullscreen workspace owns an independent renderer, structure state and
+local API requests. It extends the app to periodic structure preparation and
+analysis without applying the organic Hammett/Hückel approximations to metals.
+Frontend fragments remain assembled into the same standalone HTML; real
+relaxation uses an optional external Python service.
+
+The selected engine combines ASE BFGS (and FrechetCellFilter for variable cells)
+with MACE-MPA-0 (`medium-mpa-0`). It produces local 0 K energy minima, forces and
+stress. This learned potential is not a self-consistent electron-density
+calculation. DFT/experimental validation remains necessary for any particular
+composition and phase. See [references 42–44](REFERENCES.md#crystal-lab-additions--v260).
+
+Geometry uses right-handed row-vector cells, Cartesian Å positions, explicit
+periodic axes and stable atom IDs. Minimum-image displacement uses bounded
+reciprocal-vector enumeration in the frontend and ASE's reduced-cell geometry
+in the service. Closed-cell display adds only periodic boundary copies: weights
+are 1/2 per shared periodic boundary plane, giving corners 1/8, edges 1/4 and
+faces 1/2 for a fully periodic parallelepiped. Nonperiodic axes are not shared.
+Independent IDs preserve composition and computation count: FCC's 14 spheres
+represent four atoms. HCP is represented by its two-atom primitive cell.
+
+For initial row-cell H0 and final H1, fractional coordinates f0 map the initial
+structure into H1 before comparing it with the final positions. A common
+translation is removed under the minimum-image convention to obtain internal
+displacements. RMS and maximum displacement use these vectors; volume change
+uses det(H1)/det(H0) − 1. Display interpolation and amplification do not alter
+reported values. Reference boundary copies stay paired throughout this view.
+Large rearrangements beyond meaningful atom correspondence require separate
+analysis; this comparison is intended for local relaxation.
+
+The energy difference is E(final) − E(initial) for identical composition,
+reported per independent atom. It is not a defect formation energy (chemical
+potentials are absent) and does not compare competing dopant sites. Finite
+temperature, phase stability and electronic bonding analysis are outside this
+initial module's claims. Defaults, controls and exchange formats are described
+in the [README](../README.md#crystal-lab-晶体实验室v260) and
+[engine contract](../crystal-engine/README.md#api).
+
+Integration checks include actual Co-doped B2 NiAl optimization: the fixed-cell
+UI example converged in four steps at maximum force about 0.0022 eV/Å. A
+zero-pressure variable-cell example converged in six steps at 0.02518 eV/Å with
+volume change +0.21695%. These runs establish functioning inference and data
+flow, not an accuracy benchmark against DFT or experiment.
+
 调研日期：本次开发会话。目标：为「电子云可视化」Web 项目寻找可复用的 GPU 粒子系统、噪声 shader、bloom 后处理、分子渲染方案与分子结构数据源，并确定技术方案。
 
 ## 1. 结论速览（决策）

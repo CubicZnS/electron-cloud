@@ -27,6 +27,7 @@ function tick(){
   if (window.__WEBGL_DEAD) return; // 上下文丢失：停止渲染循环（恢复事件会重启）
   requestAnimationFrame(tick);
   const dt = Math.min(clock.getDelta(), 0.05);
+  if (CrystalLab.isOpen()) return;
   simTime += dt;
   if (introT < INTRO_DUR){
     introT += dt;
