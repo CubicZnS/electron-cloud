@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const ORDER = ["01_head.html", "02_data.js", "03_core.js", "03b_cube.js", "03c_crystal.js", "04_glsl.js", "05_render.js", "05c_crystal_render.js", "06_ui.js", "06b_cube_ui.js", "06c_crystal_ui.js", "07_main.js", "08_tail.html"];
+const ORDER = ["01_head.html", "02_data.js", "03_core.js", "03b_cube.js", "03c_crystal.js", "03d_crystal_templates.js", "04_glsl.js", "05_render.js", "05c_crystal_render.js", "06_ui.js", "06b_cube_ui.js", "06c_crystal_ui.js", "07_main.js", "08_tail.html"];
 let out = "";
 for (const f of ORDER) out += readFileSync(join(ROOT, "parts", f), "utf8") + "\n";
 writeFileSync(join(ROOT, "index.html"), out);

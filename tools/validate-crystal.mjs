@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 const source = readFileSync(new URL('../parts/03c_crystal.js', import.meta.url), 'utf8');
 const C = vm.runInNewContext(`${source}\nCrystalCore;`);
+const templatesSource=readFileSync(new URL('../parts/03d_crystal_templates.js',import.meta.url),'utf8');
+const templates=vm.runInNewContext(`${source}\n${templatesSource}\nCrystalTemplates;`);
 let passed = 0;
 function test(name, fn) { fn(); console.log(`✓ ${name}`); passed++; }
 const build = (extra = {}) => C.build({ kind: 'B2', a: 2.88, cOverA: Math.sqrt(8/3), repeats: [3,3,3], elementA: 'Ni', elementB: 'Al', ...extra });
@@ -73,5 +75,47 @@ test('result round trip preserves provenance and rejects corrupted fields',()=>{
   const s=build(),r={initial:s,final:C.clone(s),energyInitial:-100,energyFinal:-101,maxForce:.01,elapsedSeconds:1,steps:4,converged:true,stressGPa:[0,0,0,0,0,0],model:{name:'fixture',version:'1',device:'cpu',dtype:'float64',sha256:'a'.repeat(64)},settings:{fmax:.03,maxSteps:100,relaxCell:false,pressureGPa:0},units:{length:'angstrom',energy:'eV',force:'eV/angstrom',stress:'GPa'},frames:[{step:0,positions:s.atoms.map(a=>a.position),cell:s.cell,energy:-100,maxForce:.1}]};
   assert.equal(C.validateResult(JSON.parse(JSON.stringify(r))).model.sha256,r.model.sha256);
   for(const mutate of [d=>d.units.length='bohr',d=>d.maxForce=NaN,d=>d.model.version=null,d=>d.frames[0].positions.pop(),d=>d.final.pbc[0]=false]){const d=C.clone(r);mutate(d);assert.throws(()=>C.validateResult(d));}
+});
+test('all named templates preserve site ratios, periodic weights and export counts',()=>{
+  assert.equal(templates.length,232);assert.equal(new Set(templates.map(t=>t.id)).size,232);
+  for(const t of templates){
+    const s=C.build({...t,repeats:[1,1,1]}),p=C.prototypes[t.kind];
+    const counts={'A':s.atoms.filter(x=>x.site==='A').length,'B':s.atoms.filter(x=>x.site==='B').length,'C':s.atoms.filter(x=>x.site==='C').length,'all':s.atoms.filter(x=>x.site==='all').length};
+    if(p.ratio){ // multi-role: counts must be proportional to the ratio
+      const roles=p.ratio.length===3?['A','B','C']:['A','B'];
+      const first=roles.map(r=>counts[r]/p.ratio[roles.indexOf(r)]);
+      roles.forEach((r,i)=>near(counts[r]/p.ratio[i],first[0],1e-9),t.id);
+    }
+    assert.ok(s.atoms.every(x=>x.site==='all'?x.element===t.elementA:(x.site==='A'?x.element===t.elementA:x.site==='B'?x.element===t.elementB:x.element===t.elementC)),t.id);
+    near(C.boundaryImages(s).reduce((n,x)=>n+x.weight,0),s.atoms.length);
+    assert.equal(Number(C.toXYZ(s).split('\n')[0]),s.atoms.length);
+    assert.equal(C.validate(JSON.parse(JSON.stringify(s))).atoms.length,s.atoms.length);
+  }
+});
+test('nearest-neighbor coordination matches crystallographic prototypes',()=>{
+  const fixtures=[['B1-NaCl',2.83,6],['B2-CsCl',3.58,8],['B3-ZnS',2.35,4],['B4-ZnO',2.01,4],['fluorite-CaF2',2.38,8],['antifluorite-Li2O',2.01,4],['rutile-TiO2',2.05,6],['NiAs-NiAs',2.6,6],['hBN-h-BN',1.46,3],['MoS2-MoS2',2.5,6]];
+  for(const [id,cutoff,count] of fixtures){const t=templates.find(t=>t.id===id),s=C.build({...t,repeats:[1,1,1]});assert.equal(C.neighbors(s,0,cutoff).filter(n=>n.element===t.elementB).length,count,id);}
+  // new families (A/B(/C) neighbor counts at realistic bond cutoffs)
+  const tern=[['perovskite-SrTiO3',2.0,'Ti','O',6],['spinel-MgAl2O4',2.1,'Mg','O',4],['spinel-MgAl2O4',2.1,'Al','O',6],['calcite-CaCO3',1.4,'C','O',3],['calcite-CaCO3',2.6,'Ca','O',6],['zircon-ZrSiO4',1.8,'Si','O',4],['zircon-ZrSiO4',2.4,'Zr','O',8]];
+  for(const [id,cutoff,elA,elB,count] of tern){const t=templates.find(x=>x.id===id),s=C.build({...t,repeats:[1,1,1]}),i=s.atoms.findIndex(a=>a.element===elA);assert.equal(C.neighbors(s,i,cutoff).filter(n=>n.element===elB).length,count,id);}
+  for(const [id,cutoff,count] of [['diamond-Si',2.6,4],['pyrite-FeS2',2.4,6],['cuprite-Cu2O',2.0,2],['cdi2-CdI2',3.2,6],['corundum-Al2O3',2.1,6],['graphite-C(石墨)',1.6,3]]){const t=templates.find(x=>x.id===id),s=C.build({...t,repeats:[1,1,1]});assert.equal(C.neighbors(s,0,cutoff).length,count,id);}
+});
+test('NaCl closed cell has 27 spheres representing four formula units',()=>{
+  const s=C.build({...templates.find(t=>t.id==='B1-NaCl'),repeats:[1,1,1]}),images=C.boundaryImages(s);
+  assert.equal(s.atoms.length,8);assert.equal(images.length,27);
+  assert.equal(images.filter(i=>s.atoms[i.index].element==='Na').length,14);
+  assert.equal(images.filter(i=>i.weight===.25).length,12);
+});
+test('noncubic internal parameters, hexagonal angle and binary supercells',()=>{
+  for(const kind of ['B4','rutile','MoS2']){
+    const t=templates.find(t=>t.kind===kind),s=C.build({...t,repeats:[1,1,1]}),changed=C.build({...t,u:t.u+.005,repeats:[1,1,1]});
+    assert.notEqual(JSON.stringify(s.atoms),JSON.stringify(changed.atoms));
+    near(s.cell[2][2],t.a*t.cOverA);
+    assert.throws(()=>C.build({...t,u:NaN,repeats:[1,1,1]}));
+  }
+  const t=templates.find(t=>t.kind==='B4'),s=C.build({...t,repeats:[2,3,2]});
+  assert.equal(s.atoms.length,48);near(s.cell[1][0]/Math.hypot(...s.cell[1]),-.5);
+  assert.throws(()=>C.build({...t,repeats:[8,8,8]}));
+  assert.throws(()=>build({kind:'toString'}));
 });
 console.log(`${passed}/${passed} crystal checks passed`);

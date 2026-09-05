@@ -2,6 +2,20 @@
 
 ## Crystal Lab additions — v2.6.0
 
+### Resource 45 — Binary crystal prototype geometry
+
+- Name: AFLOW Encyclopedia of Crystallographic Prototypes.
+- URL: https://aflow.org/p/ ; [exact prototype links and conventions](CRYSTAL_TEMPLATES.md).
+- References: Mehl et al., Computational Materials Science 136 (2017), S1–S828,
+  https://doi.org/10.1016/j.commatsci.2017.01.017 ; Hicks et al., Computational
+  Materials Science 199 (2021), 110450, https://doi.org/10.1016/j.commatsci.2021.110450 .
+- Used for: fractional site geometry and phase naming for 23 crystal template
+  families (elemental FCC/BCC/HCP/diamond/graphite, binary AB/AB2/A2B, and
+  ternary perovskite/spinel/calcite/zircon); independently implemented in
+  CrystalCore. No third-party code, illustrations or CIF assets redistributed.
+  Numeric catalog values are project starting guesses, not a transcription of
+  AFLOW/COD experimental lattice data.
+
 ### Resource 42
 - Name: MACE 0.3.16 and MACE-MPA-0 medium foundation model
 - URL: https://github.com/ACEsuit/mace ; https://github.com/ACEsuit/mace-foundations

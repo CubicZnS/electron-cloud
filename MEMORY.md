@@ -21,6 +21,10 @@
   weighted as 8 corners/8 + 6 faces/2 = 4 independent atoms. Edges count 1/4;
   nonperiodic axes are not shared. Clicking/replacing any mirror changes its
   single source site. Calculation, composition and export never count copies.
+- Display-only mirror membership uses a 0.25 Å slop (below the smallest sphere
+  radius ~0.32 Å) so a relaxed/adopted structure whose atoms sit slightly off an
+  ideal face keeps its closed-cell mirrors; genuinely interior atoms are never
+  mirrored. Weights still sum to the independent atom count.
 - The “生成” button beside lattice parameters rebuilds using current settings,
   removing doping/vacancies/results. It does not estimate an equilibrium
   lattice constant. The default 2.88 Å is a starting guess, not a universal value.
@@ -55,6 +59,20 @@
   without adding the large dataset to the release.
 
 ## Sources
+
+- Crystal templates: 232 named seeds in 23 families — elemental (FCC/BCC/HCP,
+  diamond A4, graphite A9), binary AB/AB2/A2B (incl. pyrite C2, cuprite C3,
+  CdI2 2H C6, corundum D51) and ternary (perovskite E21, spinel H11, calcite,
+  zircon). Keep the catalog in `parts/03d_crystal_templates.js`; prototype
+  geometry and role tables live in CrystalCore (03c). Roles run 1–3 element
+  sites (A, A/B, A/B/C). Parameters are rounded starting guesses, not
+  individually sourced experimental constants. See
+  `docs/CRYSTAL_TEMPLATES.md` for AFLOW/COD geometry references, origin
+  conventions and research limitations.
+- Template load explicitly rebuilds a 1x1x1 cell; merely selecting a template
+  does not mutate the structure. Preserve editable A/B/C sites (roles 1–3),
+  c/a, internal u/z, generation reset and the calculation/import lock. No new
+  engine API fields.
 
 - Models: https://github.com/ACEsuit/mace-foundations
 - ASE: https://gitlab.com/ase/ase

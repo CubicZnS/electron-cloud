@@ -12,6 +12,11 @@
   mirrors must never enter calculation or export atom lists.
 - Preserve the full-screen Crystal Lab entry beside the two existing bottom
   entries. Match existing Chinese UI, dark colors and three.js assets.
+- Prototype geometry (1–3 element roles: A, A/B, A/B/C) belongs in
+  CrystalCore; named parameter seeds belong in `parts/03d_crystal_templates.js`,
+  assembled immediately after the core. Keep their starting-guess status and
+  geometry references explicit; verify site ratios and periodic coordination
+  when adding a prototype.
 
 ## Commands
 

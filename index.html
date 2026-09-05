@@ -2733,24 +2733,103 @@ const CrystalCore = (() => {
     for(let i=0;i<s.atoms.length;i++) for(let j=0;j<i;j++) if(norm(minimumImage(sub(s.atoms[i].position,s.atoms[j].position),s.cell,s.pbc))<.5) throw Error('原子间距小于 0.5 Å；请检查结构和单位');
     return s;
   }
-  function build({kind,a,cOverA=Math.sqrt(8/3),repeats,elementA,elementB}){
-    if(!['B2','BCC','FCC','HCP'].includes(kind)||!Number.isFinite(a)||a<1||a>20||!Array.isArray(repeats)||repeats.length!==3||repeats.some(n=>!Number.isInteger(n)||n<1||n>8)) throw Error('请检查晶格、晶格常数和超胞尺寸');
-    if(kind==='HCP'&&(!Number.isFinite(cOverA)||cOverA<.8||cOverA>3)) throw Error('c/a 范围为 0.8–3');
-    const primitive=kind==='HCP'?[[a,0,0],[-a/2,a*Math.sqrt(3)/2,0],[0,0,a*cOverA]]:[[a,0,0],[0,a,0],[0,0,a]];
-    const basis=kind==='FCC'?[[0,0,0],[0,.5,.5],[.5,0,.5],[.5,.5,0]]:kind==='HCP'?[[0,0,0],[2/3,1/3,.5]]:[[0,0,0],[.5,.5,.5]];
-    if(repeats.reduce((s,n)=>s*n,basis.length)>512) throw Error('超胞最多 512 个原子');
+  const prototypes={
+    B2:{label:'CsCl / B2 · AB',ratio:[1,1],system:'cubic',reference:'AB_cP2_221_a_b-002'},
+    BCC:{label:'BCC · 体心立方',system:'cubic'},
+    FCC:{label:'FCC · 面心立方',system:'cubic'},
+    HCP:{label:'HCP · 六方密排',system:'hexagonal'},
+    B1:{label:'岩盐 / B1 · AB',ratio:[1,1],system:'cubic',reference:'AB_cF8_225_a_b-001'},
+    B3:{label:'闪锌矿 / B3 · AB',ratio:[1,1],system:'cubic',reference:'AB_cF8_216_a_c-001'},
+    B4:{label:'纤锌矿 / B4 · AB',ratio:[1,1],system:'hexagonal',u:.375,reference:'AB_hP4_186_b_b-001'},
+    fluorite:{label:'萤石 / C1 · AB₂',ratio:[1,2],system:'cubic',reference:'AB2_cF12_225_a_c-001'},
+    antifluorite:{label:'反萤石 · A₂B',ratio:[2,1],system:'cubic',reference:'AB2_cF12_225_a_c-001'},
+    rutile:{label:'金红石 / C4 · AB₂',ratio:[1,2],system:'tetragonal',u:.305,reference:'A2B_tP6_136_f_a-001'},
+    NiAs:{label:'NiAs / B8₁ · AB',ratio:[1,1],system:'hexagonal',reference:'AB_hP4_194_c_a-001'},
+    hBN:{label:'层状 h-BN · AB',ratio:[1,1],system:'hexagonal',reference:'AB_hP4_194_c_d-001'},
+    MoS2:{label:'层状 2H-MoS₂ · AB₂',ratio:[1,2],system:'hexagonal',u:.621,reference:'AB2_hP6_194_c_f-001'},
+    diamond:{label:'金刚石 / A4 · 单质',system:'cubic',reference:'A_cF8_227_a-001'},
+    graphite:{label:'石墨 / A9 · 单质',system:'hexagonal',reference:'A_hP4_194_bc-001'},
+    pyrite:{label:'黄铁矿 / C2 · AB₂',ratio:[1,2],system:'cubic',reference:'AB2_cP12_205_a_c-001'},
+    cuprite:{label:'赤铜矿 / C3 · A₂B',ratio:[2,1],system:'cubic',reference:'A2B_cP6_224_b_a-001'},
+    cdi2:{label:'CdI₂ 2H / C6 · AB₂',ratio:[1,2],system:'hexagonal',reference:'AB2_hP3_164_a_d-001'},
+    corundum:{label:'刚玉 / D5₁ · A₂B₃',ratio:[2,3],system:'hexagonal',reference:'A2B3_hR10_167_c_e-001'},
+    perovskite:{label:'钙钛矿 / E2₁ · ABC₃',ratio:[1,1,3],system:'cubic',reference:'ABC3_cP5_221_a_b_c-001'},
+    spinel:{label:'尖晶石 / H1₁ · AB₂C₄',ratio:[1,2,4],system:'cubic',reference:'A2BC4_cF56_227_c_b_e-001'},
+    calcite:{label:'方解石 / G₂ · ABC₃',ratio:[1,1,3],system:'hexagonal',reference:'AB3C_hR30_167_a_b_e-001'},
+    zircon:{label:'锆石 / S1₁ · ABC₄',ratio:[1,1,4],system:'tetragonal',reference:'A4BC_tI24_141_h_a_b-001'}
+  };
+  /** Fixed fractional role tables for newer prototypes (rows from AFLOW CIF, pymatgen-expanded).
+   * A/B(/C) are chemical roles, not AFLOW alphabetical labels. */
+  const CELLS={
+  diamond:{A:[[0.125,0.125,0.125],[0.125,0.625,0.625],[0.375,0.375,0.875],[0.375,0.875,0.375],[0.625,0.125,0.625],[0.625,0.625,0.125],[0.875,0.375,0.375],[0.875,0.875,0.875]]},
+  graphite:{A:[[0,0,0.25],[0,0,0.75],[0.333333,0.666667,0.25],[0.666667,0.333333,0.75]]},
+  pyrite:{A:[[0,0,0],[0,0.5,0.5],[0.5,0,0.5],[0.5,0.5,0]],B:[[0.116,0.616,0.884],[0.116,0.884,0.384],[0.384,0.116,0.884],[0.384,0.384,0.384],[0.616,0.616,0.616],[0.616,0.884,0.116],[0.884,0.116,0.616],[0.884,0.384,0.116]]},
+  cuprite:{A:[[0,0,0],[0,0.5,0.5],[0.5,0,0.5],[0.5,0.5,0]],B:[[0.25,0.25,0.25],[0.75,0.75,0.75]]},
+  cdi2:{A:[[0,0,0]],B:[[0.333333,0.666667,0.748],[0.666667,0.333333,0.252]]},
+  corundum:{A:[[0,0,0.14784],[0,0,0.35216],[0,0,0.64784],[0,0,0.85216],[0.333333,0.666667,0.018827],[0.333333,0.666667,0.314507],[0.333333,0.666667,0.518827],[0.333333,0.666667,0.814507],[0.666667,0.333333,0.185493],[0.666667,0.333333,0.481173],[0.666667,0.333333,0.685493],[0.666667,0.333333,0.981173]],B:[[0,0.3061,0.75],[0,0.6939,0.25],[0.027233,0.360567,0.416667],[0.027233,0.666667,0.916667],[0.3061,0,0.75],[0.3061,0.3061,0.25],[0.333333,0.360567,0.916667],[0.333333,0.972767,0.416667],[0.360567,0.027233,0.083333],[0.360567,0.333333,0.583333],[0.639433,0.666667,0.416667],[0.639433,0.972767,0.916667],[0.666667,0.027233,0.583333],[0.666667,0.639433,0.083333],[0.6939,0,0.25],[0.6939,0.6939,0.75],[0.972767,0.333333,0.083333],[0.972767,0.639433,0.583333]]},
+  perovskite:{A:[[0,0,0]],B:[[0.5,0.5,0.5]],C:[[0,0.5,0.5],[0.5,0,0.5],[0.5,0.5,0]]},
+  spinel:{A:[[0.125,0.125,0.625],[0.125,0.625,0.125],[0.375,0.375,0.375],[0.375,0.875,0.875],[0.625,0.125,0.125],[0.625,0.625,0.625],[0.875,0.375,0.875],[0.875,0.875,0.375]],B:[[0,0,0],[0,0.25,0.25],[0,0.5,0.5],[0,0.75,0.75],[0.25,0,0.25],[0.25,0.25,0],[0.25,0.5,0.75],[0.25,0.75,0.5],[0.5,0,0.5],[0.5,0.25,0.75],[0.5,0.5,0],[0.5,0.75,0.25],[0.75,0,0.75],[0.75,0.25,0.5],[0.75,0.5,0.25],[0.75,0.75,0]],C:[[0.0124,0.0124,0.2376],[0.0124,0.2376,0.0124],[0.0124,0.5124,0.7376],[0.0124,0.7376,0.5124],[0.2376,0.0124,0.0124],[0.2376,0.2376,0.2376],[0.2376,0.5124,0.5124],[0.2376,0.7376,0.7376],[0.2624,0.2624,0.7624],[0.2624,0.4876,0.9876],[0.2624,0.7624,0.2624],[0.2624,0.9876,0.4876],[0.4876,0.2624,0.9876],[0.4876,0.4876,0.7624],[0.4876,0.7624,0.4876],[0.4876,0.9876,0.2624],[0.5124,0.0124,0.7376],[0.5124,0.2376,0.5124],[0.5124,0.5124,0.2376],[0.5124,0.7376,0.0124],[0.7376,0.0124,0.5124],[0.7376,0.2376,0.7376],[0.7376,0.5124,0.0124],[0.7376,0.7376,0.2376],[0.7624,0.2624,0.2624],[0.7624,0.4876,0.4876],[0.7624,0.7624,0.7624],[0.7624,0.9876,0.9876],[0.9876,0.2624,0.4876],[0.9876,0.4876,0.2624],[0.9876,0.7624,0.9876],[0.9876,0.9876,0.7624]]},
+  calcite:{A:[[0,0,0],[0,0,0.5],[0.333333,0.666667,0.166667],[0.333333,0.666667,0.666667],[0.666667,0.333333,0.333333],[0.666667,0.333333,0.833333]],B:[[0,0,0.25],[0,0,0.75],[0.333333,0.666667,0.416667],[0.333333,0.666667,0.916667],[0.666667,0.333333,0.083333],[0.666667,0.333333,0.583333]],C:[[0,0.2553,0.25],[0,0.7447,0.75],[0.078033,0.411367,0.916667],[0.078033,0.666667,0.416667],[0.2553,0,0.25],[0.2553,0.2553,0.75],[0.333333,0.411367,0.416667],[0.333333,0.921967,0.916667],[0.411367,0.078033,0.583333],[0.411367,0.333333,0.083333],[0.588633,0.666667,0.916667],[0.588633,0.921967,0.416667],[0.666667,0.078033,0.083333],[0.666667,0.588633,0.583333],[0.7447,0,0.75],[0.7447,0.7447,0.25],[0.921967,0.333333,0.583333],[0.921967,0.588633,0.083333]]},
+  zircon:{A:[[0,0.25,0.375],[0,0.75,0.625],[0.5,0.25,0.125],[0.5,0.75,0.875]],B:[[0,0.25,0.875],[0,0.75,0.125],[0.5,0.25,0.625],[0.5,0.75,0.375]],C:[[0,0.066,0.6951],[0,0.434,0.6951],[0,0.566,0.3049],[0,0.934,0.3049],[0.184,0.25,0.0549],[0.184,0.75,0.9451],[0.316,0.25,0.4451],[0.316,0.75,0.5549],[0.5,0.066,0.8049],[0.5,0.434,0.8049],[0.5,0.566,0.1951],[0.5,0.934,0.1951],[0.684,0.25,0.4451],[0.684,0.75,0.5549],[0.816,0.25,0.0549],[0.816,0.75,0.9451]]}
+  };
+  /** Conventional cubic cells and hexagonal/tetragonal cells; A/B(/C) are chemical roles. */
+  function build({kind,a,cOverA=Math.sqrt(8/3),u,repeats,elementA,elementB,elementC}){
+    const p=Object.hasOwn(prototypes,kind)?prototypes[kind]:null;
+    if(!p||!Number.isFinite(a)||a<1||a>20||!Array.isArray(repeats)||repeats.length!==3||repeats.some(n=>!Number.isInteger(n)||n<1||n>8)) throw Error('请检查晶格、晶格常数和超胞尺寸');
+    if(p.system!=='cubic'&&(!Number.isFinite(cOverA)||cOverA<.2||cOverA>8)) throw Error('c/a 范围为 0.2–8');
+    u=u??p.u;
+    if(p.u!==undefined&&(!Number.isFinite(u)||u<=0||u>=1))throw Error('内部坐标 u 必须在 0 与 1 之间');
+    const primitive=p.system==='hexagonal'?[[a,0,0],[-a/2,a*Math.sqrt(3)/2,0],[0,0,a*cOverA]]:[[a,0,0],[0,a,0],[0,0,p.system==='tetragonal'?a*cOverA:a]];
+    const fcc=[[0,0,0],[0,.5,.5],[.5,0,.5],[.5,.5,0]], body=[[0,0,0],[.5,.5,.5]];
+    const tetra=[];for(const x of [.25,.75])for(const y of [.25,.75])for(const z of [.25,.75])tetra.push([x,y,z]);
+    const roles=p.ratio?p.ratio.length:1; // 1 = pure element (site all)
+    let groups=[];
+    if(CELLS[kind]){
+      const C=CELLS[kind];
+      groups=[C.A||[],C.B||[],C.C||[]].filter(g=>g.length);
+    } else {
+      let aa,bb=[];
+      switch(kind){
+        case 'FCC':aa=fcc;break;
+        case 'BCC':aa=body;break;
+        case 'HCP':aa=[[0,0,0],[2/3,1/3,.5]];break;
+        case 'B2':aa=[body[0]];bb=[body[1]];break;
+        case 'B1':aa=fcc;bb=fcc.map(f=>[f[0]+.5,f[1],f[2]]);break;
+        case 'B3':aa=fcc;bb=fcc.map(f=>f.map(x=>x+.25));break;
+        case 'B4':aa=[[1/3,2/3,0],[2/3,1/3,.5]];bb=aa.map(f=>[f[0],f[1],f[2]+u]);break;
+        case 'fluorite':aa=fcc;bb=tetra;break;
+        case 'antifluorite':aa=tetra;bb=fcc;break;
+        case 'rutile':aa=body;bb=[[u,u,0],[-u,-u,0],[.5-u,.5+u,.5],[.5+u,.5-u,.5]];break;
+        case 'NiAs':aa=[[0,0,0],[0,0,.5]];bb=[[1/3,2/3,.25],[2/3,1/3,.75]];break;
+        case 'hBN':aa=[[1/3,2/3,.25],[2/3,1/3,.75]];bb=[[2/3,1/3,.25],[1/3,2/3,.75]];break;
+        case 'MoS2':aa=[[1/3,2/3,.25],[2/3,1/3,.75]];bb=[[1/3,2/3,u],[2/3,1/3,u+.5],[2/3,1/3,-u],[1/3,2/3,.5-u]];break;
+      }
+      groups=[aa,...(bb.length?[bb]:[])];
+    }
+    const basis=[],siteOf=[],roleEl=[];
+    const els=[elementA,elementB,elementC];
+    groups.forEach((g,r)=>{
+      const site=roles>1?String.fromCharCode(65+r):'all';
+      g.forEach(f=>{basis.push(f);siteOf.push(site);roleEl.push(els[r]??elementA);});
+    });
+    const folded=basis.map(f=>f.map(x=>((x%1)+1)%1));
+    if(repeats.reduce((s,n)=>s*n,folded.length)>512) throw Error('超胞最多 512 个原子');
     const s={cell:primitive.map((v,i)=>v.map(x=>x*repeats[i])),pbc:[true,true,true],atoms:[]};
-    for(let i=0;i<repeats[0];i++) for(let j=0;j<repeats[1];j++) for(let k=0;k<repeats[2];k++) basis.forEach((f,b)=>s.atoms.push({id:`${i}-${j}-${k}-${b}`,element:kind==='B2'&&b===1?elementB:elementA,position:cartesian(f.map((x,d)=>x+[i,j,k][d]),primitive),site:kind==='B2'?(b===0?'A':'B'):'all'}));
+    for(let i=0;i<repeats[0];i++) for(let j=0;j<repeats[1];j++) for(let k=0;k<repeats[2];k++) folded.forEach((f,b)=>s.atoms.push({id:`${i}-${j}-${k}-${b}`,element:roleEl[b],position:cartesian(f.map((x,d)=>x+[i,j,k][d]),primitive),site:siteOf[b]}));
     return validate(s);
   }
-  /** Display-only periodic copies on the closed cell; each source retains total weight one. */
-  function boundaryImages(s){
-    const images=[], tolerance=1e-7;
+  /** Display-only periodic copies on the closed cell; each source retains total weight one.
+   * boundarySlopA (Å) widens boundary membership for atoms that relaxed slightly off the
+   * ideal face planes (kept well below the smallest displayed sphere radius ~0.32 Å so
+   * genuinely interior atoms are never mirrored). Default 0 = strict ideal-boundary test. */
+  function boundaryImages(s,boundarySlopA=0){
+    const images=[], rec=boundarySlopA>0?reciprocal(s.cell):null;
     s.atoms.forEach((a,index)=>{
       const f=fractional(a.position,s.cell);
       const shifts=f.map((x,axis)=>{
         if(!s.pbc[axis])return [0];
         const integer=Math.round(x);
+        const tolerance=boundarySlopA>0?boundarySlopA*Math.hypot(...rec[axis]):1e-7;
         return Math.abs(x-integer)<=tolerance?[-integer,1-integer]:[-Math.floor(x)];
       });
       const weight=1/shifts.reduce((n,values)=>n*values.length,1);
@@ -2806,9 +2885,2923 @@ const CrystalCore = (() => {
     if(!Array.isArray(r.frames)||r.frames.length>501||r.frames.some(f=>!f||!Number.isInteger(f.step)||!finite(f.energy)||!finite(f.maxForce)||!Array.isArray(f.positions)||f.positions.length!==r.initial.atoms.length||!f.positions.every(vec)||!Array.isArray(f.cell)||f.cell.length!==3||!f.cell.every(vec)))throw Error('无效的计算帧');
     return r;
   }
-  return {symbols,clone,validate,validateResult,build,fractional,cartesian,minimumImage,boundaryImages,neighbors,substitute,remove,randomIds,compare,toXYZ,volume};
+  return {symbols,prototypes,clone,validate,validateResult,build,fractional,cartesian,minimumImage,boundaryImages,neighbors,substitute,remove,randomIds,compare,toXYZ,volume};
 })();
 
+/* Rounded starting guesses, not an experimental lattice-constant database.
+ * Prototype geometry sources and parameter conventions: docs/CRYSTAL_TEMPLATES.md.
+ * Row: name, 1–3 element symbols (roles follow the kind: 1 pure, 2 A/B, 3 A/B/C),
+ * a (Å), optional c (Å), optional fractional internal parameter. */
+const CrystalTemplates=[
+ {
+  "id": "FCC-Cu",
+  "name": "Cu",
+  "kind": "FCC",
+  "elements": [
+   "Cu"
+  ],
+  "elementA": "Cu",
+  "a": 3.615
+ },
+ {
+  "id": "FCC-Ag",
+  "name": "Ag",
+  "kind": "FCC",
+  "elements": [
+   "Ag"
+  ],
+  "elementA": "Ag",
+  "a": 4.085
+ },
+ {
+  "id": "FCC-Au",
+  "name": "Au",
+  "kind": "FCC",
+  "elements": [
+   "Au"
+  ],
+  "elementA": "Au",
+  "a": 4.078
+ },
+ {
+  "id": "FCC-Al",
+  "name": "Al",
+  "kind": "FCC",
+  "elements": [
+   "Al"
+  ],
+  "elementA": "Al",
+  "a": 4.05
+ },
+ {
+  "id": "FCC-Ni",
+  "name": "Ni",
+  "kind": "FCC",
+  "elements": [
+   "Ni"
+  ],
+  "elementA": "Ni",
+  "a": 3.524
+ },
+ {
+  "id": "FCC-Pt",
+  "name": "Pt",
+  "kind": "FCC",
+  "elements": [
+   "Pt"
+  ],
+  "elementA": "Pt",
+  "a": 3.924
+ },
+ {
+  "id": "FCC-Pd",
+  "name": "Pd",
+  "kind": "FCC",
+  "elements": [
+   "Pd"
+  ],
+  "elementA": "Pd",
+  "a": 3.89
+ },
+ {
+  "id": "FCC-Pb",
+  "name": "Pb",
+  "kind": "FCC",
+  "elements": [
+   "Pb"
+  ],
+  "elementA": "Pb",
+  "a": 4.95
+ },
+ {
+  "id": "FCC-Rh",
+  "name": "Rh",
+  "kind": "FCC",
+  "elements": [
+   "Rh"
+  ],
+  "elementA": "Rh",
+  "a": 3.8
+ },
+ {
+  "id": "FCC-Ir",
+  "name": "Ir",
+  "kind": "FCC",
+  "elements": [
+   "Ir"
+  ],
+  "elementA": "Ir",
+  "a": 3.84
+ },
+ {
+  "id": "BCC-Fe",
+  "name": "Fe",
+  "kind": "BCC",
+  "elements": [
+   "Fe"
+  ],
+  "elementA": "Fe",
+  "a": 2.8665
+ },
+ {
+  "id": "BCC-Cr",
+  "name": "Cr",
+  "kind": "BCC",
+  "elements": [
+   "Cr"
+  ],
+  "elementA": "Cr",
+  "a": 2.884
+ },
+ {
+  "id": "BCC-W",
+  "name": "W",
+  "kind": "BCC",
+  "elements": [
+   "W"
+  ],
+  "elementA": "W",
+  "a": 3.165
+ },
+ {
+  "id": "BCC-Mo",
+  "name": "Mo",
+  "kind": "BCC",
+  "elements": [
+   "Mo"
+  ],
+  "elementA": "Mo",
+  "a": 3.147
+ },
+ {
+  "id": "BCC-V",
+  "name": "V",
+  "kind": "BCC",
+  "elements": [
+   "V"
+  ],
+  "elementA": "V",
+  "a": 3.024
+ },
+ {
+  "id": "BCC-Nb",
+  "name": "Nb",
+  "kind": "BCC",
+  "elements": [
+   "Nb"
+  ],
+  "elementA": "Nb",
+  "a": 3.3
+ },
+ {
+  "id": "BCC-Ta",
+  "name": "Ta",
+  "kind": "BCC",
+  "elements": [
+   "Ta"
+  ],
+  "elementA": "Ta",
+  "a": 3.306
+ },
+ {
+  "id": "BCC-Li",
+  "name": "Li",
+  "kind": "BCC",
+  "elements": [
+   "Li"
+  ],
+  "elementA": "Li",
+  "a": 3.51
+ },
+ {
+  "id": "BCC-Na",
+  "name": "Na",
+  "kind": "BCC",
+  "elements": [
+   "Na"
+  ],
+  "elementA": "Na",
+  "a": 4.29
+ },
+ {
+  "id": "BCC-K",
+  "name": "K",
+  "kind": "BCC",
+  "elements": [
+   "K"
+  ],
+  "elementA": "K",
+  "a": 5.33
+ },
+ {
+  "id": "HCP-Mg",
+  "name": "Mg",
+  "kind": "HCP",
+  "elements": [
+   "Mg"
+  ],
+  "elementA": "Mg",
+  "a": 3.209,
+  "cOverA": 1.6238703645995638
+ },
+ {
+  "id": "HCP-Zn",
+  "name": "Zn",
+  "kind": "HCP",
+  "elements": [
+   "Zn"
+  ],
+  "elementA": "Zn",
+  "a": 2.665,
+  "cOverA": 1.8562851782363978
+ },
+ {
+  "id": "HCP-Ti",
+  "name": "Ti",
+  "kind": "HCP",
+  "elements": [
+   "Ti"
+  ],
+  "elementA": "Ti",
+  "a": 2.951,
+  "cOverA": 1.5875974246018296
+ },
+ {
+  "id": "HCP-Zr",
+  "name": "Zr",
+  "kind": "HCP",
+  "elements": [
+   "Zr"
+  ],
+  "elementA": "Zr",
+  "a": 3.232,
+  "cOverA": 1.5925123762376237
+ },
+ {
+  "id": "HCP-Co",
+  "name": "Co",
+  "kind": "HCP",
+  "elements": [
+   "Co"
+  ],
+  "elementA": "Co",
+  "a": 2.507,
+  "cOverA": 1.6234543278819307
+ },
+ {
+  "id": "HCP-Cd",
+  "name": "Cd",
+  "kind": "HCP",
+  "elements": [
+   "Cd"
+  ],
+  "elementA": "Cd",
+  "a": 2.979,
+  "cOverA": 1.8858677408526352
+ },
+ {
+  "id": "HCP-Be",
+  "name": "Be",
+  "kind": "HCP",
+  "elements": [
+   "Be"
+  ],
+  "elementA": "Be",
+  "a": 2.286,
+  "cOverA": 1.5678040244969378
+ },
+ {
+  "id": "HCP-Ru",
+  "name": "Ru",
+  "kind": "HCP",
+  "elements": [
+   "Ru"
+  ],
+  "elementA": "Ru",
+  "a": 2.706,
+  "cOverA": 1.582409460458241
+ },
+ {
+  "id": "HCP-Os",
+  "name": "Os",
+  "kind": "HCP",
+  "elements": [
+   "Os"
+  ],
+  "elementA": "Os",
+  "a": 2.734,
+  "cOverA": 1.580102414045355
+ },
+ {
+  "id": "diamond-C(金刚石)",
+  "name": "C(金刚石)",
+  "kind": "diamond",
+  "elements": [
+   "C"
+  ],
+  "elementA": "C",
+  "a": 3.567
+ },
+ {
+  "id": "diamond-Si",
+  "name": "Si",
+  "kind": "diamond",
+  "elements": [
+   "Si"
+  ],
+  "elementA": "Si",
+  "a": 5.431
+ },
+ {
+  "id": "diamond-Ge",
+  "name": "Ge",
+  "kind": "diamond",
+  "elements": [
+   "Ge"
+  ],
+  "elementA": "Ge",
+  "a": 5.658
+ },
+ {
+  "id": "diamond-Sn(灰锡)",
+  "name": "Sn(灰锡)",
+  "kind": "diamond",
+  "elements": [
+   "Sn"
+  ],
+  "elementA": "Sn",
+  "a": 6.489
+ },
+ {
+  "id": "graphite-C(石墨)",
+  "name": "C(石墨)",
+  "kind": "graphite",
+  "elements": [
+   "C"
+  ],
+  "elementA": "C",
+  "a": 2.464,
+  "cOverA": 2.72362012987013
+ },
+ {
+  "id": "B1-NaCl",
+  "name": "NaCl",
+  "kind": "B1",
+  "elements": [
+   "Na",
+   "Cl"
+  ],
+  "elementA": "Na",
+  "elementB": "Cl",
+  "a": 5.64
+ },
+ {
+  "id": "B1-KCl",
+  "name": "KCl",
+  "kind": "B1",
+  "elements": [
+   "K",
+   "Cl"
+  ],
+  "elementA": "K",
+  "elementB": "Cl",
+  "a": 6.29
+ },
+ {
+  "id": "B1-KBr",
+  "name": "KBr",
+  "kind": "B1",
+  "elements": [
+   "K",
+   "Br"
+  ],
+  "elementA": "K",
+  "elementB": "Br",
+  "a": 6.6
+ },
+ {
+  "id": "B1-KI",
+  "name": "KI",
+  "kind": "B1",
+  "elements": [
+   "K",
+   "I"
+  ],
+  "elementA": "K",
+  "elementB": "I",
+  "a": 7.07
+ },
+ {
+  "id": "B1-LiF",
+  "name": "LiF",
+  "kind": "B1",
+  "elements": [
+   "Li",
+   "F"
+  ],
+  "elementA": "Li",
+  "elementB": "F",
+  "a": 4.03
+ },
+ {
+  "id": "B1-LiCl",
+  "name": "LiCl",
+  "kind": "B1",
+  "elements": [
+   "Li",
+   "Cl"
+  ],
+  "elementA": "Li",
+  "elementB": "Cl",
+  "a": 5.14
+ },
+ {
+  "id": "B1-NaF",
+  "name": "NaF",
+  "kind": "B1",
+  "elements": [
+   "Na",
+   "F"
+  ],
+  "elementA": "Na",
+  "elementB": "F",
+  "a": 4.63
+ },
+ {
+  "id": "B1-NaBr",
+  "name": "NaBr",
+  "kind": "B1",
+  "elements": [
+   "Na",
+   "Br"
+  ],
+  "elementA": "Na",
+  "elementB": "Br",
+  "a": 5.97
+ },
+ {
+  "id": "B1-NaI",
+  "name": "NaI",
+  "kind": "B1",
+  "elements": [
+   "Na",
+   "I"
+  ],
+  "elementA": "Na",
+  "elementB": "I",
+  "a": 6.47
+ },
+ {
+  "id": "B1-RbCl",
+  "name": "RbCl",
+  "kind": "B1",
+  "elements": [
+   "Rb",
+   "Cl"
+  ],
+  "elementA": "Rb",
+  "elementB": "Cl",
+  "a": 6.59
+ },
+ {
+  "id": "B1-RbBr",
+  "name": "RbBr",
+  "kind": "B1",
+  "elements": [
+   "Rb",
+   "Br"
+  ],
+  "elementA": "Rb",
+  "elementB": "Br",
+  "a": 6.89
+ },
+ {
+  "id": "B1-RbI",
+  "name": "RbI",
+  "kind": "B1",
+  "elements": [
+   "Rb",
+   "I"
+  ],
+  "elementA": "Rb",
+  "elementB": "I",
+  "a": 7.34
+ },
+ {
+  "id": "B1-CsF",
+  "name": "CsF",
+  "kind": "B1",
+  "elements": [
+   "Cs",
+   "F"
+  ],
+  "elementA": "Cs",
+  "elementB": "F",
+  "a": 6.01
+ },
+ {
+  "id": "B1-MgO",
+  "name": "MgO",
+  "kind": "B1",
+  "elements": [
+   "Mg",
+   "O"
+  ],
+  "elementA": "Mg",
+  "elementB": "O",
+  "a": 4.21
+ },
+ {
+  "id": "B1-CaO",
+  "name": "CaO",
+  "kind": "B1",
+  "elements": [
+   "Ca",
+   "O"
+  ],
+  "elementA": "Ca",
+  "elementB": "O",
+  "a": 4.81
+ },
+ {
+  "id": "B1-SrO",
+  "name": "SrO",
+  "kind": "B1",
+  "elements": [
+   "Sr",
+   "O"
+  ],
+  "elementA": "Sr",
+  "elementB": "O",
+  "a": 5.16
+ },
+ {
+  "id": "B1-BaO",
+  "name": "BaO",
+  "kind": "B1",
+  "elements": [
+   "Ba",
+   "O"
+  ],
+  "elementA": "Ba",
+  "elementB": "O",
+  "a": 5.52
+ },
+ {
+  "id": "B1-NiO",
+  "name": "NiO",
+  "kind": "B1",
+  "elements": [
+   "Ni",
+   "O"
+  ],
+  "elementA": "Ni",
+  "elementB": "O",
+  "a": 4.18
+ },
+ {
+  "id": "B1-CoO",
+  "name": "CoO",
+  "kind": "B1",
+  "elements": [
+   "Co",
+   "O"
+  ],
+  "elementA": "Co",
+  "elementB": "O",
+  "a": 4.27
+ },
+ {
+  "id": "B1-MnO",
+  "name": "MnO",
+  "kind": "B1",
+  "elements": [
+   "Mn",
+   "O"
+  ],
+  "elementA": "Mn",
+  "elementB": "O",
+  "a": 4.44
+ },
+ {
+  "id": "B1-FeO",
+  "name": "FeO",
+  "kind": "B1",
+  "elements": [
+   "Fe",
+   "O"
+  ],
+  "elementA": "Fe",
+  "elementB": "O",
+  "a": 4.33
+ },
+ {
+  "id": "B1-CdO",
+  "name": "CdO",
+  "kind": "B1",
+  "elements": [
+   "Cd",
+   "O"
+  ],
+  "elementA": "Cd",
+  "elementB": "O",
+  "a": 4.7
+ },
+ {
+  "id": "B1-AgCl",
+  "name": "AgCl",
+  "kind": "B1",
+  "elements": [
+   "Ag",
+   "Cl"
+  ],
+  "elementA": "Ag",
+  "elementB": "Cl",
+  "a": 5.55
+ },
+ {
+  "id": "B1-AgBr",
+  "name": "AgBr",
+  "kind": "B1",
+  "elements": [
+   "Ag",
+   "Br"
+  ],
+  "elementA": "Ag",
+  "elementB": "Br",
+  "a": 5.77
+ },
+ {
+  "id": "B1-TiN",
+  "name": "TiN",
+  "kind": "B1",
+  "elements": [
+   "Ti",
+   "N"
+  ],
+  "elementA": "Ti",
+  "elementB": "N",
+  "a": 4.24
+ },
+ {
+  "id": "B1-TiC",
+  "name": "TiC",
+  "kind": "B1",
+  "elements": [
+   "Ti",
+   "C"
+  ],
+  "elementA": "Ti",
+  "elementB": "C",
+  "a": 4.33
+ },
+ {
+  "id": "B1-ZrN",
+  "name": "ZrN",
+  "kind": "B1",
+  "elements": [
+   "Zr",
+   "N"
+  ],
+  "elementA": "Zr",
+  "elementB": "N",
+  "a": 4.58
+ },
+ {
+  "id": "B1-HfN",
+  "name": "HfN",
+  "kind": "B1",
+  "elements": [
+   "Hf",
+   "N"
+  ],
+  "elementA": "Hf",
+  "elementB": "N",
+  "a": 4.52
+ },
+ {
+  "id": "B1-ScN",
+  "name": "ScN",
+  "kind": "B1",
+  "elements": [
+   "Sc",
+   "N"
+  ],
+  "elementA": "Sc",
+  "elementB": "N",
+  "a": 4.5
+ },
+ {
+  "id": "B1-CrN",
+  "name": "CrN",
+  "kind": "B1",
+  "elements": [
+   "Cr",
+   "N"
+  ],
+  "elementA": "Cr",
+  "elementB": "N",
+  "a": 4.14
+ },
+ {
+  "id": "B1-PbS",
+  "name": "PbS",
+  "kind": "B1",
+  "elements": [
+   "Pb",
+   "S"
+  ],
+  "elementA": "Pb",
+  "elementB": "S",
+  "a": 5.94
+ },
+ {
+  "id": "B1-PbSe",
+  "name": "PbSe",
+  "kind": "B1",
+  "elements": [
+   "Pb",
+   "Se"
+  ],
+  "elementA": "Pb",
+  "elementB": "Se",
+  "a": 6.12
+ },
+ {
+  "id": "B1-PbTe",
+  "name": "PbTe",
+  "kind": "B1",
+  "elements": [
+   "Pb",
+   "Te"
+  ],
+  "elementA": "Pb",
+  "elementB": "Te",
+  "a": 6.46
+ },
+ {
+  "id": "B1-SnTe",
+  "name": "SnTe",
+  "kind": "B1",
+  "elements": [
+   "Sn",
+   "Te"
+  ],
+  "elementA": "Sn",
+  "elementB": "Te",
+  "a": 6.33
+ },
+ {
+  "id": "B1-BaS",
+  "name": "BaS",
+  "kind": "B1",
+  "elements": [
+   "Ba",
+   "S"
+  ],
+  "elementA": "Ba",
+  "elementB": "S",
+  "a": 6.39
+ },
+ {
+  "id": "B2-CsCl",
+  "name": "CsCl",
+  "kind": "B2",
+  "elements": [
+   "Cs",
+   "Cl"
+  ],
+  "elementA": "Cs",
+  "elementB": "Cl",
+  "a": 4.12
+ },
+ {
+  "id": "B2-CsBr",
+  "name": "CsBr",
+  "kind": "B2",
+  "elements": [
+   "Cs",
+   "Br"
+  ],
+  "elementA": "Cs",
+  "elementB": "Br",
+  "a": 4.29
+ },
+ {
+  "id": "B2-CsI",
+  "name": "CsI",
+  "kind": "B2",
+  "elements": [
+   "Cs",
+   "I"
+  ],
+  "elementA": "Cs",
+  "elementB": "I",
+  "a": 4.57
+ },
+ {
+  "id": "B2-TlCl",
+  "name": "TlCl",
+  "kind": "B2",
+  "elements": [
+   "Tl",
+   "Cl"
+  ],
+  "elementA": "Tl",
+  "elementB": "Cl",
+  "a": 3.84
+ },
+ {
+  "id": "B2-TlBr",
+  "name": "TlBr",
+  "kind": "B2",
+  "elements": [
+   "Tl",
+   "Br"
+  ],
+  "elementA": "Tl",
+  "elementB": "Br",
+  "a": 3.97
+ },
+ {
+  "id": "B2-TlI",
+  "name": "TlI",
+  "kind": "B2",
+  "elements": [
+   "Tl",
+   "I"
+  ],
+  "elementA": "Tl",
+  "elementB": "I",
+  "a": 4.2
+ },
+ {
+  "id": "B2-NiAl",
+  "name": "NiAl",
+  "kind": "B2",
+  "elements": [
+   "Ni",
+   "Al"
+  ],
+  "elementA": "Ni",
+  "elementB": "Al",
+  "a": 2.88
+ },
+ {
+  "id": "B2-FeAl",
+  "name": "FeAl",
+  "kind": "B2",
+  "elements": [
+   "Fe",
+   "Al"
+  ],
+  "elementA": "Fe",
+  "elementB": "Al",
+  "a": 2.9
+ },
+ {
+  "id": "B2-CoAl",
+  "name": "CoAl",
+  "kind": "B2",
+  "elements": [
+   "Co",
+   "Al"
+  ],
+  "elementA": "Co",
+  "elementB": "Al",
+  "a": 2.86
+ },
+ {
+  "id": "B2-CuZn",
+  "name": "CuZn",
+  "kind": "B2",
+  "elements": [
+   "Cu",
+   "Zn"
+  ],
+  "elementA": "Cu",
+  "elementB": "Zn",
+  "a": 2.96
+ },
+ {
+  "id": "B2-CuBe",
+  "name": "CuBe",
+  "kind": "B2",
+  "elements": [
+   "Cu",
+   "Be"
+  ],
+  "elementA": "Cu",
+  "elementB": "Be",
+  "a": 2.7
+ },
+ {
+  "id": "B2-AgMg",
+  "name": "AgMg",
+  "kind": "B2",
+  "elements": [
+   "Ag",
+   "Mg"
+  ],
+  "elementA": "Ag",
+  "elementB": "Mg",
+  "a": 3.33
+ },
+ {
+  "id": "B2-AuZn",
+  "name": "AuZn",
+  "kind": "B2",
+  "elements": [
+   "Au",
+   "Zn"
+  ],
+  "elementA": "Au",
+  "elementB": "Zn",
+  "a": 3.19
+ },
+ {
+  "id": "B3-ZnS",
+  "name": "ZnS",
+  "kind": "B3",
+  "elements": [
+   "Zn",
+   "S"
+  ],
+  "elementA": "Zn",
+  "elementB": "S",
+  "a": 5.41
+ },
+ {
+  "id": "B3-ZnSe",
+  "name": "ZnSe",
+  "kind": "B3",
+  "elements": [
+   "Zn",
+   "Se"
+  ],
+  "elementA": "Zn",
+  "elementB": "Se",
+  "a": 5.67
+ },
+ {
+  "id": "B3-ZnTe",
+  "name": "ZnTe",
+  "kind": "B3",
+  "elements": [
+   "Zn",
+   "Te"
+  ],
+  "elementA": "Zn",
+  "elementB": "Te",
+  "a": 6.1
+ },
+ {
+  "id": "B3-CdTe",
+  "name": "CdTe",
+  "kind": "B3",
+  "elements": [
+   "Cd",
+   "Te"
+  ],
+  "elementA": "Cd",
+  "elementB": "Te",
+  "a": 6.48
+ },
+ {
+  "id": "B3-HgS",
+  "name": "HgS",
+  "kind": "B3",
+  "elements": [
+   "Hg",
+   "S"
+  ],
+  "elementA": "Hg",
+  "elementB": "S",
+  "a": 5.85
+ },
+ {
+  "id": "B3-HgSe",
+  "name": "HgSe",
+  "kind": "B3",
+  "elements": [
+   "Hg",
+   "Se"
+  ],
+  "elementA": "Hg",
+  "elementB": "Se",
+  "a": 6.08
+ },
+ {
+  "id": "B3-HgTe",
+  "name": "HgTe",
+  "kind": "B3",
+  "elements": [
+   "Hg",
+   "Te"
+  ],
+  "elementA": "Hg",
+  "elementB": "Te",
+  "a": 6.46
+ },
+ {
+  "id": "B3-GaAs",
+  "name": "GaAs",
+  "kind": "B3",
+  "elements": [
+   "Ga",
+   "As"
+  ],
+  "elementA": "Ga",
+  "elementB": "As",
+  "a": 5.65
+ },
+ {
+  "id": "B3-GaP",
+  "name": "GaP",
+  "kind": "B3",
+  "elements": [
+   "Ga",
+   "P"
+  ],
+  "elementA": "Ga",
+  "elementB": "P",
+  "a": 5.45
+ },
+ {
+  "id": "B3-GaSb",
+  "name": "GaSb",
+  "kind": "B3",
+  "elements": [
+   "Ga",
+   "Sb"
+  ],
+  "elementA": "Ga",
+  "elementB": "Sb",
+  "a": 6.1
+ },
+ {
+  "id": "B3-InP",
+  "name": "InP",
+  "kind": "B3",
+  "elements": [
+   "In",
+   "P"
+  ],
+  "elementA": "In",
+  "elementB": "P",
+  "a": 5.87
+ },
+ {
+  "id": "B3-InAs",
+  "name": "InAs",
+  "kind": "B3",
+  "elements": [
+   "In",
+   "As"
+  ],
+  "elementA": "In",
+  "elementB": "As",
+  "a": 6.06
+ },
+ {
+  "id": "B3-InSb",
+  "name": "InSb",
+  "kind": "B3",
+  "elements": [
+   "In",
+   "Sb"
+  ],
+  "elementA": "In",
+  "elementB": "Sb",
+  "a": 6.48
+ },
+ {
+  "id": "B3-AlAs",
+  "name": "AlAs",
+  "kind": "B3",
+  "elements": [
+   "Al",
+   "As"
+  ],
+  "elementA": "Al",
+  "elementB": "As",
+  "a": 5.66
+ },
+ {
+  "id": "B3-AlP",
+  "name": "AlP",
+  "kind": "B3",
+  "elements": [
+   "Al",
+   "P"
+  ],
+  "elementA": "Al",
+  "elementB": "P",
+  "a": 5.46
+ },
+ {
+  "id": "B3-AlSb",
+  "name": "AlSb",
+  "kind": "B3",
+  "elements": [
+   "Al",
+   "Sb"
+  ],
+  "elementA": "Al",
+  "elementB": "Sb",
+  "a": 6.14
+ },
+ {
+  "id": "B3-BP",
+  "name": "BP",
+  "kind": "B3",
+  "elements": [
+   "B",
+   "P"
+  ],
+  "elementA": "B",
+  "elementB": "P",
+  "a": 4.54
+ },
+ {
+  "id": "B3-BAs",
+  "name": "BAs",
+  "kind": "B3",
+  "elements": [
+   "B",
+   "As"
+  ],
+  "elementA": "B",
+  "elementB": "As",
+  "a": 4.78
+ },
+ {
+  "id": "B3-3C-SiC",
+  "name": "3C-SiC",
+  "kind": "B3",
+  "elements": [
+   "Si",
+   "C"
+  ],
+  "elementA": "Si",
+  "elementB": "C",
+  "a": 4.36
+ },
+ {
+  "id": "B3-c-BN",
+  "name": "c-BN",
+  "kind": "B3",
+  "elements": [
+   "B",
+   "N"
+  ],
+  "elementA": "B",
+  "elementB": "N",
+  "a": 3.62
+ },
+ {
+  "id": "B3-CuCl",
+  "name": "CuCl",
+  "kind": "B3",
+  "elements": [
+   "Cu",
+   "Cl"
+  ],
+  "elementA": "Cu",
+  "elementB": "Cl",
+  "a": 5.42
+ },
+ {
+  "id": "B3-CuBr",
+  "name": "CuBr",
+  "kind": "B3",
+  "elements": [
+   "Cu",
+   "Br"
+  ],
+  "elementA": "Cu",
+  "elementB": "Br",
+  "a": 5.69
+ },
+ {
+  "id": "B3-CuI",
+  "name": "CuI",
+  "kind": "B3",
+  "elements": [
+   "Cu",
+   "I"
+  ],
+  "elementA": "Cu",
+  "elementB": "I",
+  "a": 6.05
+ },
+ {
+  "id": "B4-ZnO",
+  "name": "ZnO",
+  "kind": "B4",
+  "elements": [
+   "Zn",
+   "O"
+  ],
+  "elementA": "Zn",
+  "elementB": "O",
+  "a": 3.25,
+  "cOverA": 1.603076923076923,
+  "u": 0.382
+ },
+ {
+  "id": "B4-ZnS",
+  "name": "ZnS",
+  "kind": "B4",
+  "elements": [
+   "Zn",
+   "S"
+  ],
+  "elementA": "Zn",
+  "elementB": "S",
+  "a": 3.82,
+  "cOverA": 1.6387434554973823,
+  "u": 0.375
+ },
+ {
+  "id": "B4-ZnSe",
+  "name": "ZnSe",
+  "kind": "B4",
+  "elements": [
+   "Zn",
+   "Se"
+  ],
+  "elementA": "Zn",
+  "elementB": "Se",
+  "a": 4,
+  "cOverA": 1.635,
+  "u": 0.375
+ },
+ {
+  "id": "B4-CdS",
+  "name": "CdS",
+  "kind": "B4",
+  "elements": [
+   "Cd",
+   "S"
+  ],
+  "elementA": "Cd",
+  "elementB": "S",
+  "a": 4.14,
+  "cOverA": 1.6231884057971016,
+  "u": 0.377
+ },
+ {
+  "id": "B4-CdSe",
+  "name": "CdSe",
+  "kind": "B4",
+  "elements": [
+   "Cd",
+   "Se"
+  ],
+  "elementA": "Cd",
+  "elementB": "Se",
+  "a": 4.3,
+  "cOverA": 1.630232558139535,
+  "u": 0.376
+ },
+ {
+  "id": "B4-GaN",
+  "name": "GaN",
+  "kind": "B4",
+  "elements": [
+   "Ga",
+   "N"
+  ],
+  "elementA": "Ga",
+  "elementB": "N",
+  "a": 3.19,
+  "cOverA": 1.626959247648903,
+  "u": 0.377
+ },
+ {
+  "id": "B4-AlN",
+  "name": "AlN",
+  "kind": "B4",
+  "elements": [
+   "Al",
+   "N"
+  ],
+  "elementA": "Al",
+  "elementB": "N",
+  "a": 3.11,
+  "cOverA": 1.6012861736334407,
+  "u": 0.382
+ },
+ {
+  "id": "B4-InN",
+  "name": "InN",
+  "kind": "B4",
+  "elements": [
+   "In",
+   "N"
+  ],
+  "elementA": "In",
+  "elementB": "N",
+  "a": 3.54,
+  "cOverA": 1.6101694915254237,
+  "u": 0.379
+ },
+ {
+  "id": "B4-BeO",
+  "name": "BeO",
+  "kind": "B4",
+  "elements": [
+   "Be",
+   "O"
+  ],
+  "elementA": "Be",
+  "elementB": "O",
+  "a": 2.7,
+  "cOverA": 1.622222222222222,
+  "u": 0.378
+ },
+ {
+  "id": "B4-MgTe",
+  "name": "MgTe",
+  "kind": "B4",
+  "elements": [
+   "Mg",
+   "Te"
+  ],
+  "elementA": "Mg",
+  "elementB": "Te",
+  "a": 4.55,
+  "cOverA": 1.6285714285714286,
+  "u": 0.375
+ },
+ {
+  "id": "fluorite-CaF2",
+  "name": "CaF2",
+  "kind": "fluorite",
+  "elements": [
+   "Ca",
+   "F"
+  ],
+  "elementA": "Ca",
+  "elementB": "F",
+  "a": 5.46
+ },
+ {
+  "id": "fluorite-SrF2",
+  "name": "SrF2",
+  "kind": "fluorite",
+  "elements": [
+   "Sr",
+   "F"
+  ],
+  "elementA": "Sr",
+  "elementB": "F",
+  "a": 5.8
+ },
+ {
+  "id": "fluorite-BaF2",
+  "name": "BaF2",
+  "kind": "fluorite",
+  "elements": [
+   "Ba",
+   "F"
+  ],
+  "elementA": "Ba",
+  "elementB": "F",
+  "a": 6.2
+ },
+ {
+  "id": "fluorite-PbF2",
+  "name": "PbF2",
+  "kind": "fluorite",
+  "elements": [
+   "Pb",
+   "F"
+  ],
+  "elementA": "Pb",
+  "elementB": "F",
+  "a": 5.94
+ },
+ {
+  "id": "fluorite-CdF2",
+  "name": "CdF2",
+  "kind": "fluorite",
+  "elements": [
+   "Cd",
+   "F"
+  ],
+  "elementA": "Cd",
+  "elementB": "F",
+  "a": 5.39
+ },
+ {
+  "id": "fluorite-CeO2",
+  "name": "CeO2",
+  "kind": "fluorite",
+  "elements": [
+   "Ce",
+   "O"
+  ],
+  "elementA": "Ce",
+  "elementB": "O",
+  "a": 5.41
+ },
+ {
+  "id": "fluorite-UO2",
+  "name": "UO2",
+  "kind": "fluorite",
+  "elements": [
+   "U",
+   "O"
+  ],
+  "elementA": "U",
+  "elementB": "O",
+  "a": 5.47
+ },
+ {
+  "id": "fluorite-ThO2",
+  "name": "ThO2",
+  "kind": "fluorite",
+  "elements": [
+   "Th",
+   "O"
+  ],
+  "elementA": "Th",
+  "elementB": "O",
+  "a": 5.6
+ },
+ {
+  "id": "fluorite-ZrO2",
+  "name": "ZrO2",
+  "kind": "fluorite",
+  "elements": [
+   "Zr",
+   "O"
+  ],
+  "elementA": "Zr",
+  "elementB": "O",
+  "a": 5.09
+ },
+ {
+  "id": "fluorite-HfO2",
+  "name": "HfO2",
+  "kind": "fluorite",
+  "elements": [
+   "Hf",
+   "O"
+  ],
+  "elementA": "Hf",
+  "elementB": "O",
+  "a": 5.08
+ },
+ {
+  "id": "fluorite-PuO2",
+  "name": "PuO2",
+  "kind": "fluorite",
+  "elements": [
+   "Pu",
+   "O"
+  ],
+  "elementA": "Pu",
+  "elementB": "O",
+  "a": 5.4
+ },
+ {
+  "id": "antifluorite-Li2O",
+  "name": "Li2O",
+  "kind": "antifluorite",
+  "elements": [
+   "Li",
+   "O"
+  ],
+  "elementA": "Li",
+  "elementB": "O",
+  "a": 4.62
+ },
+ {
+  "id": "antifluorite-Na2O",
+  "name": "Na2O",
+  "kind": "antifluorite",
+  "elements": [
+   "Na",
+   "O"
+  ],
+  "elementA": "Na",
+  "elementB": "O",
+  "a": 5.55
+ },
+ {
+  "id": "antifluorite-K2O",
+  "name": "K2O",
+  "kind": "antifluorite",
+  "elements": [
+   "K",
+   "O"
+  ],
+  "elementA": "K",
+  "elementB": "O",
+  "a": 6.44
+ },
+ {
+  "id": "antifluorite-Rb2O",
+  "name": "Rb2O",
+  "kind": "antifluorite",
+  "elements": [
+   "Rb",
+   "O"
+  ],
+  "elementA": "Rb",
+  "elementB": "O",
+  "a": 6.74
+ },
+ {
+  "id": "antifluorite-Mg2Si",
+  "name": "Mg2Si",
+  "kind": "antifluorite",
+  "elements": [
+   "Mg",
+   "Si"
+  ],
+  "elementA": "Mg",
+  "elementB": "Si",
+  "a": 6.35
+ },
+ {
+  "id": "antifluorite-Mg2Ge",
+  "name": "Mg2Ge",
+  "kind": "antifluorite",
+  "elements": [
+   "Mg",
+   "Ge"
+  ],
+  "elementA": "Mg",
+  "elementB": "Ge",
+  "a": 6.39
+ },
+ {
+  "id": "antifluorite-Mg2Sn",
+  "name": "Mg2Sn",
+  "kind": "antifluorite",
+  "elements": [
+   "Mg",
+   "Sn"
+  ],
+  "elementA": "Mg",
+  "elementB": "Sn",
+  "a": 6.76
+ },
+ {
+  "id": "antifluorite-Li2S",
+  "name": "Li2S",
+  "kind": "antifluorite",
+  "elements": [
+   "Li",
+   "S"
+  ],
+  "elementA": "Li",
+  "elementB": "S",
+  "a": 5.72
+ },
+ {
+  "id": "antifluorite-Na2S",
+  "name": "Na2S",
+  "kind": "antifluorite",
+  "elements": [
+   "Na",
+   "S"
+  ],
+  "elementA": "Na",
+  "elementB": "S",
+  "a": 6.53
+ },
+ {
+  "id": "rutile-TiO2",
+  "name": "TiO2",
+  "kind": "rutile",
+  "elements": [
+   "Ti",
+   "O"
+  ],
+  "elementA": "Ti",
+  "elementB": "O",
+  "a": 4.59,
+  "cOverA": 0.644880174291939,
+  "u": 0.305
+ },
+ {
+  "id": "rutile-SnO2",
+  "name": "SnO2",
+  "kind": "rutile",
+  "elements": [
+   "Sn",
+   "O"
+  ],
+  "elementA": "Sn",
+  "elementB": "O",
+  "a": 4.74,
+  "cOverA": 0.6729957805907173,
+  "u": 0.306
+ },
+ {
+  "id": "rutile-GeO2",
+  "name": "GeO2",
+  "kind": "rutile",
+  "elements": [
+   "Ge",
+   "O"
+  ],
+  "elementA": "Ge",
+  "elementB": "O",
+  "a": 4.4,
+  "cOverA": 0.6499999999999999,
+  "u": 0.307
+ },
+ {
+  "id": "rutile-PbO2",
+  "name": "PbO2",
+  "kind": "rutile",
+  "elements": [
+   "Pb",
+   "O"
+  ],
+  "elementA": "Pb",
+  "elementB": "O",
+  "a": 4.96,
+  "cOverA": 0.6834677419354839,
+  "u": 0.306
+ },
+ {
+  "id": "rutile-RuO2",
+  "name": "RuO2",
+  "kind": "rutile",
+  "elements": [
+   "Ru",
+   "O"
+  ],
+  "elementA": "Ru",
+  "elementB": "O",
+  "a": 4.49,
+  "cOverA": 0.6926503340757237,
+  "u": 0.305
+ },
+ {
+  "id": "rutile-IrO2",
+  "name": "IrO2",
+  "kind": "rutile",
+  "elements": [
+   "Ir",
+   "O"
+  ],
+  "elementA": "Ir",
+  "elementB": "O",
+  "a": 4.51,
+  "cOverA": 0.6984478935698448,
+  "u": 0.306
+ },
+ {
+  "id": "rutile-MnO2",
+  "name": "MnO2",
+  "kind": "rutile",
+  "elements": [
+   "Mn",
+   "O"
+  ],
+  "elementA": "Mn",
+  "elementB": "O",
+  "a": 4.4,
+  "cOverA": 0.6522727272727272,
+  "u": 0.305
+ },
+ {
+  "id": "rutile-VO2",
+  "name": "VO2",
+  "kind": "rutile",
+  "elements": [
+   "V",
+   "O"
+  ],
+  "elementA": "V",
+  "elementB": "O",
+  "a": 4.55,
+  "cOverA": 0.6285714285714286,
+  "u": 0.307
+ },
+ {
+  "id": "rutile-MgF2",
+  "name": "MgF2",
+  "kind": "rutile",
+  "elements": [
+   "Mg",
+   "F"
+  ],
+  "elementA": "Mg",
+  "elementB": "F",
+  "a": 4.62,
+  "cOverA": 0.6601731601731601,
+  "u": 0.303
+ },
+ {
+  "id": "rutile-MnF2",
+  "name": "MnF2",
+  "kind": "rutile",
+  "elements": [
+   "Mn",
+   "F"
+  ],
+  "elementA": "Mn",
+  "elementB": "F",
+  "a": 4.87,
+  "cOverA": 0.6796714579055442,
+  "u": 0.305
+ },
+ {
+  "id": "rutile-NiF2",
+  "name": "NiF2",
+  "kind": "rutile",
+  "elements": [
+   "Ni",
+   "F"
+  ],
+  "elementA": "Ni",
+  "elementB": "F",
+  "a": 4.65,
+  "cOverA": 0.6623655913978495,
+  "u": 0.305
+ },
+ {
+  "id": "rutile-ZnF2",
+  "name": "ZnF2",
+  "kind": "rutile",
+  "elements": [
+   "Zn",
+   "F"
+  ],
+  "elementA": "Zn",
+  "elementB": "F",
+  "a": 4.7,
+  "cOverA": 0.6659574468085105,
+  "u": 0.305
+ },
+ {
+  "id": "NiAs-NiAs",
+  "name": "NiAs",
+  "kind": "NiAs",
+  "elements": [
+   "Ni",
+   "As"
+  ],
+  "elementA": "Ni",
+  "elementB": "As",
+  "a": 3.62,
+  "cOverA": 1.3895027624309393
+ },
+ {
+  "id": "NiAs-NiS",
+  "name": "NiS",
+  "kind": "NiAs",
+  "elements": [
+   "Ni",
+   "S"
+  ],
+  "elementA": "Ni",
+  "elementB": "S",
+  "a": 3.44,
+  "cOverA": 1.5552325581395348
+ },
+ {
+  "id": "NiAs-MnTe",
+  "name": "MnTe",
+  "kind": "NiAs",
+  "elements": [
+   "Mn",
+   "Te"
+  ],
+  "elementA": "Mn",
+  "elementB": "Te",
+  "a": 4.16,
+  "cOverA": 1.6129807692307692
+ },
+ {
+  "id": "NiAs-CrS",
+  "name": "CrS",
+  "kind": "NiAs",
+  "elements": [
+   "Cr",
+   "S"
+  ],
+  "elementA": "Cr",
+  "elementB": "S",
+  "a": 3.48,
+  "cOverA": 1.6091954022988504
+ },
+ {
+  "id": "NiAs-FeS",
+  "name": "FeS",
+  "kind": "NiAs",
+  "elements": [
+   "Fe",
+   "S"
+  ],
+  "elementA": "Fe",
+  "elementB": "S",
+  "a": 3.45,
+  "cOverA": 1.6231884057971013
+ },
+ {
+  "id": "NiAs-CoS",
+  "name": "CoS",
+  "kind": "NiAs",
+  "elements": [
+   "Co",
+   "S"
+  ],
+  "elementA": "Co",
+  "elementB": "S",
+  "a": 3.37,
+  "cOverA": 1.5311572700296736
+ },
+ {
+  "id": "NiAs-PtSn",
+  "name": "PtSn",
+  "kind": "NiAs",
+  "elements": [
+   "Pt",
+   "Sn"
+  ],
+  "elementA": "Pt",
+  "elementB": "Sn",
+  "a": 4.1,
+  "cOverA": 1.324390243902439
+ },
+ {
+  "id": "hBN-h-BN",
+  "name": "h-BN",
+  "kind": "hBN",
+  "elements": [
+   "B",
+   "N"
+  ],
+  "elementA": "B",
+  "elementB": "N",
+  "a": 2.5,
+  "cOverA": 2.664
+ },
+ {
+  "id": "MoS2-MoS2",
+  "name": "MoS2",
+  "kind": "MoS2",
+  "elements": [
+   "Mo",
+   "S"
+  ],
+  "elementA": "Mo",
+  "elementB": "S",
+  "a": 3.16,
+  "cOverA": 3.892405063291139,
+  "u": 0.621
+ },
+ {
+  "id": "MoS2-WS2",
+  "name": "WS2",
+  "kind": "MoS2",
+  "elements": [
+   "W",
+   "S"
+  ],
+  "elementA": "W",
+  "elementB": "S",
+  "a": 3.15,
+  "cOverA": 3.9111111111111114,
+  "u": 0.622
+ },
+ {
+  "id": "MoS2-MoSe2",
+  "name": "MoSe2",
+  "kind": "MoS2",
+  "elements": [
+   "Mo",
+   "Se"
+  ],
+  "elementA": "Mo",
+  "elementB": "Se",
+  "a": 3.29,
+  "cOverA": 3.933130699088146,
+  "u": 0.621
+ },
+ {
+  "id": "MoS2-WSe2",
+  "name": "WSe2",
+  "kind": "MoS2",
+  "elements": [
+   "W",
+   "Se"
+  ],
+  "elementA": "W",
+  "elementB": "Se",
+  "a": 3.28,
+  "cOverA": 3.9512195121951224,
+  "u": 0.621
+ },
+ {
+  "id": "MoS2-MoTe2",
+  "name": "MoTe2",
+  "kind": "MoS2",
+  "elements": [
+   "Mo",
+   "Te"
+  ],
+  "elementA": "Mo",
+  "elementB": "Te",
+  "a": 3.52,
+  "cOverA": 3.96875,
+  "u": 0.621
+ },
+ {
+  "id": "MoS2-WTe2",
+  "name": "WTe2",
+  "kind": "MoS2",
+  "elements": [
+   "W",
+   "Te"
+  ],
+  "elementA": "W",
+  "elementB": "Te",
+  "a": 3.48,
+  "cOverA": 4.031609195402298,
+  "u": 0.621
+ },
+ {
+  "id": "MoS2-NbS2",
+  "name": "NbS2",
+  "kind": "MoS2",
+  "elements": [
+   "Nb",
+   "S"
+  ],
+  "elementA": "Nb",
+  "elementB": "S",
+  "a": 3.31,
+  "cOverA": 3.59214501510574,
+  "u": 0.621
+ },
+ {
+  "id": "MoS2-TaS2",
+  "name": "TaS2",
+  "kind": "MoS2",
+  "elements": [
+   "Ta",
+   "S"
+  ],
+  "elementA": "Ta",
+  "elementB": "S",
+  "a": 3.31,
+  "cOverA": 3.6555891238670695,
+  "u": 0.621
+ },
+ {
+  "id": "pyrite-FeS2",
+  "name": "FeS2",
+  "kind": "pyrite",
+  "elements": [
+   "Fe",
+   "S"
+  ],
+  "elementA": "Fe",
+  "elementB": "S",
+  "a": 5.418
+ },
+ {
+  "id": "pyrite-CoS2",
+  "name": "CoS2",
+  "kind": "pyrite",
+  "elements": [
+   "Co",
+   "S"
+  ],
+  "elementA": "Co",
+  "elementB": "S",
+  "a": 5.54
+ },
+ {
+  "id": "pyrite-NiS2",
+  "name": "NiS2",
+  "kind": "pyrite",
+  "elements": [
+   "Ni",
+   "S"
+  ],
+  "elementA": "Ni",
+  "elementB": "S",
+  "a": 5.68
+ },
+ {
+  "id": "pyrite-MnS2",
+  "name": "MnS2",
+  "kind": "pyrite",
+  "elements": [
+   "Mn",
+   "S"
+  ],
+  "elementA": "Mn",
+  "elementB": "S",
+  "a": 6.1
+ },
+ {
+  "id": "pyrite-RuS2",
+  "name": "RuS2",
+  "kind": "pyrite",
+  "elements": [
+   "Ru",
+   "S"
+  ],
+  "elementA": "Ru",
+  "elementB": "S",
+  "a": 5.61
+ },
+ {
+  "id": "pyrite-OsS2",
+  "name": "OsS2",
+  "kind": "pyrite",
+  "elements": [
+   "Os",
+   "S"
+  ],
+  "elementA": "Os",
+  "elementB": "S",
+  "a": 5.62
+ },
+ {
+  "id": "pyrite-PtP2",
+  "name": "PtP2",
+  "kind": "pyrite",
+  "elements": [
+   "Pt",
+   "P"
+  ],
+  "elementA": "Pt",
+  "elementB": "P",
+  "a": 5.7
+ },
+ {
+  "id": "pyrite-AuSb2",
+  "name": "AuSb2",
+  "kind": "pyrite",
+  "elements": [
+   "Au",
+   "Sb"
+  ],
+  "elementA": "Au",
+  "elementB": "Sb",
+  "a": 6.66
+ },
+ {
+  "id": "cuprite-Cu2O",
+  "name": "Cu2O",
+  "kind": "cuprite",
+  "elements": [
+   "Cu",
+   "O"
+  ],
+  "elementA": "Cu",
+  "elementB": "O",
+  "a": 4.267
+ },
+ {
+  "id": "cuprite-Ag2O",
+  "name": "Ag2O",
+  "kind": "cuprite",
+  "elements": [
+   "Ag",
+   "O"
+  ],
+  "elementA": "Ag",
+  "elementB": "O",
+  "a": 4.72
+ },
+ {
+  "id": "cdi2-CdI2",
+  "name": "CdI2",
+  "kind": "cdi2",
+  "elements": [
+   "Cd",
+   "I"
+  ],
+  "elementA": "Cd",
+  "elementB": "I",
+  "a": 4.24,
+  "cOverA": 1.6132075471698113
+ },
+ {
+  "id": "cdi2-PbI2",
+  "name": "PbI2",
+  "kind": "cdi2",
+  "elements": [
+   "Pb",
+   "I"
+  ],
+  "elementA": "Pb",
+  "elementB": "I",
+  "a": 4.56,
+  "cOverA": 1.5328947368421055
+ },
+ {
+  "id": "cdi2-MgI2",
+  "name": "MgI2",
+  "kind": "cdi2",
+  "elements": [
+   "Mg",
+   "I"
+  ],
+  "elementA": "Mg",
+  "elementB": "I",
+  "a": 4.14,
+  "cOverA": 1.6618357487922706
+ },
+ {
+  "id": "cdi2-CoI2",
+  "name": "CoI2",
+  "kind": "cdi2",
+  "elements": [
+   "Co",
+   "I"
+  ],
+  "elementA": "Co",
+  "elementB": "I",
+  "a": 3.96,
+  "cOverA": 1.6818181818181819
+ },
+ {
+  "id": "cdi2-FeI2",
+  "name": "FeI2",
+  "kind": "cdi2",
+  "elements": [
+   "Fe",
+   "I"
+  ],
+  "elementA": "Fe",
+  "elementB": "I",
+  "a": 4.04,
+  "cOverA": 1.6707920792079207
+ },
+ {
+  "id": "cdi2-NiI2",
+  "name": "NiI2",
+  "kind": "cdi2",
+  "elements": [
+   "Ni",
+   "I"
+  ],
+  "elementA": "Ni",
+  "elementB": "I",
+  "a": 3.89,
+  "cOverA": 1.6915167095115682
+ },
+ {
+  "id": "cdi2-TiS2",
+  "name": "TiS2",
+  "kind": "cdi2",
+  "elements": [
+   "Ti",
+   "S"
+  ],
+  "elementA": "Ti",
+  "elementB": "S",
+  "a": 3.41,
+  "cOverA": 1.6715542521994136
+ },
+ {
+  "id": "cdi2-ZrS2",
+  "name": "ZrS2",
+  "kind": "cdi2",
+  "elements": [
+   "Zr",
+   "S"
+  ],
+  "elementA": "Zr",
+  "elementB": "S",
+  "a": 3.66,
+  "cOverA": 1.5901639344262295
+ },
+ {
+  "id": "cdi2-SnS2",
+  "name": "SnS2",
+  "kind": "cdi2",
+  "elements": [
+   "Sn",
+   "S"
+  ],
+  "elementA": "Sn",
+  "elementB": "S",
+  "a": 3.65,
+  "cOverA": 1.6164383561643838
+ },
+ {
+  "id": "cdi2-HfS2",
+  "name": "HfS2",
+  "kind": "cdi2",
+  "elements": [
+   "Hf",
+   "S"
+  ],
+  "elementA": "Hf",
+  "elementB": "S",
+  "a": 3.64,
+  "cOverA": 1.607142857142857
+ },
+ {
+  "id": "corundum-Al2O3",
+  "name": "Al2O3",
+  "kind": "corundum",
+  "elements": [
+   "Al",
+   "O"
+  ],
+  "elementA": "Al",
+  "elementB": "O",
+  "a": 4.76,
+  "cOverA": 2.7289915966386555
+ },
+ {
+  "id": "corundum-Fe2O3",
+  "name": "Fe2O3",
+  "kind": "corundum",
+  "elements": [
+   "Fe",
+   "O"
+  ],
+  "elementA": "Fe",
+  "elementB": "O",
+  "a": 5.03,
+  "cOverA": 2.7335984095427435
+ },
+ {
+  "id": "corundum-Cr2O3",
+  "name": "Cr2O3",
+  "kind": "corundum",
+  "elements": [
+   "Cr",
+   "O"
+  ],
+  "elementA": "Cr",
+  "elementB": "O",
+  "a": 4.95,
+  "cOverA": 2.7434343434343433
+ },
+ {
+  "id": "corundum-V2O3",
+  "name": "V2O3",
+  "kind": "corundum",
+  "elements": [
+   "V",
+   "O"
+  ],
+  "elementA": "V",
+  "elementB": "O",
+  "a": 4.95,
+  "cOverA": 2.8282828282828283
+ },
+ {
+  "id": "corundum-Ti2O3",
+  "name": "Ti2O3",
+  "kind": "corundum",
+  "elements": [
+   "Ti",
+   "O"
+  ],
+  "elementA": "Ti",
+  "elementB": "O",
+  "a": 5.15,
+  "cOverA": 2.6485436893203884
+ },
+ {
+  "id": "corundum-Ga2O3",
+  "name": "Ga2O3",
+  "kind": "corundum",
+  "elements": [
+   "Ga",
+   "O"
+  ],
+  "elementA": "Ga",
+  "elementB": "O",
+  "a": 4.98,
+  "cOverA": 2.6967871485943773
+ },
+ {
+  "id": "perovskite-SrTiO3",
+  "name": "SrTiO3",
+  "kind": "perovskite",
+  "elements": [
+   "Sr",
+   "Ti",
+   "O"
+  ],
+  "elementA": "Sr",
+  "elementB": "Ti",
+  "elementC": "O",
+  "a": 3.905
+ },
+ {
+  "id": "perovskite-BaTiO3",
+  "name": "BaTiO3",
+  "kind": "perovskite",
+  "elements": [
+   "Ba",
+   "Ti",
+   "O"
+  ],
+  "elementA": "Ba",
+  "elementB": "Ti",
+  "elementC": "O",
+  "a": 4.01
+ },
+ {
+  "id": "perovskite-CaTiO3",
+  "name": "CaTiO3",
+  "kind": "perovskite",
+  "elements": [
+   "Ca",
+   "Ti",
+   "O"
+  ],
+  "elementA": "Ca",
+  "elementB": "Ti",
+  "elementC": "O",
+  "a": 3.8
+ },
+ {
+  "id": "perovskite-PbTiO3",
+  "name": "PbTiO3",
+  "kind": "perovskite",
+  "elements": [
+   "Pb",
+   "Ti",
+   "O"
+  ],
+  "elementA": "Pb",
+  "elementB": "Ti",
+  "elementC": "O",
+  "a": 3.96
+ },
+ {
+  "id": "perovskite-KNbO3",
+  "name": "KNbO3",
+  "kind": "perovskite",
+  "elements": [
+   "K",
+   "Nb",
+   "O"
+  ],
+  "elementA": "K",
+  "elementB": "Nb",
+  "elementC": "O",
+  "a": 4.01
+ },
+ {
+  "id": "perovskite-NaNbO3",
+  "name": "NaNbO3",
+  "kind": "perovskite",
+  "elements": [
+   "Na",
+   "Nb",
+   "O"
+  ],
+  "elementA": "Na",
+  "elementB": "Nb",
+  "elementC": "O",
+  "a": 3.91
+ },
+ {
+  "id": "perovskite-LaAlO3",
+  "name": "LaAlO3",
+  "kind": "perovskite",
+  "elements": [
+   "La",
+   "Al",
+   "O"
+  ],
+  "elementA": "La",
+  "elementB": "Al",
+  "elementC": "O",
+  "a": 3.79
+ },
+ {
+  "id": "perovskite-KTaO3",
+  "name": "KTaO3",
+  "kind": "perovskite",
+  "elements": [
+   "K",
+   "Ta",
+   "O"
+  ],
+  "elementA": "K",
+  "elementB": "Ta",
+  "elementC": "O",
+  "a": 3.99
+ },
+ {
+  "id": "perovskite-BaZrO3",
+  "name": "BaZrO3",
+  "kind": "perovskite",
+  "elements": [
+   "Ba",
+   "Zr",
+   "O"
+  ],
+  "elementA": "Ba",
+  "elementB": "Zr",
+  "elementC": "O",
+  "a": 4.19
+ },
+ {
+  "id": "perovskite-SrZrO3",
+  "name": "SrZrO3",
+  "kind": "perovskite",
+  "elements": [
+   "Sr",
+   "Zr",
+   "O"
+  ],
+  "elementA": "Sr",
+  "elementB": "Zr",
+  "elementC": "O",
+  "a": 4.1
+ },
+ {
+  "id": "perovskite-CaZrO3",
+  "name": "CaZrO3",
+  "kind": "perovskite",
+  "elements": [
+   "Ca",
+   "Zr",
+   "O"
+  ],
+  "elementA": "Ca",
+  "elementB": "Zr",
+  "elementC": "O",
+  "a": 4.01
+ },
+ {
+  "id": "perovskite-PbZrO3",
+  "name": "PbZrO3",
+  "kind": "perovskite",
+  "elements": [
+   "Pb",
+   "Zr",
+   "O"
+  ],
+  "elementA": "Pb",
+  "elementB": "Zr",
+  "elementC": "O",
+  "a": 4.16
+ },
+ {
+  "id": "perovskite-CsPbBr3",
+  "name": "CsPbBr3",
+  "kind": "perovskite",
+  "elements": [
+   "Cs",
+   "Pb",
+   "Br"
+  ],
+  "elementA": "Cs",
+  "elementB": "Pb",
+  "elementC": "Br",
+  "a": 5.87
+ },
+ {
+  "id": "perovskite-CsPbCl3",
+  "name": "CsPbCl3",
+  "kind": "perovskite",
+  "elements": [
+   "Cs",
+   "Pb",
+   "Cl"
+  ],
+  "elementA": "Cs",
+  "elementB": "Pb",
+  "elementC": "Cl",
+  "a": 5.61
+ },
+ {
+  "id": "perovskite-CsPbI3",
+  "name": "CsPbI3",
+  "kind": "perovskite",
+  "elements": [
+   "Cs",
+   "Pb",
+   "I"
+  ],
+  "elementA": "Cs",
+  "elementB": "Pb",
+  "elementC": "I",
+  "a": 6.3
+ },
+ {
+  "id": "perovskite-LaGaO3",
+  "name": "LaGaO3",
+  "kind": "perovskite",
+  "elements": [
+   "La",
+   "Ga",
+   "O"
+  ],
+  "elementA": "La",
+  "elementB": "Ga",
+  "elementC": "O",
+  "a": 3.88
+ },
+ {
+  "id": "perovskite-YAlO3",
+  "name": "YAlO3",
+  "kind": "perovskite",
+  "elements": [
+   "Y",
+   "Al",
+   "O"
+  ],
+  "elementA": "Y",
+  "elementB": "Al",
+  "elementC": "O",
+  "a": 3.69
+ },
+ {
+  "id": "perovskite-SrSnO3",
+  "name": "SrSnO3",
+  "kind": "perovskite",
+  "elements": [
+   "Sr",
+   "Sn",
+   "O"
+  ],
+  "elementA": "Sr",
+  "elementB": "Sn",
+  "elementC": "O",
+  "a": 4.03
+ },
+ {
+  "id": "spinel-MgAl2O4",
+  "name": "MgAl2O4",
+  "kind": "spinel",
+  "elements": [
+   "Mg",
+   "Al",
+   "O"
+  ],
+  "elementA": "Mg",
+  "elementB": "Al",
+  "elementC": "O",
+  "a": 8.083
+ },
+ {
+  "id": "spinel-ZnAl2O4",
+  "name": "ZnAl2O4",
+  "kind": "spinel",
+  "elements": [
+   "Zn",
+   "Al",
+   "O"
+  ],
+  "elementA": "Zn",
+  "elementB": "Al",
+  "elementC": "O",
+  "a": 8.09
+ },
+ {
+  "id": "spinel-FeAl2O4",
+  "name": "FeAl2O4",
+  "kind": "spinel",
+  "elements": [
+   "Fe",
+   "Al",
+   "O"
+  ],
+  "elementA": "Fe",
+  "elementB": "Al",
+  "elementC": "O",
+  "a": 8.15
+ },
+ {
+  "id": "spinel-CoAl2O4",
+  "name": "CoAl2O4",
+  "kind": "spinel",
+  "elements": [
+   "Co",
+   "Al",
+   "O"
+  ],
+  "elementA": "Co",
+  "elementB": "Al",
+  "elementC": "O",
+  "a": 8.1
+ },
+ {
+  "id": "spinel-MnAl2O4",
+  "name": "MnAl2O4",
+  "kind": "spinel",
+  "elements": [
+   "Mn",
+   "Al",
+   "O"
+  ],
+  "elementA": "Mn",
+  "elementB": "Al",
+  "elementC": "O",
+  "a": 8.26
+ },
+ {
+  "id": "spinel-NiAl2O4",
+  "name": "NiAl2O4",
+  "kind": "spinel",
+  "elements": [
+   "Ni",
+   "Al",
+   "O"
+  ],
+  "elementA": "Ni",
+  "elementB": "Al",
+  "elementC": "O",
+  "a": 8.05
+ },
+ {
+  "id": "spinel-MgCr2O4",
+  "name": "MgCr2O4",
+  "kind": "spinel",
+  "elements": [
+   "Mg",
+   "Cr",
+   "O"
+  ],
+  "elementA": "Mg",
+  "elementB": "Cr",
+  "elementC": "O",
+  "a": 8.33
+ },
+ {
+  "id": "spinel-ZnCr2O4",
+  "name": "ZnCr2O4",
+  "kind": "spinel",
+  "elements": [
+   "Zn",
+   "Cr",
+   "O"
+  ],
+  "elementA": "Zn",
+  "elementB": "Cr",
+  "elementC": "O",
+  "a": 8.33
+ },
+ {
+  "id": "spinel-CoCr2O4",
+  "name": "CoCr2O4",
+  "kind": "spinel",
+  "elements": [
+   "Co",
+   "Cr",
+   "O"
+  ],
+  "elementA": "Co",
+  "elementB": "Cr",
+  "elementC": "O",
+  "a": 8.33
+ },
+ {
+  "id": "spinel-MgFe2O4",
+  "name": "MgFe2O4",
+  "kind": "spinel",
+  "elements": [
+   "Mg",
+   "Fe",
+   "O"
+  ],
+  "elementA": "Mg",
+  "elementB": "Fe",
+  "elementC": "O",
+  "a": 8.39
+ },
+ {
+  "id": "spinel-ZnFe2O4",
+  "name": "ZnFe2O4",
+  "kind": "spinel",
+  "elements": [
+   "Zn",
+   "Fe",
+   "O"
+  ],
+  "elementA": "Zn",
+  "elementB": "Fe",
+  "elementC": "O",
+  "a": 8.44
+ },
+ {
+  "id": "spinel-NiFe2O4",
+  "name": "NiFe2O4",
+  "kind": "spinel",
+  "elements": [
+   "Ni",
+   "Fe",
+   "O"
+  ],
+  "elementA": "Ni",
+  "elementB": "Fe",
+  "elementC": "O",
+  "a": 8.34
+ },
+ {
+  "id": "spinel-MnFe2O4",
+  "name": "MnFe2O4",
+  "kind": "spinel",
+  "elements": [
+   "Mn",
+   "Fe",
+   "O"
+  ],
+  "elementA": "Mn",
+  "elementB": "Fe",
+  "elementC": "O",
+  "a": 8.51
+ },
+ {
+  "id": "calcite-CaCO3",
+  "name": "CaCO3",
+  "kind": "calcite",
+  "elements": [
+   "Ca",
+   "C",
+   "O"
+  ],
+  "elementA": "Ca",
+  "elementB": "C",
+  "elementC": "O",
+  "a": 4.99,
+  "cOverA": 3.418837675350701
+ },
+ {
+  "id": "calcite-MgCO3",
+  "name": "MgCO3",
+  "kind": "calcite",
+  "elements": [
+   "Mg",
+   "C",
+   "O"
+  ],
+  "elementA": "Mg",
+  "elementB": "C",
+  "elementC": "O",
+  "a": 4.66,
+  "cOverA": 3.221030042918455
+ },
+ {
+  "id": "calcite-FeCO3",
+  "name": "FeCO3",
+  "kind": "calcite",
+  "elements": [
+   "Fe",
+   "C",
+   "O"
+  ],
+  "elementA": "Fe",
+  "elementB": "C",
+  "elementC": "O",
+  "a": 4.69,
+  "cOverA": 3.2771855010660977
+ },
+ {
+  "id": "calcite-MnCO3",
+  "name": "MnCO3",
+  "kind": "calcite",
+  "elements": [
+   "Mn",
+   "C",
+   "O"
+  ],
+  "elementA": "Mn",
+  "elementB": "C",
+  "elementC": "O",
+  "a": 4.78,
+  "cOverA": 3.2761506276150625
+ },
+ {
+  "id": "calcite-ZnCO3",
+  "name": "ZnCO3",
+  "kind": "calcite",
+  "elements": [
+   "Zn",
+   "C",
+   "O"
+  ],
+  "elementA": "Zn",
+  "elementB": "C",
+  "elementC": "O",
+  "a": 4.65,
+  "cOverA": 3.2322580645161287
+ },
+ {
+  "id": "calcite-CoCO3",
+  "name": "CoCO3",
+  "kind": "calcite",
+  "elements": [
+   "Co",
+   "C",
+   "O"
+  ],
+  "elementA": "Co",
+  "elementB": "C",
+  "elementC": "O",
+  "a": 4.66,
+  "cOverA": 3.2103004291845494
+ },
+ {
+  "id": "calcite-NiCO3",
+  "name": "NiCO3",
+  "kind": "calcite",
+  "elements": [
+   "Ni",
+   "C",
+   "O"
+  ],
+  "elementA": "Ni",
+  "elementB": "C",
+  "elementC": "O",
+  "a": 4.6,
+  "cOverA": 3.2
+ },
+ {
+  "id": "calcite-CdCO3",
+  "name": "CdCO3",
+  "kind": "calcite",
+  "elements": [
+   "Cd",
+   "C",
+   "O"
+  ],
+  "elementA": "Cd",
+  "elementB": "C",
+  "elementC": "O",
+  "a": 4.92,
+  "cOverA": 3.313008130081301
+ },
+ {
+  "id": "zircon-ZrSiO4",
+  "name": "ZrSiO4",
+  "kind": "zircon",
+  "elements": [
+   "Zr",
+   "Si",
+   "O"
+  ],
+  "elementA": "Zr",
+  "elementB": "Si",
+  "elementC": "O",
+  "a": 6.6,
+  "cOverA": 0.9060606060606061
+ },
+ {
+  "id": "zircon-HfSiO4",
+  "name": "HfSiO4",
+  "kind": "zircon",
+  "elements": [
+   "Hf",
+   "Si",
+   "O"
+  ],
+  "elementA": "Hf",
+  "elementB": "Si",
+  "elementC": "O",
+  "a": 6.56,
+  "cOverA": 0.9054878048780489
+ },
+ {
+  "id": "zircon-ThSiO4",
+  "name": "ThSiO4",
+  "kind": "zircon",
+  "elements": [
+   "Th",
+   "Si",
+   "O"
+  ],
+  "elementA": "Th",
+  "elementB": "Si",
+  "elementC": "O",
+  "a": 7.13,
+  "cOverA": 0.8863955119214587
+ },
+ {
+  "id": "zircon-USiO4",
+  "name": "USiO4",
+  "kind": "zircon",
+  "elements": [
+   "U",
+   "Si",
+   "O"
+  ],
+  "elementA": "U",
+  "elementB": "Si",
+  "elementC": "O",
+  "a": 6.99,
+  "cOverA": 0.8955650929899857
+ }
+];
 /* ================= 依赖导入（多 CDN 回退，兼容国内网络） ================= */
 const THREE = await (async function (){
   const BASES = [
@@ -4190,7 +7183,9 @@ function createCrystalRenderer(host, onSelect){
       return base.map((x,j)=>x+comparison.vectors[i][j]*options.t*options.amplification);
     });
     // Keep reference copies paired during interpolation, including boundary crossings.
-    images=CrystalCore.boundaryImages(reference||structure);
+    // 0.25 Å slop: relaxed structures (after adopt or as a later baseline) keep closed-cell mirrors
+    // for atoms within a sphere radius of a face; interior atoms are never mirrored.
+    images=CrystalCore.boundaryImages(reference||structure,0.25);
     const shifted=(p,image)=>p.map((x,j)=>x+CrystalCore.cartesian(image,cell)[j]);
     const referencePosition=copy=>shifted(CrystalCore.cartesian(CrystalCore.fractional(reference.atoms[copy.index].position,reference.cell),cell),copy.image);
     positions=images.map(copy=>shifted(sourcePositions[copy.index],copy.image));
@@ -5311,133 +8306,258 @@ function syncSliderMode(){
 const CrystalLab = (() => {
   const style=document.createElement('style');
   style.textContent=`
-  #crystalBtn{width:40px;height:40px;flex:0 0 40px;border-radius:50%;padding:0;display:grid;place-items:center;color:#9ddccf;cursor:pointer}
-  #crystalBtn:hover{border-color:#9ddccf;box-shadow:0 0 18px #9ddccf22}
-  #crystalLab{box-sizing:border-box;position:fixed;inset:0;z-index:70;display:none;padding:0;border:0;border-radius:0;background:#0b101a;color:#dce5f2;font:12px/1.55 -apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;overflow:hidden;color-scheme:dark;user-select:text}
-  #crystalLab.open{display:block}
-  #crystalLab *{box-sizing:border-box}
-  #crystalLab button,#crystalLab input,#crystalLab select{font:inherit;color:inherit}
-  #crystalLab button{border:1px solid #a3b6d629;border-radius:7px;background:#182233;padding:7px 10px;cursor:pointer;line-height:1.4;letter-spacing:0}
-  #crystalLab button:hover:not(:disabled){background:#26364b;border-color:#7cc7ff88}
-  #crystalLab :focus-visible{outline:2px solid #7cc7ff;outline-offset:3px}
-  #crystalLab button:disabled{opacity:.38;cursor:not-allowed}
-  #crystalLab input:not([type=checkbox]):not([type=range]),#crystalLab select{width:100%;min-width:0;background:#080d16;border:1px solid #a3b6d633;border-radius:6px;padding:7px 8px;height:33px}
-  #crystalLab input[type=checkbox]{accent-color:#7cc7ff;vertical-align:middle;margin:0 5px 0 0}
-  #crystalLab input[type=range]{accent-color:#7cc7ff;width:100%;margin:6px 0}
-  #crystalLab .cl-header{height:68px;padding:14px 22px;border-bottom:1px solid #a3b6d622;display:flex;align-items:center;gap:12px;background:linear-gradient(105deg,#14223077,transparent)}
-  #crystalLab .cl-mark{width:34px;height:34px;display:grid;place-items:center;color:#9ddccf;border:1px solid #9ddccf44;border-radius:9px}
-  #crystalLab h2{font-size:16px;font-weight:550;letter-spacing:.04em;margin:0}
-  #crystalLab .cl-eyebrow{color:#8b96a8;font-size:10px;letter-spacing:.14em}
-  #crystalLab .cl-header-right{margin-left:auto;display:flex;align-items:center;gap:12px}
-  #crystalLab .cl-badge{color:#9ddccf;font-size:11px;border:1px solid #9ddccf33;border-radius:20px;padding:3px 9px;white-space:nowrap}
-  #crystalLab .cl-layout{display:grid;grid-template-columns:284px minmax(0,1fr);height:calc(100% - 68px)}
-  #crystalLab .cl-sidebar{overflow:auto;padding:0 18px 20px;border-right:1px solid #a3b6d622;scrollbar-width:thin;scrollbar-color:#4a627f #0b101a}
-  #crystalLab section.cl-section{padding:18px 0;border-bottom:1px solid #a3b6d622}
-  #crystalLab h3{font-size:12px;font-weight:550;letter-spacing:.035em;margin:0 0 12px;display:flex;align-items:center;gap:8px}
-  #crystalLab h3 span{color:#667b98;font:10px ui-monospace,monospace}
-  #crystalLab label.cl-field{display:flex;flex-direction:column;gap:4px;color:#8b96a8;font-size:11px;margin-bottom:9px}
-  #crystalLab .cl-row{display:flex;gap:8px;align-items:end}
-  #crystalLab .cl-row>*{flex:1;min-width:0}
-  #crystalLab #cl-regenerate{flex:0 0 auto;height:33px;margin-bottom:9px;white-space:nowrap}
-  #crystalLab .cl-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
-  #crystalLab .cl-actions>button{flex:1;white-space:nowrap}
-  #crystalLab .cl-primary{background:#7cc7ff20;border-color:#7cc7ff66;color:#bce3ff}
-  #crystalLab .cl-wide{width:100%}
-  #crystalLab .cl-muted{color:#8b96a8;font-size:11px;margin:8px 0 0}
-  #crystalLab .cl-content{display:flex;flex-direction:column;min-height:0;overflow:auto}
-  #crystalLab .cl-view-wrap{position:relative;flex:1;min-height:250px;background:radial-gradient(ellipse at 50% 50%,#122038,#060a11)}
-  #crystalLab .cl-viewport{position:absolute;inset:0;overflow:hidden}
-  #crystalLab .cl-viewport canvas{display:block;width:100%;height:100%;touch-action:none;outline:none}
-  #crystalLab .cl-view-head{position:absolute;top:17px;left:20px;right:20px;pointer-events:none;display:flex;justify-content:space-between;gap:12px}
-  #crystalLab .cl-view-head>div:first-child{min-width:0;flex:1}
-  #crystalLab .cl-formula{font-size:17px;letter-spacing:.03em;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  #crystalLab #cl-structure-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  #crystalLab .cl-caption{color:#8b96a8;font-size:11px}
-  #crystalLab .cl-view-tools{position:absolute;bottom:13px;left:18px;right:18px;display:flex;justify-content:space-between;align-items:end;gap:10px;pointer-events:none}
-  #crystalLab .cl-view-tools button{pointer-events:auto;background:#111c2ad9}
-  #crystalLab .cl-view-tools>div{min-width:0}
-  #crystalLab #cl-counting{margin-top:5px;overflow-wrap:anywhere}
-  #crystalLab .cl-legend{display:flex;flex-wrap:wrap;gap:10px;color:#a9b8ce;font-size:11px}
-  #crystalLab .cl-legend i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px}
-  #crystalLab .cl-inspect{padding:12px 20px;border-top:1px solid #a3b6d622;background:#0e1520;min-height:71px}
-  #crystalLab .cl-inspect-top{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  #crystalLab #cl-atom{max-width:190px;height:29px;padding:3px 7px}
-  #crystalLab .cl-mono{font:11px/1.7 ui-monospace,SFMono-Regular,monospace;font-variant-numeric:tabular-nums;color:#a9bdd9}
-  #crystalLab .cl-results{padding:15px 20px;background:linear-gradient(120deg,#14223666,#0b101a);border-top:1px solid #a3b6d622}
-  #crystalLab .cl-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:10px 0}
-  #crystalLab .cl-metric b{display:block;font:18px/1.6 ui-monospace,monospace;font-variant-numeric:tabular-nums;color:#d7edff}
-  #crystalLab .cl-metric small{font-size:10px;color:#8b96a8}
-  #crystalLab .cl-status{padding:9px 12px;border-top:1px solid #a3b6d622;font-size:11px;color:#aec4dd;min-height:36px;overflow-wrap:anywhere;background:#080d15}
-  #crystalLab .cl-status[data-tone=error]{color:#ffb5a9}
-  #crystalLab .cl-status[data-tone=success]{color:#9ddccf}
-  #crystalLab details{margin-top:10px;color:#8b96a8;font-size:11px}
-  #crystalLab summary{cursor:pointer;color:#afc4dc}
-  #crystalLab details p{margin:8px 0;overflow-wrap:anywhere}
-  #crystalLab a{color:#8ccfff}
-  #crystalLab progress{width:100%;height:3px;accent-color:#7cc7ff;display:block;margin-top:10px}
-  #crystalLab [hidden]{display:none!important}
-  @media(max-width:700px){
-    #crystalBtn{width:36px;height:36px;flex-basis:36px}
-    #crystalLab .cl-header{padding:11px 14px;height:62px}
-    #crystalLab .cl-header-right .cl-badge{display:none}
-    #crystalLab .cl-layout{display:flex;flex-direction:column;height:calc(100% - 62px);overflow:auto}
-    #crystalLab .cl-content{order:0;flex:none;overflow:visible}
-    #crystalLab .cl-view-wrap{height:360px;flex:none;min-height:0}
-    #crystalLab .cl-sidebar{order:1;overflow:visible;border-right:0;padding:0 18px 24px}
-    #crystalLab .cl-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
-    #crystalLab .cl-view-head{left:14px;right:14px}
-    #crystalLab .cl-view-head .cl-caption:last-child{max-width:100px;text-align:right}
-    #crystalLab .cl-inspect,#crystalLab .cl-results{padding:12px 14px}
-  }`;
+/* Crystal Lab — unified with Electron Cloud design language (tokens from :root) */
+#crystalBtn{width:40px;height:40px;flex:0 0 40px;border-radius:50%;padding:0;display:grid;place-items:center;color:#9ddccf;cursor:pointer;transition:all .18s}
+#crystalBtn:hover{border-color:#9ddccf;box-shadow:0 0 18px #9ddccf22}
+#crystalLab{box-sizing:border-box;position:fixed;inset:0;z-index:70;display:none;padding:0;border:0;border-radius:0;background:#04060a;color:var(--ink);font:12px/1.6 "SF Pro Display","SF Pro Text",-apple-system,"PingFang SC","Segoe UI",system-ui,sans-serif;overflow:hidden;color-scheme:dark;user-select:none;-webkit-font-smoothing:antialiased}
+#crystalLab.open{display:block}
+#crystalLab *{box-sizing:border-box}
+#crystalLab button,#crystalLab input,#crystalLab select{font:inherit;color:inherit}
+#crystalLab :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* ---------- top bar ---------- */
+#crystalLab .cl-top{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--stroke);background:linear-gradient(180deg,rgba(18,28,44,.92),rgba(9,13,21,.85));backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2)}
+#crystalLab .cl-mark{width:34px;height:34px;flex:none;display:grid;place-items:center;color:#9ddccf;border:1px solid #9ddccf55;border-radius:10px;background:rgba(157,220,207,.08)}
+#crystalLab .cl-mark svg{width:20px;height:20px}
+#crystalLab .cl-titlewrap{min-width:0}
+#crystalLab h2{font-size:15px;font-weight:600;letter-spacing:.1em;color:#eaf6ff;margin:0;line-height:1.2}
+#crystalLab .cl-eyebrow{font-size:10px;letter-spacing:.18em;color:var(--dim);margin-top:2px}
+#crystalLab .cl-top-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+#crystalLab .cl-engine{display:inline-flex;align-items:center;gap:7px;font-size:10px;letter-spacing:1px;color:var(--dim)}
+#crystalLab .cl-engine i{width:7px;height:7px;border-radius:50%;background:var(--faint);transition:background .3s,box-shadow .3s}
+#crystalLab .cl-engine[data-ready=yes] i{background:#9fe0b0;box-shadow:0 0 8px rgba(159,224,176,.7)}
+#crystalLab .cl-engine[data-ready=load] i{background:var(--accent);animation:clPulse 1s infinite}
+#crystalLab .cl-engine[data-ready=no] i{background:#5b6678}
+@keyframes clPulse{50%{opacity:.3}}
+#crystalLab .cl-close{width:30px;height:30px;padding:0;display:grid;place-items:center;border-radius:8px;border:1px solid var(--stroke);background:transparent;color:var(--dim);cursor:pointer;font-size:13px;line-height:1}
+#crystalLab .cl-close:hover{color:#eaf6ff;border-color:rgba(124,199,255,.45)}
+/* ---------- layout ---------- */
+#crystalLab .cl-layout{display:grid;grid-template-columns:300px minmax(0,1fr);height:calc(100% - 56px)}
+#crystalLab .cl-side{overflow:auto;scrollbar-width:thin;scrollbar-color:#2c3d57 transparent;padding:6px 0 16px;border-right:1px solid var(--stroke);background:linear-gradient(180deg,rgba(10,15,24,.7),rgba(7,10,16,.55))}
+#crystalLab section.cl-pane{padding:15px 16px;border-bottom:1px solid var(--stroke)}
+#crystalLab .cl-pane h3{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;letter-spacing:.16em;color:#cfe0f5;margin:0 0 12px}
+#crystalLab .cl-pane h3 .cl-idx{font:10px ui-monospace,SFMono-Regular,monospace;color:var(--faint);letter-spacing:0}
+#crystalLab .cl-pane h3 .cl-state{margin-left:auto;font:10px ui-monospace,monospace;color:var(--dim);letter-spacing:.05em}
+#crystalLab label.cl-field{display:flex;flex-direction:column;gap:4px;color:var(--dim);font-size:10px;letter-spacing:.5px;margin:0 0 9px}
+#crystalLab label.cl-field em{font-style:normal;color:var(--faint);font-weight:400}
+#crystalLab .cl-row{display:flex;gap:8px;align-items:flex-end}
+#crystalLab .cl-row>*{flex:1;min-width:0}
+#crystalLab .cl-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+#crystalLab .cl-actions>button{flex:1;white-space:nowrap}
+#crystalLab select,#crystalLab input:not([type=checkbox]):not([type=range]){width:100%;min-width:0;background:#0b1320;border:1px solid var(--stroke);border-radius:8px;padding:7px 8px;color:#d9e6f7;font-size:12px;outline:none;transition:border-color .15s,background .15s;height:32px}
+#crystalLab select:focus,#crystalLab input:not([type=checkbox]):not([type=range]):focus{border-color:rgba(124,199,255,.55);background:#0e1726}
+#crystalLab select option{background:#0d1622;color:#d9e6f7}
+#crystalLab input[type=range]{accent-color:var(--accent);width:100%;height:3px;margin:5px 0}
+#crystalLab input[type=checkbox]{accent-color:var(--accent);vertical-align:-2px;margin-right:6px}
+#crystalLab input[type=number]{font-variant-numeric:tabular-nums}
+#crystalLab .dshell-btn,#crystalLab .dshell-btnGhost{border-radius:8px;padding:7px 12px;font-size:11px;letter-spacing:1px;font-family:inherit;cursor:pointer;transition:all .15s;white-space:nowrap}
+#crystalLab .dshell-btnGhost{border:1px solid rgba(163,182,214,.22);background:transparent;color:var(--dim)}
+#crystalLab .dshell-btnGhost:hover{color:#eaf6ff;border-color:rgba(124,199,255,.45)}
+#crystalLab .cl-wide{width:100%}
+#crystalLab .cl-btnrow{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+#crystalLab .cl-muted{font-size:9px;color:var(--faint);letter-spacing:.5px;line-height:1.7;margin:7px 0 0;overflow-wrap:anywhere}
+#crystalLab .cl-muted a{color:#7fb8e8;text-decoration:none}
+#crystalLab .cl-muted a:hover{text-decoration:underline}
+#crystalLab .cl-warn{font-size:10px;color:var(--amber);line-height:1.6;margin:7px 0 0}
+#crystalLab details{margin-top:10px;font-size:10px;color:var(--dim);line-height:1.7}
+#crystalLab summary{cursor:pointer;color:#b9cfe6;letter-spacing:.5px}
+#crystalLab details p{margin:6px 0;overflow-wrap:anywhere}
+/* ---------- stage ---------- */
+#crystalLab .cl-stagewrap{display:flex;flex-direction:column;min-height:0;padding:12px 14px 14px;gap:10px}
+#crystalLab .cl-viewportwrap{position:relative;flex:1;min-height:240px;border-radius:14px;overflow:hidden;border:1px solid var(--stroke);background:radial-gradient(120% 90% at 50% 20%,#13233b 0%,#080d16 70%);box-shadow:inset 0 0 60px rgba(0,0,0,.4)}
+#crystalLab .cl-viewport{position:absolute;inset:0;overflow:hidden}
+#crystalLab .cl-viewport canvas{display:block;width:100%;height:100%;touch-action:none;outline:none}
+#crystalLab .cl-headline{position:absolute;top:12px;left:14px;right:14px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;pointer-events:none}
+#crystalLab .cl-headline .cl-left{min-width:0}
+#crystalLab .cl-formula{font-size:20px;font-weight:650;letter-spacing:.02em;color:#eef6ff;text-shadow:0 1px 12px rgba(0,0,0,.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#crystalLab .cl-meta{font-size:10px;color:#aebdd1;letter-spacing:.4px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#crystalLab .cl-hint{text-align:right;font-size:10px;color:#8fa2bb;line-height:1.8;letter-spacing:.4px}
+#crystalLab .cl-hint span{display:block;font-size:9px;color:#5f7189}
+#crystalLab .cl-tools{position:absolute;left:14px;right:14px;bottom:12px;display:flex;justify-content:space-between;align-items:flex-end;gap:10px;pointer-events:none}
+#crystalLab .cl-legendbox{display:flex;flex-direction:column;gap:4px;min-width:0;max-width:62%}
+#crystalLab .cl-legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:11px;color:#c8d9ec;background:rgba(7,11,18,.62);border:1px solid var(--stroke);border-radius:10px;padding:6px 10px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+#crystalLab .cl-legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+#crystalLab .cl-caption{font-size:9px;color:var(--faint);letter-spacing:.5px;line-height:1.7}
+#crystalLab .cl-fit{pointer-events:auto}
+/* ---------- results bench ---------- */
+#crystalLab .cl-bench{background:rgba(9,13,21,.78);border:1px solid var(--stroke);border-radius:14px;overflow:hidden;backdrop-filter:blur(12px) saturate(1.1);-webkit-backdrop-filter:blur(12px) saturate(1.1)}
+#crystalLab .cl-inspect{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 14px;border-bottom:1px solid var(--stroke)}
+#crystalLab .cl-inspect label{font-size:10px;color:var(--dim);letter-spacing:.5px}
+#crystalLab .cl-inspect select{width:auto;min-width:180px;height:28px;padding:3px 8px;font-size:11px}
+#crystalLab .cl-mono{font:11px/1.6 ui-monospace,SFMono-Regular,monospace;font-variant-numeric:tabular-nums;color:#bcd6f2;letter-spacing:.3px}
+#crystalLab .cl-neighbor{color:var(--dim);font-size:10px;letter-spacing:.3px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:auto}
+#crystalLab .cl-results{padding:12px 14px 10px}
+#crystalLab .cl-results h4{font-size:11px;font-weight:600;letter-spacing:.16em;color:#cfe0f5;margin:0 0 10px;display:flex;align-items:center;gap:10px}
+#crystalLab .cl-results h4 span{font-size:10px;color:var(--faint);letter-spacing:.3px;font-weight:400}
+#crystalLab .cl-empty{font-size:10px;color:var(--dim);line-height:1.8;letter-spacing:.3px}
+#crystalLab .cl-empty .cl-quick{margin-top:10px}
+#crystalLab .cl-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:4px 0 12px}
+#crystalLab .cl-metric{border:1px solid var(--stroke);border-radius:10px;padding:8px 10px;background:rgba(255,255,255,.02)}
+#crystalLab .cl-metric small{display:block;font-size:9px;color:var(--faint);letter-spacing:.5px;margin-bottom:4px}
+#crystalLab .cl-metric b{display:block;font:600 17px/1.4 ui-monospace,SFMono-Regular,monospace;color:#e8f3ff;font-variant-numeric:tabular-nums}
+#crystalLab .cl-ctl{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:6px 0 2px}
+#crystalLab .cl-ctl label{font-size:10px;color:var(--dim);letter-spacing:.5px}
+#crystalLab .cl-ctl .cl-field{flex:1;min-width:150px;margin:0}
+#crystalLab .cl-check{display:inline-flex;align-items:center;font-size:10px;color:var(--dim);letter-spacing:.4px;margin-right:14px;cursor:pointer}
+#crystalLab .cl-note{font-size:9px;color:var(--faint);letter-spacing:.4px;line-height:1.7;margin:8px 0 0}
+#crystalLab .cl-status{margin-top:6px;border-top:1px solid var(--stroke);padding:8px 14px 6px;font-size:10px;letter-spacing:.4px;color:var(--dim);min-height:22px;display:flex;align-items:center;gap:8px}
+#crystalLab .cl-status .dot{width:6px;height:6px;border-radius:50%;flex:none;background:var(--faint)}
+#crystalLab .cl-status[data-tone=success]{color:#b8e6c4}
+#crystalLab .cl-status[data-tone=success] .dot{background:#9fe0b0}
+#crystalLab .cl-status[data-tone=error]{color:#ffc1b8}
+#crystalLab .cl-status[data-tone=error] .dot{background:#ff9a8f}
+#crystalLab .cl-counting{font-size:9px;color:var(--faint);letter-spacing:.4px;line-height:1.7;margin-top:3px}
+/* ---------- responsive ---------- */
+@media(max-width:900px){
+  #crystalLab .cl-layout{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr);height:calc(100% - 56px);overflow:auto}
+  #crystalLab .cl-side{border-right:0;border-bottom:1px solid var(--stroke)}
+  #crystalLab .cl-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:560px){
+  #crystalBtn{width:36px;height:36px;flex-basis:36px}
+  #crystalLab .cl-top{flex-wrap:wrap;padding:8px 10px}
+  #crystalLab .cl-hint{display:none}
+}
+
+`;
   document.head.appendChild(style);
   const icon='<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="m12 2 9 5v10l-9 5-9-5V7zM3 7l9 5 9-5M12 12v10"/><path d="m7.5 4.5 9 5v10M7.5 19.5v-10l9-5" opacity=".5"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>';
   const entry=document.createElement('button');entry.id='crystalBtn';entry.className='panel';entry.title='Crystal Lab · 晶体实验室';entry.setAttribute('aria-label','晶体实验室');entry.innerHTML=icon;
   document.getElementById('quantumBtn').after(entry);
   const lab=document.createElement('section');lab.id='crystalLab';lab.setAttribute('aria-labelledby','cl-title');lab.setAttribute('aria-hidden','true');
   lab.innerHTML=`
-  <header class="cl-header"><div class="cl-mark">${icon}</div><div><h2 id="cl-title">晶体实验室</h2><div class="cl-eyebrow">周期结构 · 局部弛豫</div></div><div class="cl-header-right"><span class="cl-badge">全屏工作区</span><button id="cl-close" aria-label="退出晶体实验室">✕</button></div></header>
+  <header class="cl-top">
+    <div class="cl-mark">${icon}</div>
+    <div class="cl-titlewrap"><h2 id="cl-title">晶体实验室</h2><div class="cl-eyebrow">周期结构 · 局部弛豫</div></div>
+    <div class="cl-top-right">
+      <span class="cl-engine"><i></i><span id="cl-engine-dot">离线</span></span>
+      <button class="cl-close" id="cl-close" aria-label="退出晶体实验室">✕</button>
+    </div>
+  </header>
   <div class="cl-layout">
-    <aside class="cl-sidebar">
-      <section class="cl-section"><h3><span>01</span> 搭建晶格</h3>
-        <label class="cl-field">晶体结构<select id="cl-kind"><option value="B2">B2 · 有序双子晶格</option><option value="BCC">BCC · 体心立方</option><option value="FCC">FCC · 面心立方</option><option value="HCP">HCP · 六方密排</option></select></label>
-        <div class="cl-row"><label class="cl-field">A 位 / 主体元素<select id="cl-el-a" aria-label="A位主体元素"></select></label><label class="cl-field" id="cl-b-field">B 位元素<select id="cl-el-b" aria-label="B位元素"></select></label></div>
-        <div class="cl-row"><label class="cl-field">晶格常数 a · Å<input id="cl-a" type="number" min="1" max="20" step=".01" value="2.88"></label><label class="cl-field" id="cl-ratio-field" hidden>c / a<input id="cl-ratio" type="number" step=".001" value="1.632993"></label><button id="cl-regenerate" title="按当前参数重新生成初始猜测结构，清除掺杂、空位和弛豫结果">生成</button></div>
-        <div class="cl-row"><label class="cl-field">超胞 x<input id="cl-nx" type="number" value="3" min="1" max="8"></label><label class="cl-field">y<input id="cl-ny" type="number" value="3" min="1" max="8"></label><label class="cl-field">z<input id="cl-nz" type="number" value="3" min="1" max="8"></label></div>
-        <button id="cl-build" class="cl-wide">生成晶体</button>
-        <div class="cl-actions"><button id="cl-import">导入结构</button><button id="cl-json">导出项目</button><button id="cl-xyz">XYZ</button></div>
+    <aside class="cl-side">
+      <section class="cl-pane">
+        <h3><span class="cl-idx">01</span> 结构参数</h3>
+        <label class="cl-field">晶体模板<select id="cl-template"><option value="">选择常见化合物…</option></select></label>
+        <button id="cl-load-template" class="dshell-btnGhost cl-wide" disabled>载入模板 · 1 × 1 × 1</button>
+        <p id="cl-template-note" class="cl-muted"></p>
+        <label class="cl-field">晶体结构<select id="cl-kind"></select></label>
+        <div class="cl-row">
+          <label class="cl-field">A 位 / 主体元素<select id="cl-el-a"></select></label>
+          <label class="cl-field" id="cl-b-field">B 位元素<select id="cl-el-b"></select></label>
+          <label class="cl-field" id="cl-c-field" hidden>C 位元素<select id="cl-el-c"></select></label>
+        </div>
+        <div class="cl-row">
+          <label class="cl-field">晶格常数 a · Å<input id="cl-a" type="number" min="1" max="20" step=".01" value="2.88"></label>
+          <label class="cl-field" id="cl-ratio-field" hidden>c / a<input id="cl-ratio" type="number" step=".001" value="1.632993"></label>
+          <button id="cl-regenerate" class="dshell-btnGhost cl-auto" title="按当前参数重新生成初始猜测结构，清除掺杂、空位和弛豫结果">生成</button>
+        </div>
+        <label class="cl-field" id="cl-u-field" hidden><span id="cl-u-label">内部坐标 u</span><input id="cl-u" type="number" min=".001" max=".999" step=".001" value=".375"></label>
+        <p id="cl-prototype-note" class="cl-muted"></p>
+        <div class="cl-row">
+          <label class="cl-field">超胞 x<input id="cl-nx" type="number" value="3" min="1" max="8"></label>
+          <label class="cl-field">y<input id="cl-ny" type="number" value="3" min="1" max="8"></label>
+          <label class="cl-field">z<input id="cl-nz" type="number" value="3" min="1" max="8"></label>
+        </div>
+        <div class="cl-actions"><button id="cl-build" class="dshell-btn cl-wide">生成晶体</button></div>
+        <div class="cl-btnrow">
+          <button id="cl-import" class="dshell-btnGhost">导入结构</button>
+          <button id="cl-json" class="dshell-btnGhost">导出项目</button>
+          <button id="cl-xyz" class="dshell-btnGhost cl-wide">XYZ</button>
+        </div>
         <input id="cl-file" type="file" accept=".json,.cif,.vasp,.poscar,.xyz,.extxyz" hidden>
-        <p class="cl-muted">晶格常数是初始猜测，可自由调整。支持最多 512 个原子。</p>
+        <p class="cl-muted">晶格常数为初始猜测，可调整 · 上限 512 原子</p>
       </section>
-      <section class="cl-section"><h3><span>02</span> 位点与掺杂</h3>
-        <div class="cl-row"><label class="cl-field">替换元素<select id="cl-dopant" aria-label="掺杂元素"></select></label><label class="cl-field">子晶格<select id="cl-site"><option value="A">A 位</option><option value="B">B 位</option><option value="all">全部位点</option></select></label></div>
-        <div class="cl-actions"><button id="cl-substitute">替换选中原子</button><button id="cl-vacancy">移除选中原子</button></div>
-        <div class="cl-row" style="margin-top:10px"><label class="cl-field">随机替换数量<input id="cl-count" type="number" min="1" max="512" value="1"></label><label class="cl-field">随机种子<input id="cl-seed" type="number" step="1" value="42"></label></div>
-        <button id="cl-random" class="cl-wide">按位点随机替换</button><p id="cl-composition" class="cl-muted"></p>
+      <section class="cl-pane">
+        <h3><span class="cl-idx">02</span> 位点与掺杂</h3>
+        <div class="cl-row">
+          <label class="cl-field">替换元素<select id="cl-dopant"></select></label>
+          <label class="cl-field">子晶格<select id="cl-site"><option value="A">A 位</option><option value="B">B 位</option><option value="all">全部位点</option></select></label>
+        </div>
+        <div class="cl-actions">
+          <button id="cl-substitute" class="dshell-btnGhost">替换选中原子</button>
+          <button id="cl-vacancy" class="dshell-btnGhost">移除选中原子</button>
+        </div>
+        <div class="cl-row" style="margin-top:4px">
+          <label class="cl-field">随机数量<input id="cl-count" type="number" min="1" max="512" value="1"></label>
+          <label class="cl-field">随机种子<input id="cl-seed" type="number" step="1" value="42"></label>
+        </div>
+        <div class="cl-actions"><button id="cl-random" class="dshell-btnGhost cl-wide">按位点随机替换</button></div>
+        <p id="cl-composition" class="cl-muted"></p>
       </section>
-      <section class="cl-section"><h3><span>03</span> 结构弛豫 <span id="cl-engine-dot">离线</span></h3>
+      <section class="cl-pane">
+        <h3><span class="cl-idx">03</span> 结构弛豫</h3>
         <label class="cl-field">优化范围<select id="cl-relax-cell"><option value="fixed">原子位置 · 固定晶胞</option><option value="cell">原子位置 + 晶胞 · 零外压</option></select></label>
-        <div class="cl-row"><label class="cl-field">力阈值 · eV/Å<input id="cl-fmax" type="number" min=".001" max=".5" step=".01" value=".03"></label><label class="cl-field">最多步数<input id="cl-steps" type="number" min="1" max="500" value="100"></label></div>
-        <div class="cl-actions"><button id="cl-run" class="cl-primary" disabled>开始弛豫</button><button id="cl-cancel" hidden>停止</button></div>
-        <button id="cl-detach" class="cl-wide" style="margin-top:8px" hidden>放弃本地任务跟踪</button>
+        <div class="cl-row">
+          <label class="cl-field">力阈值 · eV/Å<input id="cl-fmax" type="number" min=".001" max=".5" step=".01" value=".03"></label>
+          <label class="cl-field">最多步数<input id="cl-steps" type="number" min="1" max="500" value="100"></label>
+        </div>
+        <div class="cl-actions">
+          <button id="cl-run" class="dshell-btn cl-wide" disabled>开始弛豫</button>
+          <button id="cl-cancel" class="dshell-btnGhost" hidden>停止</button>
+        </div>
+        <button id="cl-detach" class="dshell-btnGhost cl-wide" style="margin-top:6px" hidden>放弃本地任务跟踪</button>
         <progress id="cl-progress" max="100" value="0" hidden></progress>
         <p id="cl-engine-label" class="cl-muted">正在连接本地计算引擎…</p>
-        <p id="cl-compatibility" class="cl-muted" hidden></p>
-        <details><summary>计算引擎与适用范围</summary><p>MACE-MPA-0 通用机器学习原子势，进行 0 K 局部能量最小化。模型覆盖元素不等于已验证任意合金；科研结论需针对体系验证。</p><label class="cl-field">本地引擎地址<input id="cl-endpoint" value="http://127.0.0.1:8765" spellcheck="false"></label><button id="cl-connect">重新连接</button><p><a href="crystal-engine/README.md" target="_blank" rel="noopener">本地引擎安装说明</a> · <a href="https://github.com/ACEsuit/mace-foundations" target="_blank" rel="noopener">模型来源与许可证</a></p><p>这里计算能量、力、应力和结构，不生成电子密度。真实电子场可由量子化学计算导出，再从原有 Quantum Data 入口导入。</p></details>
+        <p id="cl-compatibility" class="cl-warn" hidden></p>
+        <details><summary>计算引擎与适用范围</summary>
+          <p>MACE-MPA-0 通用机器学习原子势 · 0 K 局部能量最小化。模型覆盖元素 ≠ 已验证任意合金；科研结论需针对体系验证。</p>
+          <label class="cl-field">本地引擎地址<input id="cl-endpoint" value="http://127.0.0.1:8765" spellcheck="false"></label>
+          <button id="cl-connect" class="dshell-btnGhost">重新连接</button>
+          <p><a href="crystal-engine/README.md" target="_blank" rel="noopener">本地引擎安装说明</a> · <a href="https://github.com/ACEsuit/mace-foundations" target="_blank" rel="noopener">模型来源与许可证</a></p>
+          <p>本引擎计算能量、力、应力与结构，不生成电子密度；真实电子场可经 Quantum Data 入口导入。</p>
+        </details>
       </section>
     </aside>
-    <main class="cl-content">
-      <div class="cl-view-wrap"><div id="cl-viewport" class="cl-viewport"></div><div class="cl-view-head"><div><div id="cl-formula" class="cl-formula"></div><div id="cl-structure-label" class="cl-caption"></div></div><div class="cl-caption">拖动旋转 · 点击选原子<br><span id="cl-boundary">周期边界 · 坐标单位 Å</span></div></div><div class="cl-view-tools"><div><div id="cl-legend" class="cl-legend"></div><div class="cl-caption" style="margin-top:5px">连线表示几何近邻，不表示键级</div></div><button id="cl-fit" aria-label="晶体视图居中">居中</button></div></div>
-      <div class="cl-inspect"><div class="cl-inspect-top"><label for="cl-atom">选中原子</label><select id="cl-atom"></select><span id="cl-atom-label" class="cl-mono"></span></div><div id="cl-neighbor" class="cl-caption" style="margin-top:6px"></div></div>
-      <div class="cl-results"><h3 style="margin-bottom:6px">结构比较 <span id="cl-result-label">等待计算</span></h3>
-        <div id="cl-empty" class="cl-muted">编辑结构后开始弛豫，查看掺杂周围的位移与近邻间距变化。结果以相同成分的未弛豫结构为参照。<div class="cl-actions"><button id="cl-quick-run" class="cl-primary" disabled>计算当前结构</button><span style="align-self:center">可在参数面板调整计算设置</span></div></div>
-        <div id="cl-result" hidden><div class="cl-metrics"><div class="cl-metric"><small>弛豫能量变化 · eV/atom</small><b id="cl-energy">—</b></div><div class="cl-metric"><small>内部位移 RMS · Å</small><b id="cl-rms">—</b></div><div class="cl-metric"><small>最大原子力 · eV/Å</small><b id="cl-force">—</b></div><div class="cl-metric"><small>晶胞体积变化 · %</small><b id="cl-volume">—</b></div></div>
-        <div class="cl-row"><label class="cl-field" style="flex:2">初始 → 弛豫后 <span id="cl-t-label">100%</span><input id="cl-t" type="range" min="0" max="1" step=".01" value="1"></label><label class="cl-field">位移显示倍率<select id="cl-amp"><option value="1">1× · 真实比例</option><option value="5">5×</option><option value="10">10×</option><option value="25">25×</option></select></label><label class="cl-field">着色<select id="cl-color"><option value="element">元素</option><option value="displacement">内部位移</option></select></label></div>
-        <div class="cl-actions" style="align-items:center;gap:16px"><label><input id="cl-ghosts" type="checkbox" checked>初始轮廓</label><label><input id="cl-arrows" type="checkbox" checked>位移箭头</label><button id="cl-adopt">将结果作为新起点</button></div>
-        <p class="cl-muted">插值仅用于结构比较，不代表动力学时间。倍率只影响画面；所有数值均为真实尺度。能量差是弛豫能，不是缺陷形成能。</p>
-        <details><summary>模型、应力与可复现记录</summary><p id="cl-provenance" class="cl-mono"></p></details></div>
-      </div><div id="cl-status" class="cl-status" role="status" aria-live="polite">准备搭建晶体</div>
+    <main class="cl-stagewrap">
+      <div class="cl-viewportwrap">
+        <div id="cl-viewport" class="cl-viewport"></div>
+        <div class="cl-headline">
+          <div class="cl-left"><div id="cl-formula" class="cl-formula"></div><div id="cl-structure-label" class="cl-meta"></div></div>
+          <div class="cl-hint">拖动旋转 · 点击选原子<span id="cl-boundary">周期边界 · 坐标单位 Å</span></div>
+        </div>
+        <div class="cl-tools">
+          <div class="cl-legendbox"><div id="cl-legend" class="cl-legend"></div><div class="cl-caption">连线为几何近邻，不代表键级</div></div>
+          <button id="cl-fit" class="dshell-btnGhost cl-fit">居中</button>
+        </div>
+      </div>
+      <div class="cl-bench">
+        <div class="cl-inspect">
+          <label for="cl-atom">选中原子</label>
+          <select id="cl-atom"></select>
+          <span id="cl-atom-label" class="cl-mono"></span>
+          <span id="cl-neighbor" class="cl-neighbor"></span>
+        </div>
+        <div class="cl-results">
+          <h4>结构比较<span id="cl-result-label">等待计算</span></h4>
+          <div id="cl-empty" class="cl-empty">运行弛豫后比较位移与近邻间距；参照为同成分未弛豫结构。
+            <div class="cl-actions cl-quick"><button id="cl-quick-run" class="dshell-btn" disabled>计算当前结构</button></div>
+          </div>
+          <div id="cl-result" hidden>
+            <div class="cl-metrics">
+              <div class="cl-metric"><small>弛豫能量变化 · eV/atom</small><b id="cl-energy">—</b></div>
+              <div class="cl-metric"><small>内部位移 RMS · Å</small><b id="cl-rms">—</b></div>
+              <div class="cl-metric"><small>最大原子力 · eV/Å</small><b id="cl-force">—</b></div>
+              <div class="cl-metric"><small>晶胞体积变化 · %</small><b id="cl-volume">—</b></div>
+            </div>
+            <div class="cl-ctl">
+              <label class="cl-field">初始 → 弛豫后 <span id="cl-t-label">100%</span><input id="cl-t" type="range" min="0" max="1" step=".01" value="1"></label>
+              <label class="cl-field">位移显示倍率<select id="cl-amp"><option value="1">1× · 真实比例</option><option value="5">5×</option><option value="10">10×</option><option value="25">25×</option></select></label>
+              <label class="cl-field">着色<select id="cl-color"><option value="element">元素</option><option value="displacement">内部位移</option></select></label>
+            </div>
+            <div class="cl-ctl">
+              <label class="cl-check"><input id="cl-ghosts" type="checkbox" checked>初始轮廓</label>
+              <label class="cl-check"><input id="cl-arrows" type="checkbox" checked>位移箭头</label>
+              <button id="cl-adopt" class="dshell-btnGhost">将结果作为新起点</button>
+            </div>
+            <p class="cl-note">插值仅供结构比较，不代表动力学；倍率只影响显示，数值为真实尺度；能量差为弛豫能，非缺陷形成能。</p>
+            <details><summary>模型、应力与可复现记录</summary><p id="cl-provenance" class="cl-mono"></p></details>
+          </div>
+        </div>
+        <div id="cl-status" class="cl-status" role="status" aria-live="polite"><span class="dot"></span><span>准备搭建晶体</span></div>
+      </div>
     </main>
   </div>`;
+;
   document.body.appendChild(lab);
   const $=id=>lab.querySelector(`#cl-${id}`), val=id=>$(id).value, num=id=>Number(val(id));
   const counting=document.createElement('div');counting.id='cl-counting';counting.className='cl-caption';$('legend').after(counting);
@@ -5445,12 +8565,35 @@ const CrystalLab = (() => {
   let visual=null, healthTimer=null, pollTimer=null, importBusy=false;
   const status=(message,tone='')=>{$('status').textContent=message;$('status').dataset.tone=tone;};
   const safely=fn=>async()=>{try{await fn();}catch(e){status(e.message||'操作失败','error');}};
-  for(const id of ['el-a','el-b','dopant']) for(const symbol of CrystalCore.symbols){const o=document.createElement('option');o.value=symbol;o.textContent=symbol;$(id).appendChild(o);}
-  $('el-a').value='Ni';$('el-b').value='Al';$('dopant').value='Co';
+  for(const id of ['el-a','el-b','el-c','dopant']) for(const symbol of CrystalCore.symbols){const o=document.createElement('option');o.value=symbol;o.textContent=symbol;$(id).appendChild(o);}
+  $('el-a').value='Ni';$('el-b').value='Al';$('el-c').value='O';$('dopant').value='Co';
+  for(const [kind,p] of Object.entries(CrystalCore.prototypes)){
+    const option=document.createElement('option');option.value=kind;option.textContent=p.label;$('kind').append(option);
+    const presets=CrystalTemplates.filter(t=>t.kind===kind);if(!presets.length)continue;
+    const group=document.createElement('optgroup');group.label=p.label;
+    for(const t of presets){const o=document.createElement('option');o.value=t.id;o.textContent=t.name;group.append(o);}$('template').append(group);
+  }
+  let loadedTemplate=null;
+  function templateNote(){
+    const t=CrystalTemplates.find(t=>t.id===val('template'));
+    $('template-note').textContent=t?`${t.name} · ${CrystalCore.prototypes[t.kind].label}：载入重建 1×1×1 单晶胞，清除当前编辑；参数为近似起始值。`:`${CrystalTemplates.length} 个模板 · ${new Set(CrystalTemplates.map(x=>x.kind)).size} 类晶型`;
+    $('load-template').disabled=!!state.job||importBusy||!t;
+  }
+  function kindFields(){
+    const p=CrystalCore.prototypes[val('kind')];
+    const roles=p.ratio?p.ratio.length:1;
+    $('b-field').hidden=roles<2;$('c-field').hidden=roles<3;
+    $('ratio-field').hidden=p.system==='cubic';$('u-field').hidden=p.u===undefined;
+    $('u-label').textContent=val('kind')==='MoS2'?'B 位分数坐标 z（4f）':val('kind')==='rutile'?'B 位内部坐标 u（4f）':'B 位相对高度 u';
+    const note=$('prototype-note');note.replaceChildren();
+    if(p.reference){if(p.ratio)note.append(`${p.ratio.join(' : ')} 位点配比 · `);const a=document.createElement('a');a.href=`https://aflow.org/p/${p.reference}/`;a.target='_blank';a.rel='noopener';a.textContent='晶型来源';note.append(a);}
+  }
+  templateNote();kindFields();
   const fmt=(x,n=4)=>Number.isFinite(x)?x.toFixed(n):'—';
   function busyControls(){
     const locked=!!state.job||importBusy;
     for(const id of ['build','regenerate','substitute','vacancy','random','import','adopt','endpoint','file'])$(id).disabled=locked;
+    $('load-template').disabled=locked||!val('template');
     const unsupportedElements=state.health?.status==='ready'?[...new Set(state.structure?.atoms.filter(a=>!state.health.supportedElements.includes(a.element)).map(a=>a.element)||[])]:[];
     const unsupported=unsupportedElements.length>0;
     $('run').disabled=locked||state.health?.status!=='ready'||unsupported;
@@ -5460,6 +8603,7 @@ const CrystalLab = (() => {
     $('cancel').hidden=!state.job;$('progress').hidden=!state.job;
     if(!state.job)$('detach').hidden=true;
     $('engine-dot').textContent=state.health?.status==='ready'?'已连接':state.health?.status==='loading'?'加载中':'离线';
+    const chip=lab.querySelector('.cl-engine');if(chip)chip.setAttribute('data-ready',state.health?.status==='ready'?'yes':state.health?.status==='loading'?'load':'no');
   }
   function legend(){
     const box=$('legend');box.replaceChildren();
@@ -5470,7 +8614,10 @@ const CrystalLab = (() => {
     for(const [symbol,count] of counts){const s=document.createElement('span'), dot=document.createElement('i');dot.style.background=`#${elementInfo(symbol).color.toString(16).padStart(6,'0')}`;s.append(dot,`${symbol} · ${count}`);box.append(s);}
   }
   function inspect(){
-    const s=state.structure,index=s.atoms.findIndex(a=>a.id===state.selected),a=s.atoms[index];if(!a)return;
+    const s=state.structure;if(!s)return;
+    const index=s.atoms.findIndex(a=>a.id===state.selected);
+    if(index<0){$('atom').value='';$('atom-label').textContent='';$('neighbor').textContent='';visual?.select(null);return;}
+    const a=s.atoms[index];
     $('atom').value=a.id;
     $('atom-label').textContent=`${state.result?'弛豫后 · ':''}${a.site==='all'?'位点':a.site+' 位'} · (${a.position.map(x=>fmt(x,3)).join(', ')}) Å`;
     const ns=CrystalCore.neighbors(s,index,Math.min(10,Math.max(...s.cell.map(v=>Math.hypot(...v)))));
@@ -5490,22 +8637,22 @@ const CrystalLab = (() => {
   }
   function refresh(){
     const s=state.structure;if(!s)return;
-    if(!s.atoms.some(a=>a.id===state.selected))state.selected=s.atoms[0].id;
+    if(state.selected!==null&&!s.atoms.some(a=>a.id===state.selected))state.selected=s.atoms[0].id;
     const counts=new Map();s.atoms.forEach(a=>counts.set(a.element,(counts.get(a.element)||0)+1));
     $('formula').textContent=[...counts].map(([el,n])=>`${el}${String(n).replace(/\d/g,d=>'₀₁₂₃₄₅₆₇₈₉'[Number(d)])}`).join(' ');
     $('structure-label').textContent=`来源：${state.source} · ${s.atoms.length} 原子 · ${fmt(CrystalCore.volume(s.cell),2)} Å³`;
     $('structure-label').title=$('structure-label').textContent;
-    const copies=CrystalCore.boundaryImages(state.result?.initial||s);
+    const copies=CrystalCore.boundaryImages(state.result?.initial||s,0.25); // display slop: relaxed atoms near a face still get closed-cell mirrors
     const terms=[.125,.25,.5,1].map(weight=>{
       const count=copies.filter(copy=>copy.weight===weight).length;
       return count?`${count} × ${weight===1?'1':`1/${1/weight}`}`:null;
     }).filter(Boolean);
     counting.textContent=`${state.result?'初始晶胞镜像':'晶胞显示'} ${copies.length} 个球 · 折算 ${terms.join(' + ')} = ${s.atoms.length} 原子`;
-    counting.title='仅周期边界补全镜像：角上 1/8、棱上 1/4、面上 1/2、内部 1。非周期方向不分摊；比较时保持初始镜像配对，计算和导出只使用独立原子。';
+    counting.title='周期边界补全仅用于显示：角/棱/面/内部按 1/8、1/4、1/2、1 折算；计算与导出只用独立原子。';
     const axes=['a','b','c'].filter((_,i)=>s.pbc[i]);$('boundary').textContent=`${axes.length?`${axes.join('/')} 周期`:'非周期结构'} · 坐标单位 Å`;
     $('relax-cell').querySelector('option[value="cell"]').disabled=axes.length!==3;
     if(axes.length!==3)$('relax-cell').value='fixed';
-    $('atom').replaceChildren(...s.atoms.map((a,i)=>{const o=document.createElement('option');o.value=a.id;o.textContent=`${i+1} · ${a.element} · ${a.site}`;return o;}));
+    $('atom').replaceChildren(...[['', '未选中原子'], ...s.atoms.map((a,i)=>[a.id, `${i+1} · ${a.element} · ${a.site}`])].map(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;return o;}));$('atom').value=state.selected||'';
     const sites=[...new Set(s.atoms.map(a=>a.site))].filter(x=>x!=='all'); const previous=val('site');
     $('site').replaceChildren(...[...sites,'all'].map(x=>{const o=document.createElement('option');o.value=x;o.textContent=x==='all'?'全部位点':`${x} 位`;return o;}));
     $('site').value=previous==='all'||sites.includes(previous)?previous:(sites[0]||'all');
@@ -5523,9 +8670,14 @@ const CrystalLab = (() => {
     $('t').value='1';$('amp').value='1';$('color').value='element';visual?.setOptions({t:1,amplification:1,color:'element'});refresh();
   }
   function build(){
+    if(state.job||importBusy)throw Error('请等待当前任务结束后再生成结构');
     const repeats=['nx','ny','nz'].map(num);
-    const s=CrystalCore.build({kind:val('kind'),a:num('a'),cOverA:num('ratio'),repeats,elementA:val('el-a'),elementB:val('el-b')});
-    state.source=`${val('kind')} · ${repeats.join(' × ')}`;state.history=[];edited(s,`build ${state.source}, a=${num('a')} Å`);visual?.fit();status('晶体已生成。点击原子选择位点，或按子晶格随机替换。','success');
+    const roles=CrystalCore.prototypes[val('kind')].ratio?CrystalCore.prototypes[val('kind')].ratio.length:1;
+    const settings={kind:val('kind'),a:num('a'),cOverA:num('ratio'),u:num('u'),repeats,elementA:val('el-a'),elementB:val('el-b'),elementC:roles>=3?val('el-c'):undefined};
+    const s=CrystalCore.build(settings);
+    state.source=`${loadedTemplate?loadedTemplate.name+' · ':''}${val('kind')} · ${repeats.join(' × ')}`;state.history=[];
+    state.selected=s.atoms[0].id;edited(s,`build ${JSON.stringify(settings)}; template=${loadedTemplate?.id||'custom'}; parameters=starting guess`);
+    visual?.fit();status('晶体已生成：点击原子选位点，或按位点随机替换。','success');
   }
   function endpoint(){const u=new URL(val('endpoint'));if(u.protocol!=='http:'||!['localhost','127.0.0.1','[::1]'].includes(u.hostname)||u.username||u.password||u.pathname!=='/'||u.search||u.hash)throw Error('引擎地址必须是本机 HTTP 地址，例如 http://127.0.0.1:8765');return u.origin;}
   async function api(path,options={},base=state.endpoint){
@@ -5561,8 +8713,8 @@ const CrystalLab = (() => {
       }else status(`计算中 · 第 ${j.step||0} 步 · 最大原子力 ${fmt(j.maxForce)} eV/Å · ${fmt(j.elapsedSeconds,0)} s`);
     }catch(e){
       if(state.job!==id&&!deliveringResult)return;
-      if(e.httpStatus===404){state.job=null;status('计算任务已不存在（引擎可能已重启）。原结构已保留，可以重新计算。','error');}
-      else{if(state.job)$('detach').hidden=false;status(`${e.message}${state.job?' 正在尝试恢复任务连接；可放弃本地跟踪以恢复编辑。':''}`,'error');}
+      if(e.httpStatus===404){state.job=null;status('任务已不存在（引擎可能重启）；原结构已保留。','error');}
+      else{if(state.job)$('detach').hidden=false;status(`${e.message}${state.job?' 正在恢复连接；可停止跟踪以恢复编辑。':''}`,'error');}
     }
     busyControls();if(state.job)pollTimer=setTimeout(poll,1500);
   }
@@ -5598,23 +8750,32 @@ const CrystalLab = (() => {
       }
       else{const format=ext==='cif'?'cif':['vasp','poscar'].includes(ext)||file.name.toUpperCase()==='POSCAR'?'vasp':'extxyz';s=(await api('/v1/import',{method:'POST',body:JSON.stringify({format,text})})).structure;}
       CrystalCore.validate(s);state.source=typeof project?.source==='string'?project.source.slice(0,200):`导入 · ${file.name}`;
-      state.history=project?.history||[];edited(s,`import ${file.name}`);
+      state.history=project?.history||[];state.selected=s.atoms[0].id;edited(s,`import ${file.name}`);
       if(project?.result)showResult(project.result);
-      visual?.fit();status(project?.result?'项目已恢复，包含结构、计算结果和模型记录。':'结构已导入；保留晶胞与周期边界，可继续编辑和弛豫。','success');
+      visual?.fit();status(project?.result?'项目已恢复（结构/结果/模型记录）。':'结构已导入：保留晶胞与周期边界，可继续编辑。','success');
     }finally{importBusy=false;busyControls();}
   }
-  $('kind').addEventListener('change',()=>{$('b-field').hidden=val('kind')!=='B2';$('ratio-field').hidden=val('kind')!=='HCP';});
+  $('template').addEventListener('change',templateNote);
+  $('load-template').addEventListener('click',safely(()=>{
+    if(state.job||importBusy)throw Error('请等待当前任务结束后再载入模板');
+    const t=CrystalTemplates.find(t=>t.id===val('template'));if(!t)return;
+    $('kind').value=t.kind;kindFields();$('el-a').value=t.elementA;if(t.elementB)$('el-b').value=t.elementB;if(t.elementC)$('el-c').value=t.elementC;$('a').value=t.a;$('ratio').value=t.cOverA??Math.sqrt(8/3);$('u').value=t.u??.375;
+    for(const id of ['nx','ny','nz'])$(id).value='1';loadedTemplate=t;kindFields();build();
+    status(`${t.name} 已载入：近似起始值，可扩胞/掺杂/弛豫。`,'success');
+  }));
+  $('kind').addEventListener('change',()=>{loadedTemplate=null;$('u').value=CrystalCore.prototypes[val('kind')].u??.375;kindFields();});
+  for(const id of ['el-a','el-b','el-c','a','ratio','u'])$(id).addEventListener('input',()=>{loadedTemplate=null;});
   $('build').addEventListener('click',safely(build));
-  $('regenerate').addEventListener('click',safely(()=>{build();status('已按当前参数恢复初始猜测结构，掺杂、空位和弛豫结果已清除。','success');}));
-  $('substitute').addEventListener('click',safely(()=>{edited(CrystalCore.substitute(state.structure,[state.selected],val('dopant')),`replace ${state.selected} with ${val('dopant')}`);status('已替换选中原子。请重新弛豫以计算结构响应。','success');}));
-  $('vacancy').addEventListener('click',safely(()=>{edited(CrystalCore.remove(state.structure,state.selected),`vacancy ${state.selected}`);status('已创建空位。','success');}));
+  $('regenerate').addEventListener('click',safely(()=>{build();status('已恢复初始猜测结构；掺杂/空位/弛豫结果已清除。','success');}));
+  $('substitute').addEventListener('click',safely(()=>{if(!state.selected)throw Error('请先点击选中一个原子');edited(CrystalCore.substitute(state.structure,[state.selected],val('dopant')),`replace ${state.selected} with ${val('dopant')}`);status('已替换选中原子；重新弛豫查看结构响应。','success');}));
+  $('vacancy').addEventListener('click',safely(()=>{if(!state.selected)throw Error('请先点击选中一个原子');edited(CrystalCore.remove(state.structure,state.selected),`vacancy ${state.selected}`);status('已创建空位。','success');}));
   $('random').addEventListener('click',safely(()=>{const ids=CrystalCore.randomIds(state.structure,val('site'),num('count'),num('seed'),val('dopant'));edited(CrystalCore.substitute(state.structure,ids,val('dopant')),`replace ${ids.join(',')} with ${val('dopant')}; seed=${num('seed')}`);state.selected=ids[0];inspect();status(`已替换 ${ids.length} 个位点，随机种子 ${num('seed')}。`,'success');}));
   for(const id of ['dopant','site'])$(id).addEventListener('change',refresh);
-  $('atom').addEventListener('change',()=>{state.selected=val('atom');inspect();});
+  $('atom').addEventListener('change',()=>{state.selected=val('atom')||null;inspect();});
   $('run').addEventListener('click',safely(run));
   $('quick-run').addEventListener('click',safely(run));
   $('cancel').addEventListener('click',safely(async()=>{if(!state.job||state.job==='submitting')return;await api(`/v1/jobs/${encodeURIComponent(state.job)}`,{method:'DELETE',body:'{}'});status('已请求停止，等待当前计算步结束…');}));
-  $('detach').addEventListener('click',()=>{state.job=null;clearTimeout(pollTimer);busyControls();status('已恢复本地编辑。引擎上的计算可能仍在运行；这一步没有取消远端任务。');});
+  $('detach').addEventListener('click',()=>{state.job=null;clearTimeout(pollTimer);busyControls();status('已恢复本地编辑（远端任务未取消）。');});
   $('connect').addEventListener('click',safely(connect));
   $('import').addEventListener('click',()=>$('file').click());$('file').addEventListener('change',safely(importFile));
   $('json').addEventListener('click',safely(()=>download('crystal-lab.json',JSON.stringify({schemaVersion:1,exportedAt:new Date().toISOString(),source:state.source,structure:state.structure,history:state.history,result:state.result},null,2),'application/json')));
@@ -5622,10 +8783,10 @@ const CrystalLab = (() => {
   $('fit').addEventListener('click',()=>visual?.fit());
   function display(){visual?.setOptions({t:num('t'),amplification:num('amp'),color:val('color'),ghosts:$('ghosts').checked,arrows:$('arrows').checked});$('t-label').textContent=`${Math.round(num('t')*100)}%`;legend();}
   for(const id of ['t','amp','color','ghosts','arrows'])$(id).addEventListener('input',display);
-  $('adopt').addEventListener('click',safely(()=>{edited(CrystalCore.clone(state.structure),'adopt relaxed structure');status('已将弛豫后的结构设为新起点。下一次比较将以此结构为参照。','success');}));
+  $('adopt').addEventListener('click',safely(()=>{edited(CrystalCore.clone(state.structure),'adopt relaxed structure');status('已将弛豫结果设为新起点（后续比较以此为准）。','success');}));
   function open(){
     lab.classList.add('open');lab.setAttribute('aria-hidden','false');
-    if(!visual){visual=createCrystalRenderer($('viewport'),id=>{state.selected=id;inspect();});if(!state.structure)build();else refresh();visual.fit();}
+    if(!visual){visual=createCrystalRenderer($('viewport'),id=>{state.selected=state.selected===id?null:id;inspect();});if(!state.structure)build();else refresh();visual.fit();}
     visual.setOptions({active:true});visual.resize();connect();clearInterval(healthTimer);healthTimer=setInterval(()=>{if(lab.classList.contains('open'))connect();},12000);
   }
   function close(){

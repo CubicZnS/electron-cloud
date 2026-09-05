@@ -1,5 +1,14 @@
 # Research Report — 有机化合物电子效应可视化（Phase 1）
 
+## Unreleased: binary structure seeds
+
+CrystalCore now builds 10 binary prototype families with explicit A/B site
+roles. The 57-entry catalog supplies rounded initial dimensions, not fitted
+potentials or an experimental database. Hexagonal and tetragonal builders
+expose c/a and relevant internal coordinates; geometry and numeric seed status
+are documented separately in [the template specification](CRYSTAL_TEMPLATES.md).
+The existing independent-atom contract, renderer and local engine remain intact.
+
 ## v2.6.0 extension: Crystal Lab
 
 The new fullscreen workspace owns an independent renderer, structure state and

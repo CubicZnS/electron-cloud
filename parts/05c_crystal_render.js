@@ -36,7 +36,9 @@ function createCrystalRenderer(host, onSelect){
       return base.map((x,j)=>x+comparison.vectors[i][j]*options.t*options.amplification);
     });
     // Keep reference copies paired during interpolation, including boundary crossings.
-    images=CrystalCore.boundaryImages(reference||structure);
+    // 0.25 Å slop: relaxed structures (after adopt or as a later baseline) keep closed-cell mirrors
+    // for atoms within a sphere radius of a face; interior atoms are never mirrored.
+    images=CrystalCore.boundaryImages(reference||structure,0.25);
     const shifted=(p,image)=>p.map((x,j)=>x+CrystalCore.cartesian(image,cell)[j]);
     const referencePosition=copy=>shifted(CrystalCore.cartesian(CrystalCore.fractional(reference.atoms[copy.index].position,reference.cell),cell),copy.image);
     positions=images.map(copy=>shifted(sourcePositions[copy.index],copy.image));
